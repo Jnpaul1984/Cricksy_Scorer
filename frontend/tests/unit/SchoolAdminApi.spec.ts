@@ -70,6 +70,8 @@ describe('schoolAdminApi', () => {
   it('creates a match through the organization-scoped School contract', async () => {
     vi.mocked(apiRequest).mockResolvedValue({ game_id: 'game-a' });
     const payload = {
+      mode: 'school_vs_school' as const,
+      school_side: null,
       team_a: {
         team_id: 'team-a',
         playing_xi_membership_ids: Array.from({ length: 11 }, (_, index) => `a-${index}`),
@@ -82,6 +84,7 @@ describe('schoolAdminApi', () => {
         captain_membership_id: 'b-0',
         wicketkeeper_membership_id: 'b-1',
       },
+      external_opponent: null,
       match_type: 'limited' as const,
       overs_limit: 20,
       days_limit: null,

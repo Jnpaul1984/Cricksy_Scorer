@@ -169,6 +169,76 @@ describe('Phase 7I School match setup', () => {
     expect(push).toHaveBeenCalledWith({ name: 'GameScoringView', params: { gameId: 'game-a' } });
   });
 
+  it('submits a saved School XI against a match-local external opponent on either side', async () => {
+    const wrapper = mountView();
+    await flushPromises();
+    await wrapper.get('[data-testid="mode-school-vs-external"]').trigger('click');
+    await wrapper.get('[data-testid="school-team-a"]').setValue('team-a');
+    await flushPromises();
+
+    const schoolRoster = wrapper.get('ul[aria-label="Team A roster"]');
+    for (const checkbox of schoolRoster.findAll('input[type="checkbox"]').slice(0, 11)) {
+      await checkbox.trigger('change');
+    }
+    await wrapper.get('#captain-a').setValue('team-a-membership-0');
+    await wrapper.get('#keeper-a').setValue('team-a-membership-1');
+    await wrapper.get('[data-testid="school-orientation"]').setValue('team_b');
+    await wrapper.get('[data-testid="external-team-name"]').setValue('Westhaven College First XI');
+    for (let index = 0; index < 11; index += 1) {
+      await wrapper
+        .get(`[data-testid="external-player-${index}"]`)
+        .setValue(`Westhaven ${index + 1}`);
+    }
+    await wrapper.get('[data-testid="create-school-match"]').trigger('submit');
+    await flushPromises();
+
+    expect(schoolApi.createSchoolMatch).toHaveBeenCalledWith(
+      'school-a',
+      expect.objectContaining({
+        mode: 'school_vs_external',
+        school_side: 'team_b',
+        team_a: null,
+        team_b: {
+          team_id: 'team-a',
+          playing_xi_membership_ids: roster('team-a')
+            .slice(0, 11)
+            .map((player) => player.id),
+          captain_membership_id: 'team-a-membership-0',
+          wicketkeeper_membership_id: 'team-a-membership-1',
+        },
+        external_opponent: {
+          team_name: 'Westhaven College First XI',
+          player_names: Array.from({ length: 11 }, (_, index) => `Westhaven ${index + 1}`),
+          captain_index: 0,
+          wicketkeeper_index: 1,
+        },
+      }),
+    );
+    expect(push).toHaveBeenCalledWith({ name: 'GameScoringView', params: { gameId: 'game-a' } });
+  });
+
+  it('validates the complete distinct external XI before creating', async () => {
+    const wrapper = mountView();
+    await flushPromises();
+    await wrapper.get('[data-testid="mode-school-vs-external"]').trigger('click');
+    await wrapper.get('[data-testid="school-team-a"]').setValue('team-a');
+    await flushPromises();
+    const schoolRoster = wrapper.get('ul[aria-label="Team A roster"]');
+    for (const checkbox of schoolRoster.findAll('input[type="checkbox"]').slice(0, 11)) {
+      await checkbox.trigger('change');
+    }
+    await wrapper.get('#captain-a').setValue('team-a-membership-0');
+    await wrapper.get('#keeper-a').setValue('team-a-membership-1');
+    await wrapper.get('[data-testid="external-team-name"]').setValue('Westhaven');
+    for (let index = 0; index < 11; index += 1) {
+      await wrapper.get(`[data-testid="external-player-${index}"]`).setValue('Same Player');
+    }
+
+    expect(wrapper.text()).toContain('External opponent player names must be distinct.');
+    expect(wrapper.get('[data-testid="create-school-match"]').attributes('disabled')).toBeDefined();
+    expect(schoolApi.createSchoolMatch).not.toHaveBeenCalled();
+  });
+
   it('clears XI and role selections when a saved Team changes', async () => {
     const wrapper = mountView();
     await flushPromises();
@@ -189,14 +259,21 @@ describe('Phase 7I School match setup', () => {
     const organizationId = ref('school-a');
     const wrapper = mountView(context(organizationId));
     await flushPromises();
-    await chooseTeams(wrapper);
+    await wrapper.get('[data-testid="mode-school-vs-external"]').trigger('click');
+    await wrapper.get('[data-testid="school-team-a"]').setValue('team-a');
+    await wrapper.get('[data-testid="external-team-name"]').setValue('Stale opponent');
+    await wrapper.get('[data-testid="external-player-0"]').setValue('Stale player');
 
     organizationId.value = 'school-b';
     await flushPromises();
 
     expect(schoolApi.listSchoolTeams).toHaveBeenLastCalledWith('school-b');
     expect(wrapper.get('[data-testid="school-team-a"]').element).toHaveProperty('value', '');
+    expect(wrapper.get('[data-testid="mode-school-vs-school"]').attributes('aria-pressed')).toBe(
+      'true',
+    );
     expect(wrapper.get('[data-testid="school-team-b"]').element).toHaveProperty('value', '');
+    expect(wrapper.find('[data-testid="external-opponent-fields"]').exists()).toBe(false);
   });
 
   it('does not expose or call match setup for a viewer', async () => {

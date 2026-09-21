@@ -17,7 +17,7 @@ from backend.domain.constants import CREDIT_BOWLER, norm_extra
 from backend.services import organization_service
 from backend.services.organization_entitlement_service import require_organization_capability
 from backend.sql_app import models
-from sqlalchemy import Select, and_, select
+from sqlalchemy import Select, and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 READ_ROLES = frozenset({"owner", "admin", "coach", "scorer", "viewer"})
@@ -59,7 +59,12 @@ def _school_games_stmt(organization_id: str) -> Select[tuple[models.Game]]:
     """Filter School Games in SQL before JSON-ledger aggregation."""
     org_a = models.Game.team_a["school_source"]["organization_id"].as_string()
     org_b = models.Game.team_b["school_source"]["organization_id"].as_string()
-    return select(models.Game).where(org_a == organization_id, org_b == organization_id)
+    return select(models.Game).where(
+        or_(
+            and_(org_a == organization_id, or_(org_b == organization_id, org_b.is_(None))),
+            and_(org_b == organization_id, org_a.is_(None)),
+        )
+    )
 
 
 def _source(team: dict[str, Any]) -> tuple[str | None, str | None]:
@@ -88,6 +93,20 @@ def _canonical_xi(team: dict[str, Any]) -> set[str]:
         and player.get("player_profile_id") == player.get("id")
     }
     return {str(player_id) for player_id in playing_xi if str(player_id) in frozen_profiles}
+
+
+def _snapshot_xi(team: dict[str, Any]) -> set[str]:
+    """Return IDs frozen in any match side, including match-local opponents."""
+    playing_xi = team.get("playing_xi")
+    players = team.get("players")
+    if not isinstance(playing_xi, list) or not isinstance(players, list):
+        return set()
+    frozen_ids = {
+        str(player["id"])
+        for player in players
+        if isinstance(player, dict) and isinstance(player.get("id"), str)
+    }
+    return {str(player_id) for player_id in playing_xi if str(player_id) in frozen_ids}
 
 
 def _started(game: models.Game) -> bool:
@@ -332,7 +351,8 @@ def _side_for_player(player_id: str, xi_a: set[str], xi_b: set[str]) -> Literal[
 
 
 def _game_team_totals(game: models.Game) -> dict[str, dict[str, int]]:
-    _, _, xi_a, xi_b = _game_sides(game)
+    xi_a = _snapshot_xi(game.team_a)
+    xi_b = _snapshot_xi(game.team_b)
     values = {"a": {"runs": 0, "wickets": 0}, "b": {"runs": 0, "wickets": 0}}
     for delivery in game.deliveries or []:
         if not isinstance(delivery, dict):
@@ -351,43 +371,45 @@ def _game_team_totals(game: models.Game) -> dict[str, dict[str, int]]:
 
 def _apply_result(
     game: models.Game,
-    team_a_id: str,
-    team_b_id: str,
+    school_sides: dict[Literal["a", "b"], str],
     totals: dict[str, dict[str, int]],
 ) -> None:
     if game.status == models.GameStatus.abandoned:
-        totals[team_a_id]["no_results"] += 1
-        totals[team_b_id]["no_results"] += 1
+        for team_id in school_sides.values():
+            totals[team_id]["no_results"] += 1
         return
     if game.status != models.GameStatus.completed:
         return
     result = _result_text(game.result) or ""
     lowered = result.lower()
     if lowered == "match tied":
-        totals[team_a_id]["ties"] += 1
-        totals[team_b_id]["ties"] += 1
+        for team_id in school_sides.values():
+            totals[team_id]["ties"] += 1
     elif lowered == "match drawn":
-        totals[team_a_id]["draws"] += 1
-        totals[team_b_id]["draws"] += 1
+        for team_id in school_sides.values():
+            totals[team_id]["draws"] += 1
     elif lowered in {"no result", "match abandoned"}:
-        totals[team_a_id]["no_results"] += 1
-        totals[team_b_id]["no_results"] += 1
+        for team_id in school_sides.values():
+            totals[team_id]["no_results"] += 1
     elif " won by " in result:
         winner_name = result.split(" won by ", 1)[0]
         name_a = str(game.team_a.get("name", ""))
         name_b = str(game.team_b.get("name", ""))
+        winner_side: Literal["a", "b"] | None = None
         if name_a != name_b and winner_name == name_a:
-            totals[team_a_id]["wins"] += 1
-            totals[team_b_id]["losses"] += 1
+            winner_side = "a"
         elif name_a != name_b and winner_name == name_b:
-            totals[team_b_id]["wins"] += 1
-            totals[team_a_id]["losses"] += 1
-        else:
-            totals[team_a_id]["no_results"] += 1
-            totals[team_b_id]["no_results"] += 1
+            winner_side = "b"
+        for side, team_id in school_sides.items():
+            if winner_side is None:
+                totals[team_id]["no_results"] += 1
+            elif side == winner_side:
+                totals[team_id]["wins"] += 1
+            else:
+                totals[team_id]["losses"] += 1
     else:
-        totals[team_a_id]["no_results"] += 1
-        totals[team_b_id]["no_results"] += 1
+        for team_id in school_sides.values():
+            totals[team_id]["no_results"] += 1
 
 
 async def team_statistics(
@@ -413,27 +435,24 @@ async def team_statistics(
     games = list((await db.scalars(_school_games_stmt(organization_id))).all())
     for game in games:
         source_a, source_b, _, _ = _game_sides(game)
-        if (
-            source_a is None
-            or source_b is None
-            or source_a not in values
-            or source_b not in values
-            or source_a == source_b
-        ):
+        school_sides: dict[Literal["a", "b"], str] = {}
+        if source_a is not None and source_a in values:
+            school_sides["a"] = source_a
+        if source_b is not None and source_b in values and source_b != source_a:
+            school_sides["b"] = source_b
+        if not school_sides:
             continue
         if _started(game):
-            values[source_a]["matches"] += 1
-            values[source_b]["matches"] += 1
+            for team_id in school_sides.values():
+                values[team_id]["matches"] += 1
         game_totals = _game_team_totals(game)
-        values[source_a]["runs_scored"] += game_totals["a"]["runs"]
-        values[source_a]["runs_conceded"] += game_totals["b"]["runs"]
-        values[source_a]["wickets_lost"] += game_totals["a"]["wickets"]
-        values[source_a]["wickets_taken"] += game_totals["b"]["wickets"]
-        values[source_b]["runs_scored"] += game_totals["b"]["runs"]
-        values[source_b]["runs_conceded"] += game_totals["a"]["runs"]
-        values[source_b]["wickets_lost"] += game_totals["b"]["wickets"]
-        values[source_b]["wickets_taken"] += game_totals["a"]["wickets"]
-        _apply_result(game, source_a, source_b, values)
+        for side, team_id in school_sides.items():
+            opponent_side = "b" if side == "a" else "a"
+            values[team_id]["runs_scored"] += game_totals[side]["runs"]
+            values[team_id]["runs_conceded"] += game_totals[opponent_side]["runs"]
+            values[team_id]["wickets_lost"] += game_totals[side]["wickets"]
+            values[team_id]["wickets_taken"] += game_totals[opponent_side]["wickets"]
+        _apply_result(game, school_sides, values)
     return [
         SchoolTeamStatistics(
             team_id=team.id,
@@ -447,7 +466,9 @@ async def team_statistics(
 
 def _match_result(game: models.Game) -> SchoolMatchResult | None:
     team_a_id, team_b_id, _, _ = _game_sides(game)
-    if team_a_id is None or team_b_id is None or team_a_id == team_b_id:
+    if (team_a_id is None and team_b_id is None) or (
+        team_a_id is not None and team_a_id == team_b_id
+    ):
         return None
     totals = _game_team_totals(game)
     publication = game.publication_state or "private"

@@ -12,6 +12,7 @@ import type {
 } from '@/types/schoolAdmin';
 
 type Side = 'a' | 'b';
+type MatchMode = 'school_vs_school' | 'school_vs_external';
 
 const router = useRouter();
 const { organizationId, canCreateSchoolMatch } = useSchoolContext();
@@ -31,6 +32,12 @@ const loadingA = ref(false);
 const loadingB = ref(false);
 const creating = ref(false);
 const error = ref('');
+const mode = ref<MatchMode>('school_vs_school');
+const schoolOrientation = ref<'team_a' | 'team_b'>('team_a');
+const externalTeamName = ref('');
+const externalPlayerNames = ref<string[]>(Array.from({ length: 11 }, () => ''));
+const externalCaptainIndex = ref(0);
+const externalWicketkeeperIndex = ref(1);
 
 const matchType = ref<'limited' | 'multi_day' | 'custom'>('limited');
 const oversLimit = ref<number | null>(20);
@@ -42,6 +49,19 @@ const decision = ref<'bat' | 'bowl'>('bat');
 
 const teamA = computed(() => teams.value.find((team) => team.id === teamAId.value));
 const teamB = computed(() => teams.value.find((team) => team.id === teamBId.value));
+const schoolTeam = computed(() => teamA.value);
+const displayTeamAName = computed(() =>
+  mode.value === 'school_vs_external' && schoolOrientation.value === 'team_b'
+    ? externalTeamName.value.trim() || 'External opponent'
+    : teamA.value?.name || 'Team A',
+);
+const displayTeamBName = computed(() =>
+  mode.value === 'school_vs_external' && schoolOrientation.value === 'team_a'
+    ? externalTeamName.value.trim() || 'External opponent'
+    : mode.value === 'school_vs_external'
+      ? teamA.value?.name || 'School Team'
+      : teamB.value?.name || 'Team B',
+);
 
 function resetSide(side: Side) {
   if (side === 'a') {
@@ -63,7 +83,19 @@ function resetSchoolState() {
   teamBId.value = '';
   resetSide('a');
   resetSide('b');
+  mode.value = 'school_vs_school';
+  schoolOrientation.value = 'team_a';
+  externalTeamName.value = '';
+  externalPlayerNames.value = Array.from({ length: 11 }, () => '');
+  externalCaptainIndex.value = 0;
+  externalWicketkeeperIndex.value = 1;
   error.value = '';
+}
+
+function setMode(nextMode: MatchMode) {
+  mode.value = nextMode;
+  error.value = '';
+  if (nextMode === 'school_vs_external') resetSide('b');
 }
 
 async function loadTeams() {
@@ -139,18 +171,48 @@ function selectedPlayers(side: Side) {
 }
 
 function validationMessage(): string {
-  if (!teamAId.value || !teamBId.value) return 'Choose two saved School Teams.';
-  if (teamAId.value === teamBId.value) return 'Choose two different saved School Teams.';
-  if (selectedA.value.length !== 11 || selectedB.value.length !== 11)
-    return 'Explicitly select exactly 11 eligible players for each playing XI.';
-  if (!captainA.value || !captainB.value || !wicketkeeperA.value || !wicketkeeperB.value)
+  if (!teamAId.value) return 'Choose a saved School Team.';
+  if (mode.value === 'school_vs_school' && !teamBId.value) return 'Choose two saved School Teams.';
+  if (mode.value === 'school_vs_school' && teamAId.value === teamBId.value)
+    return 'Choose two different saved School Teams.';
+  if (
+    selectedA.value.length !== 11 ||
+    (mode.value === 'school_vs_school' && selectedB.value.length !== 11)
+  )
+    return mode.value === 'school_vs_school'
+      ? 'Explicitly select exactly 11 eligible players for each playing XI.'
+      : 'Explicitly select exactly 11 eligible School players.';
+  if (
+    !captainA.value ||
+    !wicketkeeperA.value ||
+    (mode.value === 'school_vs_school' && (!captainB.value || !wicketkeeperB.value))
+  )
     return 'Choose a captain and wicketkeeper from each playing XI.';
   const profileIdsA = selectedPlayers('a').map((player) => player.player_profile_id);
   const profileIdsB = selectedPlayers('b').map((player) => player.player_profile_id);
-  if (new Set(profileIdsA).size !== 11 || new Set(profileIdsB).size !== 11)
+  if (
+    new Set(profileIdsA).size !== 11 ||
+    (mode.value === 'school_vs_school' && new Set(profileIdsB).size !== 11)
+  )
     return 'A playing XI cannot contain the same canonical player twice.';
-  if (profileIdsA.some((id) => profileIdsB.includes(id)))
+  if (mode.value === 'school_vs_school' && profileIdsA.some((id) => profileIdsB.includes(id)))
     return 'The same canonical player cannot represent both sides in one match.';
+  if (mode.value === 'school_vs_external') {
+    if (!externalTeamName.value.trim()) return 'Enter the external opponent Team name.';
+    if (externalTeamName.value.trim().length > 255)
+      return 'External opponent Team name must be 255 characters or fewer.';
+    const names = externalPlayerNames.value.map((name) => name.trim());
+    if (names.some((name) => !name)) return 'Enter all 11 external opponent player names.';
+    if (names.some((name) => name.length > 255))
+      return 'External player names must be 255 characters or fewer.';
+    if (new Set(names.map((name) => name.toLocaleLowerCase())).size !== 11)
+      return 'External opponent player names must be distinct.';
+    if (
+      externalTeamName.value.trim().toLocaleLowerCase() ===
+      schoolTeam.value?.name.toLocaleLowerCase()
+    )
+      return 'School and external opponent Team names must be different.';
+  }
   if (matchType.value === 'limited' && !oversLimit.value)
     return 'Set the overs limit for this limited-overs match.';
   if (matchType.value === 'multi_day' && (!daysLimit.value || !oversPerDay.value))
@@ -169,18 +231,32 @@ async function createMatch() {
     return;
   }
   const payload: SchoolMatchCreate = {
+    mode: mode.value,
+    school_side: mode.value === 'school_vs_external' ? schoolOrientation.value : null,
     team_a: {
       team_id: teamAId.value,
       playing_xi_membership_ids: [...selectedA.value],
       captain_membership_id: captainA.value,
       wicketkeeper_membership_id: wicketkeeperA.value,
     },
-    team_b: {
-      team_id: teamBId.value,
-      playing_xi_membership_ids: [...selectedB.value],
-      captain_membership_id: captainB.value,
-      wicketkeeper_membership_id: wicketkeeperB.value,
-    },
+    team_b:
+      mode.value === 'school_vs_school'
+        ? {
+            team_id: teamBId.value,
+            playing_xi_membership_ids: [...selectedB.value],
+            captain_membership_id: captainB.value,
+            wicketkeeper_membership_id: wicketkeeperB.value,
+          }
+        : null,
+    external_opponent:
+      mode.value === 'school_vs_external'
+        ? {
+            team_name: externalTeamName.value.trim(),
+            player_names: externalPlayerNames.value.map((name) => name.trim()),
+            captain_index: externalCaptainIndex.value,
+            wicketkeeper_index: externalWicketkeeperIndex.value,
+          }
+        : null,
     match_type: matchType.value,
     overs_limit: matchType.value === 'limited' ? oversLimit.value : null,
     days_limit: matchType.value === 'multi_day' ? daysLimit.value : null,
@@ -189,6 +265,10 @@ async function createMatch() {
     toss_winner_side: tossWinnerSide.value,
     decision: decision.value,
   };
+  if (mode.value === 'school_vs_external' && schoolOrientation.value === 'team_b') {
+    payload.team_b = payload.team_a;
+    payload.team_a = null;
+  }
   creating.value = true;
   error.value = '';
   try {
@@ -217,10 +297,10 @@ watch(teamBId, (teamId) => loadRoster('b', teamId));
   <section class="panel" aria-labelledby="school-match-heading">
     <header>
       <p class="eyebrow">Phase 7I · Match setup</p>
-      <h2 id="school-match-heading">Create a match from saved School Teams</h2>
+      <h2 id="school-match-heading">Create a School match</h2>
       <p class="boundary">
-        A Team roster is not a playing XI. Select exactly eleven eligible players for this match;
-        no roster is selected automatically.
+        A Team roster is not a playing XI. Select exactly eleven eligible players for this match; no
+        roster is selected automatically.
       </p>
       <RouterLink to="/setup">Use generic/manual match setup instead</RouterLink>
     </header>
@@ -229,15 +309,59 @@ watch(teamBId, (teamId) => loadRoster('b', teamId));
       Your active School role or entitlement does not permit match setup.
     </p>
     <p v-else-if="loadingTeams" role="status">Loading saved Teams…</p>
-    <p v-else-if="teams.length < 2" class="notice" role="status">
-      Create at least two active saved Teams before starting a School match.
+    <div v-else class="mode-picker" aria-label="Match opponent mode">
+      <button
+        type="button"
+        :aria-pressed="mode === 'school_vs_school'"
+        data-testid="mode-school-vs-school"
+        @click="setMode('school_vs_school')"
+      >
+        School Team vs School Team
+      </button>
+      <button
+        type="button"
+        :aria-pressed="mode === 'school_vs_external'"
+        data-testid="mode-school-vs-external"
+        @click="setMode('school_vs_external')"
+      >
+        School Team vs External Opponent
+      </button>
+    </div>
+    <p
+      v-if="
+        canCreateSchoolMatch &&
+        !loadingTeams &&
+        ((mode === 'school_vs_school' && teams.length < 2) ||
+          (mode === 'school_vs_external' && teams.length < 1))
+      "
+      class="notice"
+      role="status"
+    >
+      {{
+        mode === 'school_vs_school'
+          ? 'Create at least two active saved Teams before starting this match.'
+          : 'Create an active saved School Team before starting this match.'
+      }}
     </p>
 
-    <form v-else class="setup-form" @submit.prevent="createMatch">
+    <form
+      v-if="
+        canCreateSchoolMatch &&
+        !loadingTeams &&
+        ((mode === 'school_vs_school' && teams.length >= 2) ||
+          (mode === 'school_vs_external' && teams.length >= 1))
+      "
+      class="setup-form"
+      @submit.prevent="createMatch"
+    >
       <div class="teams-grid">
         <fieldset>
-          <legend>Team A and playing XI</legend>
-          <label for="school-team-a">Saved Team</label>
+          <legend>
+            {{
+              mode === 'school_vs_external' ? 'School Team and playing XI' : 'Team A and playing XI'
+            }}
+          </legend>
+          <label for="school-team-a">Saved School Team</label>
           <select id="school-team-a" v-model="teamAId" data-testid="school-team-a">
             <option value="">Choose Team A…</option>
             <option v-for="team in teams" :key="team.id" :value="team.id">{{ team.name }}</option>
@@ -283,7 +407,7 @@ watch(teamBId, (teamId) => loadRoster('b', teamId));
           </select>
         </fieldset>
 
-        <fieldset>
+        <fieldset v-if="mode === 'school_vs_school'">
           <legend>Team B and playing XI</legend>
           <label for="school-team-b">Saved Team</label>
           <select id="school-team-b" v-model="teamBId" data-testid="school-team-b">
@@ -330,6 +454,54 @@ watch(teamBId, (teamId) => loadRoster('b', teamId));
             </option>
           </select>
         </fieldset>
+
+        <fieldset v-else data-testid="external-opponent-fields">
+          <legend>External opponent and playing XI</legend>
+          <p class="boundary">
+            These players are match-local only. No School Team, roster membership, or Cricksy
+            account will be created.
+          </p>
+          <label for="school-orientation">School side</label>
+          <select
+            id="school-orientation"
+            v-model="schoolOrientation"
+            data-testid="school-orientation"
+          >
+            <option value="team_a">Team A</option>
+            <option value="team_b">Team B</option>
+          </select>
+          <label for="external-team-name">External opponent Team name</label>
+          <input
+            id="external-team-name"
+            v-model="externalTeamName"
+            data-testid="external-team-name"
+            maxlength="255"
+            placeholder="Westhaven College First XI"
+          />
+          <ol class="external-xi" aria-label="External opponent XI">
+            <li v-for="(_, index) in externalPlayerNames" :key="index">
+              <label :for="`external-player-${index}`">Player {{ index + 1 }}</label>
+              <input
+                :id="`external-player-${index}`"
+                v-model="externalPlayerNames[index]"
+                :data-testid="`external-player-${index}`"
+                maxlength="255"
+              />
+            </li>
+          </ol>
+          <label for="external-captain">Captain</label>
+          <select id="external-captain" v-model.number="externalCaptainIndex">
+            <option v-for="(_, index) in externalPlayerNames" :key="index" :value="index">
+              {{ externalPlayerNames[index].trim() || `Player ${index + 1}` }}
+            </option>
+          </select>
+          <label for="external-keeper">Wicketkeeper</label>
+          <select id="external-keeper" v-model.number="externalWicketkeeperIndex">
+            <option v-for="(_, index) in externalPlayerNames" :key="index" :value="index">
+              {{ externalPlayerNames[index].trim() || `Player ${index + 1}` }}
+            </option>
+          </select>
+        </fieldset>
       </div>
 
       <fieldset class="match-details">
@@ -353,19 +525,13 @@ watch(teamBId, (teamId) => loadRoster('b', teamId));
           <label for="days-limit">Days</label>
           <input id="days-limit" v-model.number="daysLimit" type="number" min="1" max="7" />
           <label for="overs-per-day">Overs per day</label>
-          <input
-            id="overs-per-day"
-            v-model.number="oversPerDay"
-            type="number"
-            min="1"
-            max="120"
-          />
+          <input id="overs-per-day" v-model.number="oversPerDay" type="number" min="1" max="120" />
         </template>
         <label><input v-model="dlsEnabled" type="checkbox" /> Enable DLS</label>
         <label for="toss-winner">Toss winner</label>
         <select id="toss-winner" v-model="tossWinnerSide">
-          <option value="team_a">{{ teamA?.name || 'Team A' }}</option>
-          <option value="team_b">{{ teamB?.name || 'Team B' }}</option>
+          <option value="team_a">{{ displayTeamAName }}</option>
+          <option value="team_b">{{ displayTeamBName }}</option>
         </select>
         <fieldset class="decision">
           <legend>Toss decision</legend>
@@ -419,6 +585,15 @@ watch(teamBId, (teamId) => loadRoster('b', teamId));
   gap: 1rem;
   margin-top: 1rem;
 }
+.mode-picker {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+.mode-picker button[aria-pressed='false'] {
+  background: #445171;
+  color: #eef2ff;
+}
 .teams-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -437,12 +612,26 @@ legend {
   font-weight: 700;
 }
 select,
-input[type='number'] {
+input[type='number'],
+input[type='text'],
+input:not([type]) {
   padding: 0.65rem;
   border: 1px solid #607095;
   border-radius: 7px;
   background: #111827;
   color: inherit;
+}
+.external-xi {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+  padding-left: 1.5rem;
+}
+.external-xi li {
+  display: grid;
+  grid-template-columns: 6rem 1fr;
+  gap: 0.5rem;
+  align-items: center;
 }
 .roster {
   display: grid;
