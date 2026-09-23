@@ -3,13 +3,20 @@ import { createPinia, setActivePinia } from 'pinia'
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { computed, reactive, ref, nextTick } from 'vue'
 
+import { apiService } from '@/services/api'
 import { useGameStore } from '@/stores/gameStore'
 import GameScoringView from '@/views/GameScoringView.vue'
 
-vi.mock('vue-router', () => ({
-  useRoute: () => ({ params: { gameId: 'test-game' }, query: {} }),
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
-}))
+const routeHarness = vi.hoisted(() => ({ current: null as any }))
+
+vi.mock('vue-router', async () => {
+  const { reactive } = await vi.importActual<typeof import('vue')>('vue')
+  routeHarness.current = reactive({ params: { gameId: 'test-game' }, query: {} })
+  return {
+    useRoute: () => routeHarness.current,
+    useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+  }
+})
 
 const createAuthStoreMock = () => ({
   canScore: ref(true),
@@ -19,7 +26,7 @@ const createAuthStoreMock = () => ({
 })
 
 const createGameStoreMock = () => {
-  const uiState = {
+  const uiState = reactive({
     loading: false,
     error: null,
     selectedStrikerId: 'striker-1',
@@ -27,8 +34,8 @@ const createGameStoreMock = () => {
     selectedBowlerId: 'bowler-1',
     scoringDisabled: false,
     activeScorecardTab: 'batting',
-  }
-  const state = {
+  })
+  const state = reactive({
     needs_new_batter: false,
     needs_new_over: false,
     needs_new_innings: false,
@@ -37,7 +44,7 @@ const createGameStoreMock = () => {
     current_over_balls: 0,
     mid_over_change_used: false,
     batting_order_ids: [],
-  }
+  })
   const score = reactive({ runs: 0, overs: '0.0', wickets: 0 })
   const battingPlayers = [
     { id: 'striker-1', name: 'Striker One' },
@@ -47,6 +54,8 @@ const createGameStoreMock = () => {
 
   const battingRosterXI = ref(battingPlayers)
   const bowlingRosterXI = ref(bowlingPlayers)
+  const canScoreState = ref(true)
+  const canScoreDeliveryState = ref(true)
 
   const battingRowsXI = ref(
     battingPlayers.map((player) => ({
@@ -77,7 +86,7 @@ const createGameStoreMock = () => {
     applyDls: vi.fn(),
     changeBowlerMidOver: vi.fn(),
     connectionStatus: 'connected',
-    currentGame: {
+    currentGame: reactive({
       id: 'test-game',
       status: 'in_progress',
       current_inning: 1,
@@ -87,7 +96,7 @@ const createGameStoreMock = () => {
       batting_order_ids: [],
       dls_enabled: false,
       overs_limit: 20,
-    },
+    }),
     dlsApplied: false,
     dlsPanel: {},
     dlsParNow: vi.fn(),
@@ -113,13 +122,24 @@ const createGameStoreMock = () => {
       uiState.selectedStrikerId = id
     },
     startInterruption: vi.fn(),
+    startNextInnings: vi.fn(),
     startNewOver: vi.fn(),
     state,
     stopInterruption: vi.fn(),
     stopLive: vi.fn(),
     uiState,
-    canScore: true,
-    canScoreDelivery: true,
+    get canScore() {
+      return canScoreState.value
+    },
+    set canScore(value: boolean) {
+      canScoreState.value = value
+    },
+    get canScoreDelivery() {
+      return canScoreDeliveryState.value
+    },
+    set canScoreDelivery(value: boolean) {
+      canScoreDeliveryState.value = value
+    },
     liveSnapshot: ref(null),
     needsNewBatter: ref(false),
     needsNewOver: ref(false),
@@ -180,7 +200,44 @@ describe('GameScoringView', () => {
     setActivePinia(pinia)
     gameStoreMock = createGameStoreMock()
     authStoreMock = createAuthStoreMock()
+    routeHarness.current.params.gameId = 'test-game'
+    vi.restoreAllMocks()
+    vi.spyOn(apiService, 'setOpeners').mockResolvedValue({} as any)
   })
+
+  const prepareSchoolFirstInnings = (canScore = true) => {
+    gameStoreMock.currentGame.status = 'innings_break'
+    gameStoreMock.currentGame.current_inning = 0
+    gameStoreMock.state.needs_new_innings = true
+    gameStoreMock.state.current_bowler_id = null
+    gameStoreMock.canScore = false
+    gameStoreMock.canScoreDelivery = false
+    authStoreMock.canScore.value = false
+    gameStoreMock.liveSnapshot.value = {
+      school_organization_id: 'school-1',
+      can_score: canScore,
+      status: 'innings_break',
+      current_inning: 0,
+      needs_new_innings: true,
+    }
+    gameStoreMock.startNextInnings = vi.fn(async () => {
+      gameStoreMock.currentGame.status = 'in_progress'
+      gameStoreMock.currentGame.current_inning = 1
+      gameStoreMock.state.needs_new_innings = false
+      gameStoreMock.canScore = true
+      gameStoreMock.canScoreDelivery = true
+      gameStoreMock.liveSnapshot.value = {
+        school_organization_id: 'school-1',
+        can_score: canScore,
+        status: 'in_progress',
+        current_inning: 1,
+        needs_new_innings: false,
+        current_striker_id: 'striker-1',
+        current_non_striker_id: 'non-striker-1',
+        current_bowler_id: 'bowler-1',
+      }
+    })
+  }
 
   const mountView = async (attachTo?: HTMLElement) => {
     const wrapper = mount(GameScoringView, {
@@ -207,6 +264,11 @@ describe('GameScoringView', () => {
 
     await nextTick()
     return wrapper
+  }
+
+  const setLiveSnapshot = async (snapshot: Record<string, unknown> | null) => {
+    gameStoreMock.liveSnapshot.value = snapshot
+    await nextTick()
   }
 
   it('disables scoring when the store gate is closed', async () => {
@@ -343,5 +405,348 @@ describe('GameScoringView', () => {
     expect(gate.text()).toContain('previous innings is complete')
     expect(gate.text()).toContain('Start Next Innings')
     expect(gate.text()).not.toContain('Ready to Start')
+  })
+
+  it.each(['owner', 'scorer'])(
+    'uses School context authority for an authorized %s with no personal scoring role',
+    async () => {
+    prepareSchoolFirstInnings()
+
+    const wrapper = await mountView()
+    await flushPromises()
+
+    expect(apiService.setOpeners).toHaveBeenCalledTimes(1)
+    expect(apiService.setOpeners).toHaveBeenCalledWith('test-game', {
+      striker_id: 'striker-1',
+      non_striker_id: 'non-striker-1',
+    })
+    expect(gameStoreMock.startNextInnings).toHaveBeenCalledTimes(1)
+    expect(gameStoreMock.startNextInnings).toHaveBeenCalledWith('test-game', {
+      striker_id: 'striker-1',
+      non_striker_id: 'non-striker-1',
+      opening_bowler_id: 'bowler-1',
+    })
+    expect(gameStoreMock.scoreRuns).not.toHaveBeenCalled()
+    expect(wrapper.find('[data-testid="gate-innings"]').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="scorer-controls"]').attributes('aria-disabled')).toBe('false')
+    expect(wrapper.get('[data-testid="submit-delivery"]').attributes('disabled')).toBeUndefined()
+
+    gameStoreMock.liveSnapshot.value = { ...gameStoreMock.liveSnapshot.value }
+    await flushPromises()
+    expect(gameStoreMock.startNextInnings).toHaveBeenCalledTimes(1)
+    },
+  )
+
+  it.each([
+    ['', 'non-striker-1', 'bowler-1'],
+    ['striker-1', '', 'bowler-1'],
+    ['striker-1', 'non-striker-1', ''],
+    ['striker-1', 'striker-1', 'bowler-1'],
+    ['striker-1', 'non-striker-1', 'not-in-xi'],
+  ])('does not start a School first innings for an invalid opening selection', async (striker, nonStriker, bowler) => {
+    prepareSchoolFirstInnings()
+    gameStoreMock.uiState.selectedStrikerId = striker
+    gameStoreMock.uiState.selectedNonStrikerId = nonStriker
+    gameStoreMock.uiState.selectedBowlerId = bowler
+
+    const wrapper = await mountView()
+    await flushPromises()
+
+    expect(gameStoreMock.startNextInnings).not.toHaveBeenCalled()
+    expect(wrapper.get('[data-testid="gate-innings"]').text()).toContain(
+      'Select striker, non-striker and opening bowler to begin.',
+    )
+  })
+
+  it('keeps School viewers read-only even when opening selections are present', async () => {
+    prepareSchoolFirstInnings(false)
+
+    const wrapper = await mountView()
+    await flushPromises()
+
+    expect(gameStoreMock.startNextInnings).not.toHaveBeenCalled()
+    expect(wrapper.get('[data-testid="scorer-striker-select"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('[data-testid="scorer-nonstriker-select"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('[data-testid="scorer-bowler-select"]').attributes('disabled')).toBeDefined()
+  })
+
+  it('clears School authorization when the mounted scorer transitions to a generic game', async () => {
+    authStoreMock.canScore.value = false
+    gameStoreMock.liveSnapshot.value = {
+      school_organization_id: 'school-1',
+      can_score: true,
+      status: 'in_progress',
+      current_inning: 1,
+      needs_new_innings: false,
+    }
+
+    const wrapper = await mountView()
+
+    expect(wrapper.get('[data-testid="scorer-controls"]').attributes('aria-disabled')).toBe('false')
+    expect(wrapper.get('[data-testid="submit-delivery"]').attributes('disabled')).toBeUndefined()
+
+    await setLiveSnapshot({
+      status: 'in_progress',
+      current_inning: 1,
+      needs_new_innings: false,
+    })
+
+    expect(wrapper.get('[data-testid="scorer-controls"]').attributes('aria-disabled')).toBe('true')
+    expect(wrapper.get('[data-testid="submit-delivery"]').attributes('disabled')).toBeDefined()
+  })
+
+  it('does not carry School A authorization while School B is loading', async () => {
+    authStoreMock.canScore.value = false
+    gameStoreMock.liveSnapshot.value = {
+      school_organization_id: 'school-a',
+      can_score: true,
+      status: 'in_progress',
+      current_inning: 1,
+      needs_new_innings: false,
+    }
+
+    const wrapper = await mountView()
+    expect(wrapper.get('[data-testid="scorer-controls"]').attributes('aria-disabled')).toBe('false')
+
+    routeHarness.current.params.gameId = 'school-b-game'
+    gameStoreMock.currentGame.id = 'school-b-game'
+    await nextTick()
+
+    expect(wrapper.get('[data-testid="scorer-controls"]').attributes('aria-disabled')).toBe('true')
+
+    await setLiveSnapshot(null)
+    expect(wrapper.get('[data-testid="scorer-controls"]').attributes('aria-disabled')).toBe('true')
+
+    await setLiveSnapshot({
+      school_organization_id: 'school-b',
+      can_score: false,
+      status: 'in_progress',
+      current_inning: 1,
+      needs_new_innings: false,
+    })
+    expect(wrapper.get('[data-testid="scorer-controls"]').attributes('aria-disabled')).toBe('true')
+  })
+
+  it('establishes School authorization after a generic game snapshot', async () => {
+    authStoreMock.canScore.value = false
+    gameStoreMock.liveSnapshot.value = {
+      status: 'in_progress',
+      current_inning: 1,
+      needs_new_innings: false,
+    }
+
+    const wrapper = await mountView()
+    expect(wrapper.get('[data-testid="scorer-controls"]').attributes('aria-disabled')).toBe('true')
+
+    await setLiveSnapshot({
+      school_organization_id: 'school-1',
+      can_score: true,
+      status: 'in_progress',
+      current_inning: 1,
+      needs_new_innings: false,
+    })
+
+    expect(wrapper.get('[data-testid="scorer-controls"]').attributes('aria-disabled')).toBe('false')
+    expect(wrapper.get('[data-testid="submit-delivery"]').attributes('disabled')).toBeUndefined()
+  })
+
+  it('uses the latest authorization on same-School snapshot refreshes', async () => {
+    authStoreMock.canScore.value = false
+    gameStoreMock.liveSnapshot.value = {
+      school_organization_id: 'school-1',
+      can_score: true,
+      status: 'in_progress',
+      current_inning: 1,
+      needs_new_innings: false,
+    }
+
+    const wrapper = await mountView()
+    expect(wrapper.get('[data-testid="scorer-controls"]').attributes('aria-disabled')).toBe('false')
+
+    await setLiveSnapshot({
+      school_organization_id: 'school-1',
+      can_score: true,
+      status: 'in_progress',
+      current_inning: 1,
+      needs_new_innings: false,
+      refreshed_at: '2026-09-23T00:00:00Z',
+    })
+    expect(wrapper.get('[data-testid="scorer-controls"]').attributes('aria-disabled')).toBe('false')
+
+    await setLiveSnapshot({
+      school_organization_id: 'school-1',
+      can_score: false,
+      status: 'in_progress',
+      current_inning: 1,
+      needs_new_innings: false,
+    })
+    expect(wrapper.get('[data-testid="scorer-controls"]').attributes('aria-disabled')).toBe('true')
+  })
+
+  it('does not carry a failed first-innings guard or error into the next game', async () => {
+    prepareSchoolFirstInnings()
+    gameStoreMock.startNextInnings = vi.fn()
+      .mockRejectedValueOnce(new Error('School A rejected'))
+      .mockRejectedValueOnce(new Error('School B rejected'))
+
+    const wrapper = await mountView()
+    await flushPromises()
+
+    expect(gameStoreMock.startNextInnings).toHaveBeenCalledTimes(1)
+    expect(wrapper.get('[data-testid="gate-innings"]').text()).toContain('School A rejected')
+
+    routeHarness.current.params.gameId = 'school-b-game'
+    gameStoreMock.currentGame.id = 'school-b-game'
+    await nextTick()
+    expect(wrapper.get('[data-testid="gate-innings"]').text()).not.toContain('School A rejected')
+
+    await setLiveSnapshot({
+      school_organization_id: 'school-b',
+      can_score: true,
+      status: 'innings_break',
+      current_inning: 0,
+      needs_new_innings: true,
+    })
+    await flushPromises()
+
+    expect(gameStoreMock.startNextInnings).toHaveBeenCalledTimes(2)
+    expect(wrapper.get('[data-testid="gate-innings"]').text()).toContain('School B rejected')
+  })
+
+  it('does not carry a completed first-innings guard into the next game', async () => {
+    prepareSchoolFirstInnings()
+    gameStoreMock.startNextInnings = vi.fn().mockResolvedValue(undefined)
+
+    await mountView()
+    await flushPromises()
+    expect(gameStoreMock.startNextInnings).toHaveBeenCalledTimes(1)
+
+    routeHarness.current.params.gameId = 'school-b-game'
+    gameStoreMock.currentGame.id = 'school-b-game'
+    gameStoreMock.currentGame.status = 'innings_break'
+    gameStoreMock.currentGame.current_inning = 0
+    gameStoreMock.state.needs_new_innings = true
+    gameStoreMock.canScore = false
+    gameStoreMock.canScoreDelivery = false
+    await setLiveSnapshot({
+      school_organization_id: 'school-b',
+      can_score: true,
+      status: 'innings_break',
+      current_inning: 0,
+      needs_new_innings: true,
+    })
+    await flushPromises()
+
+    expect(gameStoreMock.startNextInnings).toHaveBeenCalledTimes(2)
+    expect(gameStoreMock.startNextInnings).toHaveBeenLastCalledWith('school-b-game', {
+      striker_id: 'striker-1',
+      non_striker_id: 'non-striker-1',
+      opening_bowler_id: 'bowler-1',
+    })
+  })
+
+  it('invalidates a pending first-innings operation when the game changes', async () => {
+    prepareSchoolFirstInnings()
+    let resolveSchoolA: (() => void) | undefined
+    const schoolAStart = new Promise<void>((resolve) => {
+      resolveSchoolA = resolve
+    })
+    gameStoreMock.startNextInnings = vi.fn()
+      .mockImplementationOnce(() => schoolAStart)
+      .mockResolvedValueOnce(undefined)
+
+    await mountView()
+    await flushPromises()
+    expect(gameStoreMock.startNextInnings).toHaveBeenCalledTimes(1)
+
+    routeHarness.current.params.gameId = 'school-b-game'
+    gameStoreMock.currentGame.id = 'school-b-game'
+    gameStoreMock.currentGame.status = 'innings_break'
+    gameStoreMock.currentGame.current_inning = 0
+    gameStoreMock.state.needs_new_innings = true
+    await setLiveSnapshot({
+      school_organization_id: 'school-b',
+      can_score: true,
+      status: 'innings_break',
+      current_inning: 0,
+      needs_new_innings: true,
+    })
+    await flushPromises()
+
+    expect(gameStoreMock.startNextInnings).toHaveBeenCalledTimes(2)
+    expect(gameStoreMock.startNextInnings).toHaveBeenLastCalledWith('school-b-game', {
+      striker_id: 'striker-1',
+      non_striker_id: 'non-striker-1',
+      opening_bowler_id: 'bowler-1',
+    })
+
+    resolveSchoolA?.()
+    await flushPromises()
+    expect(gameStoreMock.startNextInnings).toHaveBeenCalledTimes(2)
+  })
+
+  it('requires an explicit retry after a failed School first-innings start', async () => {
+    prepareSchoolFirstInnings()
+    gameStoreMock.startNextInnings = vi.fn()
+      .mockRejectedValueOnce(new Error('Start rejected'))
+      .mockImplementationOnce(async () => {
+        gameStoreMock.currentGame.status = 'in_progress'
+        gameStoreMock.currentGame.current_inning = 1
+        gameStoreMock.state.needs_new_innings = false
+        gameStoreMock.canScore = true
+        gameStoreMock.canScoreDelivery = true
+        gameStoreMock.liveSnapshot.value = {
+          school_organization_id: 'school-1',
+          can_score: true,
+          status: 'in_progress',
+          current_inning: 1,
+          needs_new_innings: false,
+        }
+      })
+
+    const wrapper = await mountView()
+    await flushPromises()
+
+    expect(gameStoreMock.startNextInnings).toHaveBeenCalledTimes(1)
+    expect(wrapper.get('[data-testid="gate-innings"]').text()).toContain('Start rejected')
+    const retry = wrapper.get('[data-testid="retry-school-first-innings"]')
+    await retry.trigger('click')
+    await flushPromises()
+
+    expect(gameStoreMock.startNextInnings).toHaveBeenCalledTimes(2)
+    expect(wrapper.find('[data-testid="gate-innings"]').exists()).toBe(false)
+  })
+
+  it('does not auto-start later School innings', async () => {
+    prepareSchoolFirstInnings()
+    gameStoreMock.currentGame.current_inning = 1
+    gameStoreMock.liveSnapshot.value = {
+      school_organization_id: 'school-1',
+      can_score: true,
+      status: 'innings_break',
+      current_inning: 1,
+      needs_new_innings: true,
+    }
+
+    const wrapper = await mountView()
+    await flushPromises()
+
+    expect(gameStoreMock.startNextInnings).not.toHaveBeenCalled()
+    expect(wrapper.get('[data-testid="gate-innings"]').text()).toContain('Start Next Innings')
+  })
+
+  it('preserves the generic manual-start flow and personal role gate', async () => {
+    gameStoreMock.currentGame.status = 'innings_break'
+    gameStoreMock.currentGame.current_inning = 0
+    gameStoreMock.state.needs_new_innings = true
+    gameStoreMock.canScore = false
+    gameStoreMock.canScoreDelivery = false
+    authStoreMock.canScore.value = true
+
+    const wrapper = await mountView()
+    await flushPromises()
+
+    expect(gameStoreMock.startNextInnings).not.toHaveBeenCalled()
+    expect(wrapper.get('[data-testid="btn-open-start-innings"]').text()).toContain('Start First Innings')
   })
 })

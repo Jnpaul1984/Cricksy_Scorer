@@ -226,6 +226,9 @@ function coerceSnapshot(s: ApiSnapshot | any): UiSnapshot {
     needs_new_batter: Boolean(s?.needs_new_batter ?? false),
     needs_new_over: Boolean(s?.needs_new_over ?? false),
     needs_new_innings: Boolean(s?.needs_new_innings ?? false),
+    school_organization_id:
+      typeof s?.school_organization_id === 'string' ? s.school_organization_id : undefined,
+    can_score: typeof s?.can_score === 'boolean' ? s.can_score : undefined,
     // runtime bowling context
     current_bowler_id: s?.current_bowler_id ?? s?.currentBowlerId ?? s?.current_bowler?.id ?? null,
     last_ball_bowler_id: s?.last_ball_bowler_id ?? s?.lastBallBowlerId ?? s?.last_ball_bowler?.id ?? null,

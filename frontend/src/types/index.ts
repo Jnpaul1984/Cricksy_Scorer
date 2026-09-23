@@ -167,6 +167,9 @@ export interface Snapshot {
   // NEW gate flags
   needs_new_batter?: boolean
   needs_new_over?: boolean
+  needs_new_innings?: boolean
+  school_organization_id?: string
+  can_score?: boolean
   // completion/result
   is_game_over?: boolean;
   result?: MatchResult | null;

@@ -34,6 +34,8 @@ EDIT_ROLES = frozenset({"owner", "admin", "coach"})
 DELETE_ROLES = frozenset({"owner", "admin"})
 LINK_ROLES = frozenset({"owner", "admin", "coach", "scorer"})
 PUBLISH_ROLES = LINK_ROLES
+SCORE_ROLES = LINK_ROLES
+SCHOOL_SCORING_CAPABILITY = "school_matches_unlimited"
 
 
 @dataclass(frozen=True)
@@ -685,6 +687,56 @@ async def require_school_game_member(
         )
     except organization_service.OrganizationServiceError as exc:
         raise _not_found("Game") from exc
+
+
+async def school_game_scoring_authorization(
+    db: AsyncSession, *, game: models.Game, user: models.User | None
+) -> tuple[str | None, bool]:
+    """Resolve contextual scoring authority from a Game's frozen School source."""
+    organization_a, _ = _school_source(game.team_a)
+    organization_b, _ = _school_source(game.team_b)
+    if (
+        organization_a is not None
+        and organization_b is not None
+        and organization_a != organization_b
+    ):
+        raise _not_found("Game")
+    organization_id = organization_a or organization_b
+    if organization_id is None:
+        return None, False
+    if user is None or not user.is_active:
+        raise _not_found("Game")
+    try:
+        organization, membership = await organization_service.get_organization_for_member(
+            db, organization_id=organization_id, user_id=user.id
+        )
+    except organization_service.OrganizationServiceError as exc:
+        raise _not_found("Game") from exc
+
+    can_score = (
+        organization.organization_type == "school"
+        and membership.role in SCORE_ROLES
+        and await organization_has_capability(
+            db,
+            organization_id=organization_id,
+            capability=SCHOOL_SCORING_CAPABILITY,
+        )
+    )
+    return organization_id, can_score
+
+
+async def require_school_game_scorer(
+    db: AsyncSession, *, game: models.Game, user: models.User | None
+) -> None:
+    """Protect School-owned scorer mutations while preserving legacy Game behavior."""
+    organization_id, can_score = await school_game_scoring_authorization(db, game=game, user=user)
+    if organization_id is not None and not can_score:
+        logger.warning(
+            "organization.school_game_scoring_denied",
+            organization_id=organization_id,
+            actor_user_id=user.id if user is not None else None,
+        )
+        raise _forbidden()
 
 
 async def publication(

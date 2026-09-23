@@ -83,6 +83,15 @@ def _gh(name: str, *args: Any, **kwargs: Any) -> Any:
     return None
 
 
+async def _require_school_scorer(
+    db: AsyncSession, *, game: models.Game, user: models.User | None
+) -> None:
+    try:
+        await school_competition_service.require_school_game_scorer(db, game=game, user=user)
+    except school_competition_service.SchoolCompetitionServiceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+
+
 # Small runtime helper to coerce unknown values to int safely for static checks
 def _to_int_safe(x: Any) -> int:
     try:
@@ -165,10 +174,12 @@ async def start_over(
     game_id: str,
     body: StartOverBody,
     db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[models.User | None, Depends(get_current_user_optional)],
 ):
     db_game = await crud.get_game(db, game_id=game_id)
     if not db_game:
         raise HTTPException(status_code=404, detail="Game not found")
+    await _require_school_scorer(db, game=db_game, user=current_user)
 
     g: Any = db_game
 
@@ -290,10 +301,12 @@ async def change_bowler_mid_over(
     game_id: str,
     body: MidOverChangeBody,
     db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[models.User | None, Depends(get_current_user_optional)],
 ):
     db_game = await crud.get_game(db, game_id=game_id)
     if not db_game:
         raise HTTPException(status_code=404, detail="Game not found")
+    await _require_school_scorer(db, game=db_game, user=current_user)
 
     g: Any = db_game
 
@@ -373,6 +386,7 @@ async def change_bowler_mid_over(
 async def end_current_innings(
     game_id: str,
     db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[models.User | None, Depends(get_current_user_optional)],
 ) -> dict[str, Any]:
     """
     Manually end the current innings and set status to innings_break.
@@ -381,6 +395,7 @@ async def end_current_innings(
     db_game = await crud.get_game(db, game_id=game_id)
     if not db_game:
         raise HTTPException(status_code=404, detail="Game not found")
+    await _require_school_scorer(db, game=db_game, user=current_user)
 
     g: Any = db_game
 
@@ -503,10 +518,12 @@ async def start_next_innings(
     game_id: str,
     body: StartNextInningsBody,
     db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[models.User | None, Depends(get_current_user_optional)],
 ) -> dict[str, Any]:
     db_game = await crud.get_game(db, game_id=game_id)
     if not db_game:
         raise HTTPException(status_code=404, detail="Game not found")
+    await _require_school_scorer(db, game=db_game, user=current_user)
 
     g: Any = db_game
 
@@ -623,10 +640,12 @@ async def set_openers(
     game_id: str,
     body: dict[str, str],
     db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[models.User | None, Depends(get_current_user_optional)],
 ):
     db_game = await crud.get_game(db, game_id=game_id)
     if not db_game:
         raise HTTPException(status_code=404, detail="Game not found")
+    await _require_school_scorer(db, game=db_game, user=current_user)
 
     g: Any = db_game
 
@@ -656,10 +675,12 @@ async def replace_batter(
     game_id: str,
     body: ReplaceBatterBody,
     db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[models.User | None, Depends(get_current_user_optional)],
 ) -> dict[str, Any]:
     db_game = await crud.get_game(db, game_id=game_id)
     if not db_game:
         raise HTTPException(status_code=404, detail="Game not found")
+    await _require_school_scorer(db, game=db_game, user=current_user)
 
     g: Any = db_game
 
@@ -719,10 +740,12 @@ async def set_next_batter(
     game_id: str,
     body: NextBatterBody,
     db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[models.User | None, Depends(get_current_user_optional)],
 ):
     db_game = await crud.get_game(db, game_id=game_id)
     if not db_game:
         raise HTTPException(status_code=404, detail="Game not found")
+    await _require_school_scorer(db, game=db_game, user=current_user)
 
     g: Any = db_game
 
@@ -758,10 +781,12 @@ async def set_next_batter(
 async def finalize_game(
     game_id: str,
     db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[models.User | None, Depends(get_current_user_optional)],
 ) -> dict[str, Any]:
     db_game = await crud.get_game(db, game_id=game_id)
     if not db_game:
         raise HTTPException(status_code=404, detail="Game not found")
+    await _require_school_scorer(db, game=db_game, user=current_user)
 
     g: Any = db_game
 
@@ -794,7 +819,10 @@ async def get_snapshot(
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
     try:
-        await school_competition_service.require_school_game_member(
+        (
+            school_organization_id,
+            can_score_school_game,
+        ) = await school_competition_service.school_game_scoring_authorization(
             db, game=game, user=current_user
         )
     except school_competition_service.SchoolCompetitionServiceError as exc:
@@ -829,6 +857,9 @@ async def get_snapshot(
     snap["needs_new_batter"] = flags["needs_new_batter"]
     snap["needs_new_over"] = False if is_break else flags["needs_new_over"]
     snap["needs_new_innings"] = is_break
+    if school_organization_id is not None:
+        snap["school_organization_id"] = school_organization_id
+        snap["can_score"] = can_score_school_game
 
     # Interruption records + mini cards
     snap["interruptions"] = cast(list[dict[str, Any]], getattr(g, "interruptions", []) or [])
@@ -1021,10 +1052,12 @@ async def add_delivery(
     game_id: str,
     delivery: schemas.ScoreDelivery,
     db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[models.User | None, Depends(get_current_user_optional)],
 ) -> dict[str, Any]:
     db_game = await crud.get_game(db, game_id=game_id)
     if not db_game:
         raise HTTPException(status_code=404, detail="Game not found")
+    await _require_school_scorer(db, game=db_game, user=current_user)
 
     g: Any = db_game
 
@@ -1391,11 +1424,14 @@ async def add_delivery(
 
 @router.post("/{game_id}/undo-last")
 async def undo_last_delivery(
-    game_id: str, db: Annotated[AsyncSession, Depends(get_db)]
+    game_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[models.User | None, Depends(get_current_user_optional)],
 ) -> dict[str, Any]:
     db_game = await crud.get_game(db, game_id=game_id)
     if not db_game:
         raise HTTPException(status_code=404, detail="Game not found")
+    await _require_school_scorer(db, game=db_game, user=current_user)
 
     g: Any = db_game
 
@@ -1475,6 +1511,7 @@ async def correct_delivery(
     delivery_id: int,
     correction: DeliveryCorrection,
     db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[models.User | None, Depends(get_current_user_optional)],
 ) -> dict[str, Any]:
     """
     Correct a delivery by ID. Updates the delivery in the ledger,
@@ -1483,6 +1520,7 @@ async def correct_delivery(
     db_game = await crud.get_game(db, game_id=game_id)
     if not db_game:
         raise HTTPException(status_code=404, detail="Game not found")
+    await _require_school_scorer(db, game=db_game, user=current_user)
 
     g: Any = db_game
 

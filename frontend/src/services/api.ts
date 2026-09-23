@@ -300,6 +300,8 @@ export interface Snapshot {
   current_bowler_id?: string | null;
   balls_bowled_total?: number;
   needs_new_innings?: boolean;
+  school_organization_id?: string;
+  can_score?: boolean;
   teams?: { batting: { name: string }; bowling: { name: string } };
   players?: {
     batting: Array<{ id: string; name: string }>;
