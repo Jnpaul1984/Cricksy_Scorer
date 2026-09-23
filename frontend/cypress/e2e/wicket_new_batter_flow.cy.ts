@@ -2,12 +2,12 @@ const API_BASE: string = (Cypress.env('API_BASE') as string) || 'http://127.0.0.
 
 const ensureDialogOpen = (dialogTestId: string, triggerTestId: string) => {
   cy.get('body').then(($body) => {
-    const isOpen = $body.find(`[data-testid="${dialogTestId}"][open]`).length > 0
+    const isOpen = $body.find(`[data-testid="${dialogTestId}"]`).length > 0
     if (!isOpen) {
-      cy.get(`[data-testid="${triggerTestId}"]`).should('be.visible').click()
+      cy.get(`[data-testid="${triggerTestId}"]`).should('be.visible').click({ force: true })
     }
   })
-  cy.get(`[data-testid="${dialogTestId}"]`).should('have.attr', 'open')
+  cy.get(`[data-testid="${dialogTestId}"]`).should('be.visible').and('have.attr', 'role', 'dialog')
 }
 
 describe('Wicket → needs_new_batter gate clears after selecting replacement', () => {

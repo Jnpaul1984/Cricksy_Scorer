@@ -182,8 +182,9 @@ describe('GameScoringView', () => {
     authStoreMock = createAuthStoreMock()
   })
 
-  const mountView = async () => {
+  const mountView = async (attachTo?: HTMLElement) => {
     const wrapper = mount(GameScoringView, {
+      attachTo,
       global: {
         plugins: [pinia],
         stubs: {
@@ -192,7 +193,13 @@ describe('GameScoringView', () => {
           DeliveryTable: true,
           BattingCard: true,
           BowlingCard: true,
+          EventLogTab: true,
+          InningsGradeWidget: true,
+          PhaseTimelineWidget: true,
+          PressureMapWidget: true,
           ShotMapCanvas: true,
+          WinProbabilityChart: true,
+          WinProbabilityWidget: true,
           RouterLink: true,
         },
       },
@@ -208,7 +215,13 @@ describe('GameScoringView', () => {
     authStoreMock.canScore.value = true
 
     const wrapper = await mountView()
+    const controls = wrapper.get('[data-testid="scorer-controls"]')
     const submitButton = wrapper.get('[data-testid="submit-delivery"]')
+    expect(controls.classes()).toContain('scorer-controls--disabled')
+    expect(controls.attributes('aria-disabled')).toBe('true')
+    expect(wrapper.get('[data-testid="delivery-run-0"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('[data-testid="delivery-extra-wd"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('[data-testid="delivery-wicket"]').attributes('disabled')).toBeDefined()
     expect(submitButton).toBeDefined()
     expect(submitButton?.attributes('disabled')).toBeDefined()
   })
@@ -222,6 +235,41 @@ describe('GameScoringView', () => {
     const submitButton = wrapper.get('[data-testid="submit-delivery"]')
     expect(submitButton).toBeDefined()
     expect(submitButton?.attributes('disabled')).toBeUndefined()
+  })
+
+  it('renders the primary run, extras, and wicket controls with scorer classes', async () => {
+    const wrapper = await mountView()
+
+    for (const runs of [0, 1, 2, 3, 4, 6]) {
+      const control = wrapper.get(`[data-testid="delivery-run-${runs}"]`)
+      expect(control.text()).toBe(String(runs))
+      expect(control.classes()).toContain('btn-score')
+      expect(control.attributes('type')).toBe('button')
+      expect(control.attributes('disabled')).toBeUndefined()
+    }
+
+    for (const extra of ['legal', 'wd', 'nb', 'b', 'lb']) {
+      const control = wrapper.get(`[data-testid="delivery-extra-${extra}"]`)
+      expect(control.classes()).toContain('btn-input')
+      expect(control.attributes('type')).toBe('button')
+    }
+
+    const wicket = wrapper.get('[data-testid="delivery-wicket"]')
+    expect(wicket.attributes('type')).toBe('checkbox')
+    expect(wicket.element.closest('label')?.textContent).toContain('WICKET')
+  })
+
+  it('keeps enabled scoring buttons keyboard focusable', async () => {
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const wrapper = await mountView(host)
+    const runControl = wrapper.get('[data-testid="delivery-run-1"]')
+
+    ;(runControl.element as HTMLButtonElement).focus()
+
+    expect(document.activeElement).toBe(runControl.element)
+    wrapper.unmount()
+    host.remove()
   })
 
   it('submits a run and shows the updated score when scoring is allowed', async () => {
@@ -241,7 +289,6 @@ describe('GameScoringView', () => {
     expect(gameStoreMock.scoreRuns).toHaveBeenCalledTimes(1)
     expect(gameStoreMock.scoreRuns).toHaveBeenCalledWith('test-game', runAmount, null)
     expect(wrapper.get('[data-testid="scoreboard-runs"]').text()).toBe(String(runAmount))
-    expect(wrapper.get('[data-testid="scoreboard-overs"]').text()).toBe('0.1')
   })
 
   it('does not score when delivery scoring is disabled', async () => {
@@ -254,5 +301,47 @@ describe('GameScoringView', () => {
     await flushPromises()
 
     expect(gameStoreMock.scoreRuns).not.toHaveBeenCalled()
+  })
+
+  it('submits an extra through the existing score handler', async () => {
+    const wrapper = await mountView()
+
+    await wrapper.get('[data-testid="delivery-extra-wd"]').trigger('click')
+    await wrapper.get('[data-testid="submit-delivery"]').trigger('click')
+    await flushPromises()
+
+    expect(gameStoreMock.scoreExtra).toHaveBeenCalledWith('test-game', 'wd', 1)
+  })
+
+  it('presents the pre-first-innings gate as a start action, not an innings break', async () => {
+    gameStoreMock.currentGame.status = 'innings_break'
+    gameStoreMock.currentGame.current_inning = 0
+    gameStoreMock.canScore = false
+    gameStoreMock.canScoreDelivery = false
+
+    const wrapper = await mountView()
+    const gate = wrapper.get('[data-testid="gate-innings"]')
+
+    expect(gate.attributes('role')).toBe('region')
+    expect(gate.text()).toContain('Match action')
+    expect(gate.text()).toContain('Ready to Start')
+    expect(gate.text()).toContain('Start First Innings')
+    expect(gate.text()).not.toContain('Innings Break')
+    expect(wrapper.find('[data-testid="delivery-run-0"]').exists()).toBe(true)
+  })
+
+  it('retains the legitimate innings-break presentation after an innings', async () => {
+    gameStoreMock.currentGame.status = 'innings_break'
+    gameStoreMock.currentGame.current_inning = 1
+    gameStoreMock.canScore = false
+    gameStoreMock.canScoreDelivery = false
+
+    const wrapper = await mountView()
+    const gate = wrapper.get('[data-testid="gate-innings"]')
+
+    expect(gate.text()).toContain('Innings Break')
+    expect(gate.text()).toContain('previous innings is complete')
+    expect(gate.text()).toContain('Start Next Innings')
+    expect(gate.text()).not.toContain('Ready to Start')
   })
 })

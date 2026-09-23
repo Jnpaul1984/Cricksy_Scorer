@@ -1123,6 +1123,14 @@ const needsNewInningsLive = computed<boolean>(() => {
   return allOut.value || oversExhausted.value
 })
 
+// School-created matches intentionally use the innings-break gate before inning 1.
+// Keep that lifecycle intact while presenting the pre-match transition as an action,
+// not as though a completed innings is already in progress.
+const isFirstInningsSetup = computed<boolean>(() =>
+  needsNewInningsLive.value &&
+  Number((gameStore.currentGame as any)?.current_inning ?? 0) === 0
+)
+
 
 
 
@@ -1753,7 +1761,7 @@ async function confirmChangeBowler(): Promise<void> {
 
         <div class="stat-group rates">
           <span class="rate-item">CRR: <strong>{{ ((liveSnapshot as any)?.current_run_rate ?? (liveSnapshot as any)?.crr ?? 0).toFixed(2) }}</strong></span>
-          <span v-if="targetSafe" class="rate-item">Target: <strong>{{ targetSafe }}</strong></span>
+          <span v-if="targetSafe" class="rate-item" data-testid="scoreboard-target">Target: <strong>{{ targetSafe }}</strong></span>
           <span v-if="targetSafe" class="rate-item">RRR: <strong>{{ (requiredRunRate ?? 0).toFixed(2) }}</strong></span>
           <span v-if="targetSafe" class="rate-item need-txt">Need <strong>{{ runsRequired }}</strong></span>
         </div>
@@ -1771,7 +1779,7 @@ async function confirmChangeBowler(): Promise<void> {
       <!-- Striker Panel -->
       <div class="player-box striker-box">
         <div class="pb-label">STRIKER</div>
-        <select v-model="selectedStriker" class="pb-select-full">
+        <select v-model="selectedStriker" class="pb-select-full" data-testid="scorer-striker-select">
           <option disabled value="">Select...</option>
           <option v-for="p in battingPlayers" :key="p.id" :value="p.id" :disabled="p.id === selectedNonStriker">
             {{ p.name }} {{ roleBadge(p.id) }}
@@ -1782,7 +1790,7 @@ async function confirmChangeBowler(): Promise<void> {
       <!-- Non-Striker Panel -->
       <div class="player-box non-striker-box">
         <div class="pb-label">NON-STRIKER</div>
-        <select v-model="selectedNonStriker" class="pb-select-full">
+        <select v-model="selectedNonStriker" class="pb-select-full" data-testid="scorer-nonstriker-select">
           <option disabled value="">Select...</option>
           <option v-for="p in battingPlayers" :key="p.id" :value="p.id" :disabled="p.id === selectedStriker">
             {{ p.name }} {{ roleBadge(p.id) }}
@@ -1809,7 +1817,7 @@ async function confirmChangeBowler(): Promise<void> {
             </button>
           </div>
         </div>
-        <select v-model="selectedBowler" class="pb-select-full">
+        <select v-model="selectedBowler" class="pb-select-full" data-testid="scorer-bowler-select">
           <option disabled value="">Select...</option>
           <option v-for="p in bowlingPlayers" :key="p.id" :value="p.id">
             {{ p.name }} {{ bowlerRoleBadge(p.id) }}
@@ -1825,28 +1833,49 @@ async function confirmChangeBowler(): Promise<void> {
       <div class="panel scoring-panel">
         <!-- Gate Banners -->
         <div v-if="needsNewBatterLive || needsNewOverLive || needsNewInningsLive" class="gate-overlay">
-           <div v-if="needsNewInningsLive">
-             <h3>Innings Break</h3>
-             <button v-if="roleCanScore" class="btn-gate" @click="openStartInnings">Start Next Innings</button>
+           <div
+             v-if="needsNewInningsLive"
+             class="gate-card"
+             data-testid="gate-innings"
+             role="region"
+             aria-labelledby="innings-gate-title"
+           >
+             <span class="gate-eyebrow">Match action</span>
+             <h3 id="innings-gate-title">{{ isFirstInningsSetup ? 'Ready to Start' : 'Innings Break' }}</h3>
+             <p>{{ isFirstInningsSetup ? 'Select the opening players, then start the first innings.' : 'The previous innings is complete. Start the next innings when ready.' }}</p>
+             <button
+               v-if="roleCanScore"
+               class="btn-gate"
+               data-testid="btn-open-start-innings"
+               type="button"
+               @click="openStartInnings"
+             >
+               {{ isFirstInningsSetup ? 'Start First Innings' : 'Start Next Innings' }}
+             </button>
            </div>
-           <div v-else-if="needsNewBatterLive">
+           <div v-else-if="needsNewBatterLive" class="gate-card" data-testid="gate-new-batter">
              <h3>Wicket Fall</h3>
-             <button v-if="roleCanScore" class="btn-gate" @click="openSelectBatter">Select New Batter</button>
+             <button v-if="roleCanScore" class="btn-gate" data-testid="btn-open-select-batter" type="button" @click="openSelectBatter">Select New Batter</button>
            </div>
-           <div v-else-if="needsNewOverLive">
+           <div v-else-if="needsNewOverLive" class="gate-card" data-testid="gate-new-over">
              <h3>End of Over</h3>
-             <button v-if="roleCanScore" class="btn-gate" @click="openStartOver">Start Next Over</button>
+             <button v-if="roleCanScore" class="btn-gate" data-testid="btn-open-start-over" type="button" @click="openStartOver">Start Next Over</button>
            </div>
         </div>
 
-        <div class="scoring-grid-inputs" :class="{disabled: !canScore}">
+        <div
+          class="scoring-grid-inputs scorer-controls"
+          :class="{'scorer-controls--disabled': !canScore}"
+          :aria-disabled="!canScore"
+          data-testid="scorer-controls"
+        >
           <!-- Extras Row -->
           <div class="input-row extras-row">
-            <button class="btn-input btn-extra-legal" :class="{active: extra==='none'}" @click="extra='none'">LEGAL</button>
-            <button class="btn-input btn-extra-wd" :class="{active: extra==='wd'}" @click="extra='wd'">WD</button>
-            <button class="btn-input btn-extra-nb" :class="{active: extra==='nb'}" @click="extra='nb'">NB</button>
-            <button class="btn-input btn-extra-b" :class="{active: extra==='b'}" @click="extra='b'">B</button>
-            <button class="btn-input btn-extra-lb" :class="{active: extra==='lb'}" @click="extra='lb'">LB</button>
+            <button class="btn-input btn-extra-legal" data-testid="delivery-extra-legal" type="button" :disabled="!canScore" :class="{active: extra==='none'}" @click="extra='none'">LEGAL</button>
+            <button class="btn-input btn-extra-wd" data-testid="delivery-extra-wd" type="button" :disabled="!canScore" :class="{active: extra==='wd'}" @click="extra='wd'">WD</button>
+            <button class="btn-input btn-extra-nb" data-testid="delivery-extra-nb" type="button" :disabled="!canScore" :class="{active: extra==='nb'}" @click="extra='nb'">NB</button>
+            <button class="btn-input btn-extra-b" data-testid="delivery-extra-b" type="button" :disabled="!canScore" :class="{active: extra==='b'}" @click="extra='b'">B</button>
+            <button class="btn-input btn-extra-lb" data-testid="delivery-extra-lb" type="button" :disabled="!canScore" :class="{active: extra==='lb'}" @click="extra='lb'">LB</button>
           </div>
 
           <!-- Runs Matrix -->
@@ -1854,6 +1883,8 @@ async function confirmChangeBowler(): Promise<void> {
             <button v-for="r in [0,1,2,3,4,6,5]" :key="r"
               :data-testid="`delivery-run-${r}`"
               class="btn-score"
+              type="button"
+              :disabled="!canScore"
               :class="[
                 `btn-score-${r}`,
                 { active: (extra==='none'||extra==='nb' ? offBat : extraRuns) === r }
@@ -1865,8 +1896,8 @@ async function confirmChangeBowler(): Promise<void> {
 
           <!-- Wicket & Submit -->
           <div class="input-row action-row">
-            <label class="wicket-toggle" :class="{checked: isWicket}">
-              <input type="checkbox" v-model="isWicket"> WICKET
+            <label class="wicket-toggle" :class="{checked: isWicket, disabled: !canScore}">
+              <input data-testid="delivery-wicket" type="checkbox" v-model="isWicket" :disabled="!canScore"> WICKET
             </label>
             <button
               data-testid="submit-delivery"
@@ -2204,13 +2235,33 @@ async function confirmChangeBowler(): Promise<void> {
    BROADCAST LAYOUT (ONE SCREEN, NO SCROLL)
    ===================================================== */
 .broadcast-layout {
+  --scorer-boundary-four-text: #166534;
+  --scorer-boundary-six-text: #1e40af;
+  --scorer-danger-text: #991b1b;
+  --scorer-extra-text: #9a3412;
+  --scorer-running-extra-text: #854d0e;
+  --scorer-selected-bg: #0e7490;
+  --scorer-selected-text: #ffffff;
   display: grid;
   grid-template-rows: 48px auto 1fr 160px; /* Header, PlayerBar, Main, Footer - reduced footer to 160px */
   height: 100vh;
   width: 100vw;
   overflow: hidden;
-  background: #f0f2f5;
+  background: var(--color-bg);
+  color: var(--color-text);
   font-family: 'Inter', sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  .broadcast-layout {
+    --scorer-boundary-four-text: #86efac;
+    --scorer-boundary-six-text: #93c5fd;
+    --scorer-danger-text: #fca5a5;
+    --scorer-extra-text: #fdba74;
+    --scorer-running-extra-text: #fde047;
+    --scorer-selected-bg: #155e75;
+    --scorer-selected-text: #ffffff;
+  }
 }
 
 /* HEADER */
@@ -2350,38 +2401,72 @@ async function confirmChangeBowler(): Promise<void> {
   display: grid;
   grid-template-columns: 320px 1fr; /* Fixed Scoring Panel, Flexible Shot Map */
   gap: 1px;
-  background: #ddd; /* Grid line color */
+  background: var(--color-border-strong); /* Grid line color */
   overflow: hidden;
   min-height: 0;
 }
 
 /* PANELS */
-.panel { background: white; position: relative; overflow: hidden; }
+.panel { background: var(--color-surface); position: relative; overflow: hidden; }
 
 /* SCORING PANEL (Left) */
 .scoring-panel {
   display: flex;
   flex-direction: column;
   padding: 8px;
-  background: #fff;
+  background: var(--color-surface);
 }
 .gate-overlay {
-  position: absolute; inset: 0; background: rgba(255,255,255,0.95); z-index: 20;
+  position: absolute; inset: 0; background: var(--color-bg); z-index: 20;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
-  text-align: center;
+  padding: 16px; text-align: center;
 }
-.btn-gate { background: #1a237e; color: white; padding: 12px 24px; border-radius: 8px; font-weight: bold; border: none; cursor: pointer; margin-top: 12px; }
+.gate-card {
+  width: min(100%, 280px);
+  padding: 20px 16px;
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  color: var(--color-text);
+}
+.gate-card h3 { margin: 4px 0 8px; color: var(--color-text); }
+.gate-card p { margin: 0; color: var(--color-text-secondary); font-size: 13px; }
+.gate-eyebrow {
+  color: var(--color-primary);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.btn-gate {
+  background: var(--scorer-selected-bg);
+  color: var(--scorer-selected-text);
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-weight: bold;
+  border: 2px solid transparent;
+  cursor: pointer;
+  margin-top: 14px;
+}
+.btn-gate:hover { filter: brightness(1.12); }
+.btn-gate:active { transform: translateY(1px); }
+.btn-gate:focus-visible {
+  outline: 3px solid var(--color-text);
+  outline-offset: 3px;
+}
 
 .scoring-grid-inputs { display: flex; flex-direction: column; gap: 8px; height: 100%; }
-.scoring-grid-inputs.disabled { opacity: 0.3; pointer-events: none; }
+.scorer-controls--disabled { opacity: 1; }
 
 .input-row { display: flex; gap: 6px; }
 .extras-row { height: 36px; }
 .btn-input {
   flex: 1;
   padding: 0;
-  border: 1px solid #ddd;
-  background: #f8f9fa;
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-surface-raised);
+  color: var(--color-text);
   border-radius: 6px;
   font-weight: 700;
   font-size: 11px;
@@ -2391,8 +2476,8 @@ async function confirmChangeBowler(): Promise<void> {
   justify-content: center;
   transition: all 0.1s;
 }
-.btn-input:hover { background: #eee; }
-.btn-input.active { background: #1a237e; color: white; border-color: #1a237e; }
+.btn-input:hover:not(:disabled) { background: var(--color-surface-hover); }
+.btn-input.active { background: var(--scorer-selected-bg); color: var(--scorer-selected-text); border-color: var(--scorer-selected-bg); }
 
 .input-matrix {
   display: grid;
@@ -2404,17 +2489,38 @@ async function confirmChangeBowler(): Promise<void> {
 .btn-score {
   font-size: 32px;
   font-weight: 800;
-  background: white;
-  border: 1px solid #ddd;
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border-strong);
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.1s;
   font-family: 'Inter', sans-serif;
-  color: #333;
+  color: var(--color-text);
 }
-.btn-score:hover { background: #f5f5f5; transform: translateY(-1px); }
-.btn-score:active { transform: translateY(0); }
-.btn-score.active { background: #1a237e; color: white; border-color: #1a237e; }
+.btn-score:hover:not(:disabled) { background: var(--color-surface-hover); transform: translateY(-1px); box-shadow: var(--shadow-sm); }
+.btn-score:active:not(:disabled) { transform: translateY(0); background: var(--color-surface-active); }
+.btn-score.active { background: var(--scorer-selected-bg); color: var(--scorer-selected-text); border-color: var(--scorer-selected-bg); }
+
+.btn-input:focus-visible,
+.btn-score:focus-visible,
+.btn-submit:focus-visible,
+.btn-undo:focus-visible,
+.btn-action-xs:focus-visible,
+.pb-select-full:focus-visible {
+  outline: 3px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.btn-input:disabled,
+.btn-score:disabled {
+  background: var(--color-surface);
+  border-color: var(--color-border-strong);
+  border-style: dashed;
+  color: var(--color-text-muted);
+  cursor: not-allowed;
+  opacity: 0.72;
+  transform: none;
+}
 
 /* Boundaries */
 .btn-score.val-4 { color: #2e7d32; background: #f1f8e9; border-color: #c5e1a5; }
@@ -2426,7 +2532,7 @@ async function confirmChangeBowler(): Promise<void> {
 .btn-score:nth-child(7) {
   grid-column: 1 / -1;
   font-size: 18px;
-  color: #666;
+  color: var(--color-text-secondary);
 }
 
 .action-row { display: flex; gap: 6px; align-items: stretch; height: 38px; position: relative; z-index: 10; }
@@ -2436,8 +2542,9 @@ async function confirmChangeBowler(): Promise<void> {
   align-items: center;
   justify-content: center;
   gap: 4px;
-  border: 2px solid #d32f2f;
-  color: #d32f2f;
+  border: 2px solid var(--scorer-danger-text);
+  color: var(--scorer-danger-text);
+  background: var(--color-error-soft);
   border-radius: 6px;
   font-weight: 700;
   cursor: pointer;
@@ -2446,8 +2553,16 @@ async function confirmChangeBowler(): Promise<void> {
   position: relative;
   z-index: 10;
 }
-.wicket-toggle:hover { background: #ffebee; }
-.wicket-toggle.checked { background: #d32f2f; color: white; }
+.wicket-toggle:hover:not(.disabled) { filter: brightness(1.08); }
+.wicket-toggle:focus-within { outline: 3px solid var(--color-primary); outline-offset: 2px; }
+.wicket-toggle.checked { background: var(--color-error); color: #fff; }
+.wicket-toggle.disabled {
+  border-style: dashed;
+  color: var(--color-text-muted);
+  background: var(--color-surface);
+  cursor: not-allowed;
+  opacity: 0.72;
+}
 
 .btn-submit {
   flex: 2;
@@ -2467,7 +2582,14 @@ async function confirmChangeBowler(): Promise<void> {
 }
 .btn-submit:hover { background: #1b5e20; transform: translateY(-1px); }
 .btn-submit:active { transform: translateY(0); }
-.btn-submit:disabled { background: #ccc; cursor: not-allowed; box-shadow: none; transform: none; }
+.btn-submit:disabled {
+  background: var(--color-surface-active);
+  color: var(--color-text-muted);
+  border: 1px dashed var(--color-border-strong);
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
+}
 
 .wicket-details { background: #ffebee; padding: 8px; border-radius: 6px; display: flex; gap: 8px; }
 .sel-sm { flex: 1; padding: 6px; border-radius: 4px; border: 1px solid #ef9a9a; }
@@ -2475,11 +2597,12 @@ async function confirmChangeBowler(): Promise<void> {
 .undo-row { margin-top: auto; text-align: center; padding-top: 2px; padding-bottom: 2px; }
 .btn-undo { background: none; border: none; color: #999; text-decoration: underline; cursor: pointer; font-size: 10px; }
 .btn-undo:hover { color: #d32f2f; }
+.btn-undo:disabled { color: var(--color-text-muted); cursor: not-allowed; text-decoration-style: dashed; }
 
 .btn-ghost-sm {
   background: transparent;
-  border: 1px solid #ddd;
-  color: #666;
+  border: 1px solid rgba(255,255,255,0.55);
+  color: #fff;
   padding: 4px 12px;
   border-radius: 16px;
   font-size: 12px;
@@ -2488,14 +2611,14 @@ async function confirmChangeBowler(): Promise<void> {
   transition: all 0.2s;
 }
 .btn-ghost-sm:hover {
-  background: #f5f5f5;
-  color: #333;
-  border-color: #ccc;
+  background: rgba(255,255,255,0.14);
+  color: #fff;
+  border-color: #fff;
 }
 
 /* MAP PANEL (Right) */
 .map-panel {
-  background: #e8f5e9;
+  background: var(--color-surface-raised);
   display: flex;
   flex-direction: column; /* Stack strip and map */
   overflow: hidden;
@@ -2503,8 +2626,8 @@ async function confirmChangeBowler(): Promise<void> {
 
 .recent-strip {
   height: 40px;
-  background: #fff;
-  border-bottom: 1px solid #ddd;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
   display: flex;
   align-items: center;
   padding: 0 12px;
@@ -2515,7 +2638,7 @@ async function confirmChangeBowler(): Promise<void> {
 .recent-label {
   font-size: 11px;
   font-weight: 700;
-  color: #666;
+  color: var(--color-text-secondary);
   letter-spacing: 0.5px;
 }
 
@@ -2702,22 +2825,35 @@ async function confirmChangeBowler(): Promise<void> {
    ===================================================== */
 
 /* 1. Run Button Colors */
-.btn-score-0, .btn-score-1, .btn-score-2, .btn-score-3, .btn-score-5 { color: #333; background: #fff; }
-.btn-score-4 { color: #1b5e20; background: #e8f5e9; border-color: #a5d6a7; }
-.btn-score-6 { color: #0d47a1; background: #e3f2fd; border-color: #90caf9; }
+.btn-score-0, .btn-score-1, .btn-score-2, .btn-score-3, .btn-score-5 {
+  color: var(--color-text);
+  background: var(--color-surface-raised);
+}
+.btn-score-4 { color: var(--scorer-boundary-four-text); background: var(--color-success-soft); border-color: var(--scorer-boundary-four-text); }
+.btn-score-6 { color: var(--scorer-boundary-six-text); background: var(--color-info-soft); border-color: var(--scorer-boundary-six-text); }
 
-.btn-score.active { background: #333; color: white; border-color: #333; }
-.btn-score-4.active { background: #2e7d32; color: white; border-color: #2e7d32; }
-.btn-score-6.active { background: #1565c0; color: white; border-color: #1565c0; }
+.btn-score.active { background: var(--scorer-selected-bg); color: var(--scorer-selected-text); border-color: var(--scorer-selected-bg); }
+.btn-score-4.active { background: #15803d; color: white; border-color: #15803d; }
+.btn-score-6.active { background: #1d4ed8; color: white; border-color: #1d4ed8; }
 
 /* Extras Colors */
-.btn-extra-wd { color: #e65100; }
-.btn-extra-nb { color: #e65100; }
-.btn-extra-b  { color: #f57f17; }
-.btn-extra-lb { color: #f57f17; }
+.btn-extra-wd { color: var(--scorer-extra-text); }
+.btn-extra-nb { color: var(--scorer-extra-text); }
+.btn-extra-b  { color: var(--scorer-running-extra-text); }
+.btn-extra-lb { color: var(--scorer-running-extra-text); }
 
-.btn-extra-wd.active, .btn-extra-nb.active { background: #ff9800; color: white; border-color: #ff9800; }
-.btn-extra-b.active, .btn-extra-lb.active  { background: #fbc02d; color: white; border-color: #fbc02d; }
+.btn-extra-wd.active, .btn-extra-nb.active { background: #b45309; color: white; border-color: #b45309; }
+.btn-extra-b.active, .btn-extra-lb.active  { background: #a16207; color: white; border-color: #a16207; }
+
+/* Disabled controls stay legible without fading the entire scoring surface. */
+.scorer-controls--disabled .btn-input,
+.scorer-controls--disabled .btn-score {
+  background: var(--color-surface);
+  border-color: var(--color-border-strong);
+  border-style: dashed;
+  color: var(--color-text-muted);
+  opacity: 0.72;
+}
 
 /* 2. [REMOVED] Shot Map Tap Marker - not needed for UX */
 
@@ -2739,7 +2875,7 @@ async function confirmChangeBowler(): Promise<void> {
 /* 4. Submit Micro-lock */
 .btn-submit:disabled {
   opacity: 0.7;
-  cursor: wait;
+  cursor: not-allowed;
 }
 
 /* 5. Floating Wicket Details (Teleported) */
@@ -2807,6 +2943,23 @@ async function confirmChangeBowler(): Promise<void> {
 }
 
 @media (max-width: 768px) {
+  .broadcast-main {
+    grid-template-columns: 280px minmax(0, 1fr);
+  }
+
+  .player-bar {
+    gap: 6px;
+    padding-inline: 8px;
+  }
+
+  .player-box {
+    padding-inline: 8px;
+  }
+
+  .btn-score {
+    font-size: 28px;
+  }
+
   .analytics-widgets {
     grid-template-columns: 1fr;
   }
