@@ -459,6 +459,7 @@ async def test_match_snapshot_and_canonical_identity_survive_roster_lifecycle_ch
                 "runs_off_bat": 0,
                 "is_wicket": False,
             },
+            headers=actor.headers,
         )
         assert scored.status_code == 200, scored.text
         assert scored.json()["score"]["runs"] == 4
@@ -853,6 +854,7 @@ async def test_mixed_match_statistics_publication_and_snapshot_are_school_attrib
                 "runs_off_bat": 0,
                 "is_wicket": False,
             },
+            headers=owner.headers,
         )
         assert scored.status_code == 200, scored.text
 
@@ -970,3 +972,310 @@ async def test_mixed_match_statistics_publication_and_snapshot_are_school_attrib
         assert game is not None
         assert game.team_a == frozen_team_a
         assert game.team_b == frozen_team_b
+
+
+async def _opening_player_ids(client: TestClient, game_id: str) -> tuple[str, str, str]:
+    session_maker = client.session_maker  # type: ignore[attr-defined]
+    async with session_maker() as session:
+        game = await session.get(Game, game_id)
+        assert game is not None
+        batting = game.team_a if game.batting_team_name == game.team_a["name"] else game.team_b
+        bowling = game.team_b if game.bowling_team_name == game.team_b["name"] else game.team_a
+        return (
+            str(batting["players"][0]["id"]),
+            str(batting["players"][1]["id"]),
+            str(bowling["players"][0]["id"]),
+        )
+
+
+async def _require_postgres_game_routes(client: TestClient) -> None:
+    session_maker = client.session_maker  # type: ignore[attr-defined]
+    async with session_maker() as session:
+        is_postgres = session.bind is not None and session.bind.dialect.name == "postgresql"
+    if not is_postgres:
+        pytest.skip("School gameplay routes require the real PostgreSQL persistence gate")
+
+
+async def _start_first_innings(
+    client: TestClient,
+    *,
+    game_id: str,
+    headers: dict[str, str],
+) -> tuple[tuple[str, str, str], dict]:
+    striker_id, non_striker_id, bowler_id = await _opening_player_ids(client, game_id)
+    openers = client.post(
+        f"/games/{game_id}/openers",
+        json={"striker_id": striker_id, "non_striker_id": non_striker_id},
+        headers=headers,
+    )
+    assert openers.status_code == 200, openers.text
+    started = client.post(
+        f"/games/{game_id}/innings/start",
+        json={
+            "striker_id": striker_id,
+            "non_striker_id": non_striker_id,
+            "opening_bowler_id": bowler_id,
+        },
+        headers=headers,
+    )
+    assert started.status_code == 200, started.text
+    return (striker_id, non_striker_id, bowler_id), started.json()
+
+
+@pytest.mark.parametrize("role", ["owner", "admin", "coach", "scorer"])
+async def test_school_contextual_scorers_start_first_innings_without_personal_upgrade(
+    school_client: TestClient,
+    role: str,
+) -> None:
+    await _require_postgres_game_routes(school_client)
+    _, actor, organization, team_a, team_b = await _match_environment(
+        school_client,
+        suffix=f"first-innings-{role}",
+        role=role,
+    )
+    session_maker = school_client.session_maker  # type: ignore[attr-defined]
+    async with session_maker() as session:
+        stored_actor = await session.get(User, actor.id)
+        assert stored_actor is not None
+        assert stored_actor.role == RoleEnum.free
+    created = school_client.post(
+        f"/api/organizations/{organization['id']}/matches",
+        json=_payload(team_a, team_b),
+        headers=actor.headers,
+    )
+    assert created.status_code == 201, created.text
+    game_id = created.json()["game_id"]
+
+    snapshot = school_client.get(f"/games/{game_id}/snapshot", headers=actor.headers)
+    assert snapshot.status_code == 200, snapshot.text
+    assert snapshot.json()["school_organization_id"] == organization["id"]
+    assert snapshot.json()["can_score"] is True
+
+    opening_ids, started = await _start_first_innings(
+        school_client,
+        game_id=game_id,
+        headers=actor.headers,
+    )
+    assert started["status"] == "IN_PROGRESS"
+    assert started["current_inning"] == 1
+    assert started["score"] == {"runs": 0, "wickets": 0, "overs": 0}
+    assert started.get("deliveries", []) == []
+    assert started["current_striker_id"] == opening_ids[0]
+    assert started["current_non_striker_id"] == opening_ids[1]
+    assert started["current_bowler_id"] == opening_ids[2]
+
+    duplicate = school_client.post(
+        f"/games/{game_id}/innings/start",
+        json={
+            "striker_id": opening_ids[0],
+            "non_striker_id": opening_ids[1],
+            "opening_bowler_id": opening_ids[2],
+        },
+        headers=actor.headers,
+    )
+    assert duplicate.status_code == 400
+    assert duplicate.json() == {"detail": "No new innings to start"}
+
+
+async def test_school_viewer_and_cross_tenant_users_cannot_mutate_scoring(
+    school_client: TestClient,
+) -> None:
+    await _require_postgres_game_routes(school_client)
+    owner, viewer, organization, team_a, team_b = await _match_environment(
+        school_client,
+        suffix="scoring-denial",
+        role="viewer",
+    )
+    created = school_client.post(
+        f"/api/organizations/{organization['id']}/matches",
+        json=_payload(team_a, team_b),
+        headers=owner.headers,
+    )
+    assert created.status_code == 201, created.text
+    game_id = created.json()["game_id"]
+    striker_id, non_striker_id, bowler_id = await _opening_player_ids(school_client, game_id)
+
+    viewer_snapshot = school_client.get(f"/games/{game_id}/snapshot", headers=viewer.headers)
+    assert viewer_snapshot.status_code == 200
+    assert viewer_snapshot.json()["can_score"] is False
+
+    mutations = (
+        ("openers", {"striker_id": striker_id, "non_striker_id": non_striker_id}),
+        (
+            "innings/start",
+            {
+                "striker_id": striker_id,
+                "non_striker_id": non_striker_id,
+                "opening_bowler_id": bowler_id,
+            },
+        ),
+        (
+            "deliveries",
+            {
+                "striker_id": striker_id,
+                "non_striker_id": non_striker_id,
+                "bowler_id": bowler_id,
+                "runs_scored": 1,
+                "runs_off_bat": 0,
+                "is_wicket": False,
+            },
+        ),
+    )
+    for endpoint, payload in mutations:
+        denied = school_client.post(
+            f"/games/{game_id}/{endpoint}", json=payload, headers=viewer.headers
+        )
+        assert denied.status_code == 403
+        assert denied.json() == {"detail": "Insufficient organization role"}
+
+    outsider = register_user(school_client, "school-scoring-outsider@example.com")
+    create_school(school_client, outsider, "Unrelated Scoring School")
+    session_maker = school_client.session_maker  # type: ignore[attr-defined]
+    async with session_maker() as session:
+        stored = await session.get(User, outsider.id)
+        assert stored is not None
+        stored.role = RoleEnum.org_pro
+        stored.org_id = organization["id"]
+        stored.is_superuser = True
+        await session.commit()
+
+    hidden_snapshot = school_client.get(f"/games/{game_id}/snapshot", headers=outsider.headers)
+    assert hidden_snapshot.status_code == 404
+    assert hidden_snapshot.json() == {"detail": "Game not found"}
+    hidden_start = school_client.post(
+        f"/games/{game_id}/innings/start",
+        json={
+            "striker_id": striker_id,
+            "non_striker_id": non_striker_id,
+            "opening_bowler_id": bowler_id,
+        },
+        headers=outsider.headers,
+    )
+    assert hidden_start.status_code == 404
+    assert hidden_start.json() == {"detail": "Game not found"}
+    assert organization["name"].lower() not in hidden_start.text.lower()
+
+
+async def test_school_scoring_requires_the_active_organization_entitlement(
+    school_client: TestClient,
+) -> None:
+    await _require_postgres_game_routes(school_client)
+    _, owner, organization, team_a, team_b = await _match_environment(
+        school_client,
+        suffix="scoring-entitlement",
+    )
+    created = school_client.post(
+        f"/api/organizations/{organization['id']}/matches",
+        json=_payload(team_a, team_b),
+        headers=owner.headers,
+    )
+    assert created.status_code == 201, created.text
+    game_id = created.json()["game_id"]
+    striker_id, non_striker_id, bowler_id = await _opening_player_ids(school_client, game_id)
+
+    session_maker = school_client.session_maker  # type: ignore[attr-defined]
+    async with session_maker() as session:
+        entitlement = await session.scalar(
+            select(OrganizationEntitlement).where(
+                OrganizationEntitlement.organization_id == organization["id"]
+            )
+        )
+        assert entitlement is not None
+        entitlement.status = "disabled"
+        await session.commit()
+
+    snapshot = school_client.get(f"/games/{game_id}/snapshot", headers=owner.headers)
+    assert snapshot.status_code == 200
+    assert snapshot.json()["can_score"] is False
+    denied = school_client.post(
+        f"/games/{game_id}/innings/start",
+        json={
+            "striker_id": striker_id,
+            "non_striker_id": non_striker_id,
+            "opening_bowler_id": bowler_id,
+        },
+        headers=owner.headers,
+    )
+    assert denied.status_code == 403
+    assert denied.json() == {"detail": "Insufficient organization role"}
+
+
+@pytest.mark.parametrize("school_side", ["team_a", "team_b"])
+async def test_school_vs_external_first_innings_uses_same_contextual_scoring_contract(
+    school_client: TestClient,
+    school_side: str,
+) -> None:
+    await _require_postgres_game_routes(school_client)
+    _, scorer, organization, school_team, _ = await _match_environment(
+        school_client,
+        suffix=f"external-first-{school_side}",
+        role="scorer",
+    )
+    created = school_client.post(
+        f"/api/organizations/{organization['id']}/matches",
+        json=_external_payload(school_team, school_side=school_side),
+        headers=scorer.headers,
+    )
+    assert created.status_code == 201, created.text
+    game_id = created.json()["game_id"]
+
+    opening_ids, started = await _start_first_innings(
+        school_client,
+        game_id=game_id,
+        headers=scorer.headers,
+    )
+    assert started["current_inning"] == 1
+    assert started["score"]["runs"] == 0
+    assert started.get("deliveries", []) == []
+
+    scored = school_client.post(
+        f"/games/{game_id}/deliveries",
+        json={
+            "striker_id": opening_ids[0],
+            "non_striker_id": opening_ids[1],
+            "bowler_id": opening_ids[2],
+            "runs_scored": 1,
+            "runs_off_bat": 0,
+            "is_wicket": False,
+        },
+        headers=scorer.headers,
+    )
+    assert scored.status_code == 200, scored.text
+    assert scored.json()["score"]["runs"] == 1
+
+
+async def test_generic_match_scoring_contract_does_not_require_school_context(
+    school_client: TestClient,
+) -> None:
+    created = school_client.post(
+        "/games",
+        json={
+            "team_a_name": "Generic Start A",
+            "team_b_name": "Generic Start B",
+            "players_a": ["A1", "A2"],
+            "players_b": ["B1", "B2"],
+            "match_type": "limited",
+            "overs_limit": 20,
+            "dls_enabled": False,
+            "interruptions": [],
+            "toss_winner_team": "Generic Start A",
+            "decision": "bat",
+        },
+    )
+    assert created.status_code == 200, created.text
+    game_id = created.json()["id"]
+    session_maker = school_client.session_maker  # type: ignore[attr-defined]
+    async with session_maker() as session:
+        game = await session.get(Game, game_id)
+        assert game is not None
+        game.status = GameStatus.innings_break
+        game.current_inning = 0
+        await session.commit()
+
+    opening_ids, started = await _start_first_innings(
+        school_client,
+        game_id=game_id,
+        headers={},
+    )
+    assert started["current_inning"] == 1
+    assert started["current_striker_id"] == opening_ids[0]

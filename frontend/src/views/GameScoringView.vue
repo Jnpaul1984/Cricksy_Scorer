@@ -165,7 +165,25 @@ const storeCanScore = computed(() => {
   }
   return true
 })
-const canScore = computed(() => Boolean(storeCanScore.value && roleCanScore.value))
+const schoolOrganizationId = ref('')
+const schoolContextCanScore = ref(false)
+
+watch(
+  liveSnapshot,
+  (snapshot) => {
+    const organizationId = normId((snapshot as any)?.school_organization_id)
+    if (!organizationId) return
+    schoolOrganizationId.value = organizationId
+    schoolContextCanScore.value = (snapshot as any)?.can_score === true
+  },
+  { immediate: true },
+)
+
+const isSchoolMatch = computed(() => Boolean(schoolOrganizationId.value))
+const canOperateCurrentMatch = computed(() =>
+  isSchoolMatch.value ? schoolContextCanScore.value : roleCanScore.value
+)
+const canScore = computed(() => Boolean(storeCanScore.value && canOperateCurrentMatch.value))
 
 // Header score display: prefer liveSnapshot, fall back to store score (helps tests and early UI)
 const headerRuns = computed(() => {
@@ -189,10 +207,10 @@ const headerOvers = computed(() => {
 })
 const proTooltip = 'Requires Coach Pro or Organization Pro'
 const showScoringUpsell = computed(
-  () => !roleCanScore.value && (!authRole.value || isFreeUser.value || isPlayerPro.value),
+  () => !isSchoolMatch.value && !roleCanScore.value && (!authRole.value || isFreeUser.value || isPlayerPro.value),
 )
 const showAnalystReadOnly = computed(
-  () => !roleCanScore.value && authRole.value === 'analyst_pro',
+  () => !isSchoolMatch.value && !roleCanScore.value && authRole.value === 'analyst_pro',
 )
 // Allow a manual start even if the server gate didn't flip yet
 const canForceStartInnings = computed(() =>
@@ -202,7 +220,7 @@ const canForceStartInnings = computed(() =>
 )
 
 function forceStartInnings(): void {
-  if (!roleCanScore.value) return
+  if (!canOperateCurrentMatch.value) return
   if (!canForceStartInnings.value) return
 
   // If the normal conditions aren't met, warn before proceeding
@@ -1013,7 +1031,9 @@ function econ(runsConceded: number, ballsBowled: number): string {
 
 const cantScoreReasons = computed(() => {
   const rs:string[] = []
-  if (!roleCanScore.value) rs.push(proTooltip)
+  if (!canOperateCurrentMatch.value) {
+    rs.push(isSchoolMatch.value ? 'Your School role is read-only' : proTooltip)
+  }
   const firstBall = Number(currentOverBalls.value || 0) === 0
   if (!gameStore.currentGame) rs.push('No game loaded')
   else {
@@ -1130,6 +1150,30 @@ const isFirstInningsSetup = computed<boolean>(() =>
   needsNewInningsLive.value &&
   Number((gameStore.currentGame as any)?.current_inning ?? 0) === 0
 )
+
+const firstInningsPendingKey = ref('')
+const firstInningsCompletedKey = ref('')
+const firstInningsFailedKey = ref('')
+const inningsStartError = ref('')
+
+const firstInningsSelectionKey = computed(() => {
+  if (!isSchoolMatch.value || !isFirstInningsSetup.value || !canOperateCurrentMatch.value) {
+    return ''
+  }
+
+  const strikerId = normId(selectedStriker.value)
+  const nonStrikerId = normId(selectedNonStriker.value)
+  const bowlerId = normId(selectedBowler.value)
+  if (!strikerId || !nonStrikerId || !bowlerId || strikerId === nonStrikerId) return ''
+
+  const battingIds = new Set(battingPlayers.value.map((player) => normId(player.id)))
+  const bowlingIds = new Set(bowlingPlayers.value.map((player) => normId(player.id)))
+  if (!battingIds.has(strikerId) || !battingIds.has(nonStrikerId) || !bowlingIds.has(bowlerId)) {
+    return ''
+  }
+
+  return [gameId.value, 'first-innings', strikerId, nonStrikerId, bowlerId].join(':')
+})
 
 
 
@@ -1272,7 +1316,7 @@ const nextNonStrikerId = ref<UUID>('' as UUID)
 const openingBowlerId = ref<UUID>('' as UUID)
 
 function openStartInnings(): void {
-  if (!roleCanScore.value) return
+  if (!canOperateCurrentMatch.value) return
   // sensible defaults
   const bat = nextBattingXI.value
   const bowl = nextBowlingXI.value
@@ -1283,47 +1327,34 @@ function openStartInnings(): void {
 }
 function closeStartInnings(): void { startInningsDlgOpen.value = false }
 
-async function confirmStartInnings(): Promise<void> {
-  if (!roleCanScore.value) return
-  console.log('[confirmStartInnings] clicked');
+type InningsStartSelection = {
+  striker_id: string
+  non_striker_id: string
+  opening_bowler_id: string
+}
+
+async function startInningsWithSelection(
+  payload: InningsStartSelection,
+  successMessage: string,
+): Promise<boolean> {
+  if (!canOperateCurrentMatch.value || isStartingInnings.value) return false
   const id = gameId.value
-  if (!id) return
+  if (!id) return false
+
+  inningsStartError.value = ''
+  isStartingInnings.value = true
   try {
     inningsStartIso.value = new Date().toISOString()
-    isStartingInnings.value = true
-
-    // Cache the first-innings summary locally (runs/wkts/overs) before we flip
-    try {
+    if (Number((gameStore.currentGame as any)?.current_inning ?? 0) > 0) {
       firstInnings.value = {
         runs: inningsScore.value.runs,
         wickets: inningsScore.value.wickets,
         overs: oversDisplay.value,
       }
-    } catch { /* noop */ }
-
-    const strikerId = normId(nextStrikerId.value)
-    const nonStrikerId = normId(nextNonStrikerId.value)
-    const openingBowler = normId(openingBowlerId.value)
-
-    // Guard: we never want to send null/empty IDs to the API
-    if (!strikerId || !nonStrikerId || !openingBowler) {
-      console.warn('[confirmStartInnings] missing opener selection', {
-        strikerId,
-        nonStrikerId,
-        openingBowler,
-      })
-      isStartingInnings.value = false
-      return
     }
 
-    const payload = {
-      striker_id:        strikerId,
-      non_striker_id:    nonStrikerId,
-      opening_bowler_id: openingBowler,
-    } as const
-
     await apiService.setOpeners(id, {
-      striker_id:     payload.striker_id,
+      striker_id: payload.striker_id,
       non_striker_id: payload.non_striker_id,
     })
 
@@ -1335,36 +1366,96 @@ async function confirmStartInnings(): Promise<void> {
       await gameStore.loadGame(id)
     }
 
-    // ðŸ”§ Optimistic local clear so the dialog actually goes away now
-    // (server snapshot will arrive and confirm shortly)
-    gameStore.mergeGamePatch({ status: 'in_progress' } as any)
+    selectedStriker.value = payload.striker_id
+    selectedNonStriker.value = payload.non_striker_id
+    selectedBowler.value = payload.opening_bowler_id
     inningsFlipAt.value = Date.now()
-    if (liveSnapshot.value) {
-      liveSnapshot.value = {
-        ...liveSnapshot.value,
-        needs_new_innings: false,
-        current_bowler_id: openingBowler,
-        current_striker_id: strikerId,
-        current_non_striker_id: nonStrikerId
-      } as any
-    }
-
-    // Optimistic selections
-    selectedStriker.value = normId(nextStrikerId.value) as string
-    selectedNonStriker.value = normId(nextNonStrikerId.value) as string
-    if (openingBowlerId.value) selectedBowler.value = normId(openingBowlerId.value) as string
-
-
-    isStartingInnings.value = false
-    showToast('Next innings started', 'success')
     closeStartInnings()
-  } catch (e:any) {
+    showToast(successMessage, 'success')
+    return true
+  } catch (error: any) {
+    const message = error?.message || 'Failed to start innings'
+    inningsStartError.value = message
+    onError(message)
+    console.error('startNextInnings error:', error)
+    return false
+  } finally {
     isStartingInnings.value = false
-    onError(e?.message || 'Failed to start next innings')
-    // (Optional) console for quick visibility:
-    console.error('startNextInnings error:', e)
   }
 }
+
+async function confirmStartInnings(): Promise<void> {
+  if (!canOperateCurrentMatch.value) return
+  const payload = {
+    striker_id: normId(nextStrikerId.value),
+    non_striker_id: normId(nextNonStrikerId.value),
+    opening_bowler_id: normId(openingBowlerId.value),
+  }
+  if (
+    !payload.striker_id ||
+    !payload.non_striker_id ||
+    !payload.opening_bowler_id ||
+    payload.striker_id === payload.non_striker_id
+  ) {
+    return
+  }
+  await startInningsWithSelection(payload, 'Next innings started')
+}
+
+async function attemptAutomaticFirstInningsStart(key: string): Promise<void> {
+  if (
+    !key ||
+    key !== firstInningsSelectionKey.value ||
+    firstInningsPendingKey.value === key ||
+    firstInningsCompletedKey.value === key ||
+    firstInningsFailedKey.value === key
+  ) {
+    return
+  }
+
+  const payload = {
+    striker_id: normId(selectedStriker.value),
+    non_striker_id: normId(selectedNonStriker.value),
+    opening_bowler_id: normId(selectedBowler.value),
+  }
+  firstInningsPendingKey.value = key
+  const started = await startInningsWithSelection(payload, 'First innings started')
+  firstInningsPendingKey.value = ''
+  if (started) {
+    firstInningsCompletedKey.value = key
+    firstInningsFailedKey.value = ''
+  } else {
+    firstInningsFailedKey.value = key
+  }
+}
+
+function retryAutomaticFirstInningsStart(): void {
+  const key = firstInningsSelectionKey.value
+  if (!key || isStartingInnings.value) return
+  firstInningsFailedKey.value = ''
+  void attemptAutomaticFirstInningsStart(key)
+}
+
+watch(
+  firstInningsSelectionKey,
+  (key, previousKey) => {
+    if (key !== previousKey) {
+      firstInningsFailedKey.value = ''
+      inningsStartError.value = ''
+    }
+    if (key) void attemptAutomaticFirstInningsStart(key)
+  },
+  { flush: 'post', immediate: true },
+)
+
+watch(gameId, () => {
+  schoolOrganizationId.value = ''
+  schoolContextCanScore.value = false
+  firstInningsPendingKey.value = ''
+  firstInningsCompletedKey.value = ''
+  firstInningsFailedKey.value = ''
+  inningsStartError.value = ''
+})
 
 
 // ================== EMBED / SHARE PANEL ==================
@@ -1443,8 +1534,8 @@ onMounted(async () => {
     // Gate prompts after initial load
     if (liveSnapshot.value) syncBattersFromSnapshot(liveSnapshot.value as any)
     if (currentBowlerId.value) selectedBowler.value = currentBowlerId.value as UUID
-    if (roleCanScore.value && needsNewBatterLive.value) openSelectBatter()
-    if (roleCanScore.value && needsNewOverLive.value)  openStartOver()
+    if (canOperateCurrentMatch.value && needsNewBatterLive.value) openSelectBatter()
+    if (canOperateCurrentMatch.value && needsNewOverLive.value)  openStartOver()
   } catch (e) {
     showToast('Failed to load or connect', 'error', 3000)
     console.error('load/init failed:', e)
@@ -1518,8 +1609,9 @@ watch([bowlingPlayers, xiLoaded, currentBowlerId], () => {
   if (id && !bowlingPlayers.value.some(p => p.id === id) && id !== currentBowlerId.value) selectedBowler.value = '' as unknown as UUID
 })
 watch(needsNewInningsLive, (v) => {
-  if (!roleCanScore.value) return
+  if (!canOperateCurrentMatch.value) return
   if (!v) return
+  if (isFirstInningsSetup.value && isSchoolMatch.value) return
   if (isStartingInnings.value) return               // don't pop while we're starting
   if (startInningsDlgOpen.value) return             // already open
   if (v) {
@@ -1539,11 +1631,11 @@ watch(() => stateAny.value?.needs_new_innings, (v) => {
 
 // Only open these gates if an innings is NOT required
 watch(needsNewBatterLive, (v) => {
-  if (!roleCanScore.value) return
+  if (!canOperateCurrentMatch.value) return
   if (v && !needsNewInningsLive.value) openSelectBatter()
 })
 watch([needsNewOverLive, needsNewOverDerived], ([serverGate, localGate]) => {
-  if (!roleCanScore.value) return
+  if (!canOperateCurrentMatch.value) return
   if ((serverGate || localGate) && !needsNewInningsLive.value) {
     // Keep any user-chosen next bowler; just nudge the dialog if you want.
     if (!selectedBowler.value) {
@@ -1612,14 +1704,14 @@ const candidateBatters = computed<Player[]>(() => {
 
 
 function openSelectBatter(): void {
-  if (!roleCanScore.value) return
+  if (!canOperateCurrentMatch.value) return
   selectedNextBatterId.value = '' as UUID
   selectBatterDlgOpen.value = true
 }
 function closeSelectBatter(): void { selectBatterDlgOpen.value = false }
 
 async function confirmSelectBatter() {
-  if (!roleCanScore.value) return
+  if (!canOperateCurrentMatch.value) return
   const batter = normId(selectedNextBatterId.value)
   if (!batter) return
 
@@ -1652,7 +1744,7 @@ async function confirmSelectBatter() {
 
 
 function openStartOver(): void {
-  if (!roleCanScore.value) return
+  if (!canOperateCurrentMatch.value) return
   const first = eligibleNextOverBowlers.value[0]?.id ?? '' as UUID
   selectedNextOverBowlerId.value = first as UUID
   startOverDlgOpen.value = true
@@ -1661,7 +1753,7 @@ function closeStartOver(): void { startOverDlgOpen.value = false }
 
 // Store only
 async function confirmStartOver(): Promise<void> {
-  if (!roleCanScore.value) return
+  if (!canOperateCurrentMatch.value) return
   const id = gameId.value
   const bowler = selectedNextOverBowlerId.value
   if (!id || !bowler) return
@@ -1679,7 +1771,7 @@ async function confirmStartOver(): Promise<void> {
 }
 
 function openCorrectionBowler(): void {
-  if (!roleCanScore.value) return
+  if (!canOperateCurrentMatch.value) return
   if (!canCorrectBowler.value) {
     showToast('Cannot correct bowler after legal balls bowled', 'error')
     return
@@ -1695,7 +1787,7 @@ function openCorrectionBowler(): void {
 }
 
 function openChangeBowler(): void {
-  if (!roleCanScore.value) return
+  if (!canOperateCurrentMatch.value) return
   isBowlerCorrection.value = false
   selectedReplacementBowlerId.value = '' as UUID
   changeBowlerDlgOpen.value = true
@@ -1779,7 +1871,7 @@ async function confirmChangeBowler(): Promise<void> {
       <!-- Striker Panel -->
       <div class="player-box striker-box">
         <div class="pb-label">STRIKER</div>
-        <select v-model="selectedStriker" class="pb-select-full" data-testid="scorer-striker-select">
+        <select v-model="selectedStriker" class="pb-select-full" data-testid="scorer-striker-select" :disabled="!canOperateCurrentMatch || isStartingInnings">
           <option disabled value="">Select...</option>
           <option v-for="p in battingPlayers" :key="p.id" :value="p.id" :disabled="p.id === selectedNonStriker">
             {{ p.name }} {{ roleBadge(p.id) }}
@@ -1790,7 +1882,7 @@ async function confirmChangeBowler(): Promise<void> {
       <!-- Non-Striker Panel -->
       <div class="player-box non-striker-box">
         <div class="pb-label">NON-STRIKER</div>
-        <select v-model="selectedNonStriker" class="pb-select-full" data-testid="scorer-nonstriker-select">
+        <select v-model="selectedNonStriker" class="pb-select-full" data-testid="scorer-nonstriker-select" :disabled="!canOperateCurrentMatch || isStartingInnings">
           <option disabled value="">Select...</option>
           <option v-for="p in battingPlayers" :key="p.id" :value="p.id" :disabled="p.id === selectedStriker">
             {{ p.name }} {{ roleBadge(p.id) }}
@@ -1802,7 +1894,7 @@ async function confirmChangeBowler(): Promise<void> {
       <div class="player-box bowler-box">
         <div class="pb-label">
           <span>BOWLER</span>
-          <div class="bowler-actions" v-if="roleCanScore">
+          <div class="bowler-actions" v-if="canOperateCurrentMatch">
             <button class="btn-action-xs" @click="openStartOver" :disabled="!canStartOverNow" title="Start new over / Change bowler">
               New Over
             </button>
@@ -1817,7 +1909,7 @@ async function confirmChangeBowler(): Promise<void> {
             </button>
           </div>
         </div>
-        <select v-model="selectedBowler" class="pb-select-full" data-testid="scorer-bowler-select">
+        <select v-model="selectedBowler" class="pb-select-full" data-testid="scorer-bowler-select" :disabled="!canOperateCurrentMatch || isStartingInnings">
           <option disabled value="">Select...</option>
           <option v-for="p in bowlingPlayers" :key="p.id" :value="p.id">
             {{ p.name }} {{ bowlerRoleBadge(p.id) }}
@@ -1842,9 +1934,14 @@ async function confirmChangeBowler(): Promise<void> {
            >
              <span class="gate-eyebrow">Match action</span>
              <h3 id="innings-gate-title">{{ isFirstInningsSetup ? 'Ready to Start' : 'Innings Break' }}</h3>
-             <p>{{ isFirstInningsSetup ? 'Select the opening players, then start the first innings.' : 'The previous innings is complete. Start the next innings when ready.' }}</p>
+             <p v-if="isFirstInningsSetup && isSchoolMatch" data-testid="school-first-innings-guidance">
+               {{ isStartingInnings
+                 ? 'Starting the first innings…'
+                 : inningsStartError || 'Select striker, non-striker and opening bowler to begin.' }}
+             </p>
+             <p v-else>{{ isFirstInningsSetup ? 'Select the opening players, then start the first innings.' : 'The previous innings is complete. Start the next innings when ready.' }}</p>
              <button
-               v-if="roleCanScore"
+               v-if="canOperateCurrentMatch && (!isFirstInningsSetup || !isSchoolMatch)"
                class="btn-gate"
                data-testid="btn-open-start-innings"
                type="button"
@@ -1852,14 +1949,22 @@ async function confirmChangeBowler(): Promise<void> {
              >
                {{ isFirstInningsSetup ? 'Start First Innings' : 'Start Next Innings' }}
              </button>
+             <button
+               v-if="isFirstInningsSetup && isSchoolMatch && canOperateCurrentMatch && inningsStartError"
+               class="btn-gate"
+               data-testid="retry-school-first-innings"
+               type="button"
+               :disabled="isStartingInnings"
+               @click="retryAutomaticFirstInningsStart"
+             >Retry Start</button>
            </div>
            <div v-else-if="needsNewBatterLive" class="gate-card" data-testid="gate-new-batter">
              <h3>Wicket Fall</h3>
-             <button v-if="roleCanScore" class="btn-gate" data-testid="btn-open-select-batter" type="button" @click="openSelectBatter">Select New Batter</button>
+             <button v-if="canOperateCurrentMatch" class="btn-gate" data-testid="btn-open-select-batter" type="button" @click="openSelectBatter">Select New Batter</button>
            </div>
            <div v-else-if="needsNewOverLive" class="gate-card" data-testid="gate-new-over">
              <h3>End of Over</h3>
-             <button v-if="roleCanScore" class="btn-gate" data-testid="btn-open-start-over" type="button" @click="openStartOver">Start Next Over</button>
+             <button v-if="canOperateCurrentMatch" class="btn-gate" data-testid="btn-open-start-over" type="button" @click="openStartOver">Start Next Over</button>
            </div>
         </div>
 
@@ -2103,7 +2208,7 @@ async function confirmChangeBowler(): Promise<void> {
     </div>
 
     <!-- Start Over Modal -->
-    <div v-if="roleCanScore && startOverDlgOpen" class="modal-backdrop" role="dialog" aria-modal="true" data-testid="modal-start-over">
+    <div v-if="canOperateCurrentMatch && startOverDlgOpen" class="modal-backdrop" role="dialog" aria-modal="true" data-testid="modal-start-over">
       <BaseCard padding="lg" class="modal-card">
         <h3 class="modal-title">Start next over</h3>
         <p class="modal-body-text">Select a bowler (cannot be the bowler who delivered the last ball of previous over).</p>
@@ -2119,7 +2224,7 @@ async function confirmChangeBowler(): Promise<void> {
     </div>
 
     <!-- Start Next Innings Modal -->
-    <div v-if="roleCanScore && startInningsDlgOpen" class="modal-backdrop" role="dialog" aria-modal="true" data-testid="modal-start-innings">
+    <div v-if="canOperateCurrentMatch && startInningsDlgOpen" class="modal-backdrop" role="dialog" aria-modal="true" data-testid="modal-start-innings">
       <BaseCard padding="lg" class="modal-card">
         <h3 class="modal-title">Start next innings</h3>
         <p class="modal-body-text">Select openers and (optional) opening bowler.</p>
@@ -2163,7 +2268,7 @@ async function confirmChangeBowler(): Promise<void> {
     </div>
 
     <!-- Select Next Batter Modal (Gate) -->
-    <div v-if="roleCanScore && selectBatterDlgOpen" class="modal-backdrop" role="dialog" aria-modal="true" data-testid="modal-select-batter">
+    <div v-if="canOperateCurrentMatch && selectBatterDlgOpen" class="modal-backdrop" role="dialog" aria-modal="true" data-testid="modal-select-batter">
       <BaseCard padding="lg" class="modal-card">
         <h3 class="modal-title">Select next batter</h3>
         <p class="modal-body-text">Pick a batter who is not out.</p>
