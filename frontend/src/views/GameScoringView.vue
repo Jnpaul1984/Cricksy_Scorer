@@ -172,9 +172,10 @@ watch(
   liveSnapshot,
   (snapshot) => {
     const organizationId = normId((snapshot as any)?.school_organization_id)
-    if (!organizationId) return
     schoolOrganizationId.value = organizationId
-    schoolContextCanScore.value = (snapshot as any)?.can_score === true
+    schoolContextCanScore.value = Boolean(
+      organizationId && (snapshot as any)?.can_score === true,
+    )
   },
   { immediate: true },
 )
@@ -1070,6 +1071,7 @@ function clearQueuedDeliveriesForThisGame(): void {
 // ================== Live strip data (current bowler / over) ==================
 const stateAny = computed(() => gameStore.state as any)
 const isStartingInnings = ref(false)
+let inningsStartOperationGeneration = 0
 // First-innings summary captured locally when we flip to innings 2
 const firstInnings = ref<{ runs: number; wickets: number; overs: string } | null>(null)
 
@@ -1340,6 +1342,10 @@ async function startInningsWithSelection(
   if (!canOperateCurrentMatch.value || isStartingInnings.value) return false
   const id = gameId.value
   if (!id) return false
+  const operationGeneration = ++inningsStartOperationGeneration
+  const isCurrentOperation = () => (
+    operationGeneration === inningsStartOperationGeneration && gameId.value === id
+  )
 
   inningsStartError.value = ''
   isStartingInnings.value = true
@@ -1366,6 +1372,7 @@ async function startInningsWithSelection(
       await gameStore.loadGame(id)
     }
 
+    if (!isCurrentOperation()) return false
     selectedStriker.value = payload.striker_id
     selectedNonStriker.value = payload.non_striker_id
     selectedBowler.value = payload.opening_bowler_id
@@ -1374,13 +1381,14 @@ async function startInningsWithSelection(
     showToast(successMessage, 'success')
     return true
   } catch (error: any) {
+    if (!isCurrentOperation()) return false
     const message = error?.message || 'Failed to start innings'
     inningsStartError.value = message
     onError(message)
     console.error('startNextInnings error:', error)
     return false
   } finally {
-    isStartingInnings.value = false
+    if (isCurrentOperation()) isStartingInnings.value = false
   }
 }
 
@@ -1420,6 +1428,7 @@ async function attemptAutomaticFirstInningsStart(key: string): Promise<void> {
   }
   firstInningsPendingKey.value = key
   const started = await startInningsWithSelection(payload, 'First innings started')
+  if (firstInningsPendingKey.value !== key) return
   firstInningsPendingKey.value = ''
   if (started) {
     firstInningsCompletedKey.value = key
@@ -1449,13 +1458,15 @@ watch(
 )
 
 watch(gameId, () => {
+  inningsStartOperationGeneration += 1
+  isStartingInnings.value = false
   schoolOrganizationId.value = ''
   schoolContextCanScore.value = false
   firstInningsPendingKey.value = ''
   firstInningsCompletedKey.value = ''
   firstInningsFailedKey.value = ''
   inningsStartError.value = ''
-})
+}, { flush: 'sync' })
 
 
 // ================== EMBED / SHARE PANEL ==================
