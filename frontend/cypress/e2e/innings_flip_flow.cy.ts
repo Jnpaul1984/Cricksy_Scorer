@@ -1,11 +1,11 @@
 const ensureDialogOpen = (dialogTestId: string, triggerTestId: string) => {
   cy.get('body').then(($body) => {
-    const isOpen = $body.find(`[data-testid="${dialogTestId}"][open]`).length > 0
+    const isOpen = $body.find(`[data-testid="${dialogTestId}"]`).length > 0
     if (!isOpen) {
-      cy.get(`[data-testid="${triggerTestId}"]`).should('be.visible').click()
+      cy.get(`[data-testid="${triggerTestId}"]`).should('be.visible').click({ force: true })
     }
   })
-  cy.get(`[data-testid="${dialogTestId}"]`).should('have.attr', 'open')
+  cy.get(`[data-testid="${dialogTestId}"]`).should('be.visible').and('have.attr', 'role', 'dialog')
 }
 
 describe('End of innings → start next innings gate', () => {
@@ -50,13 +50,13 @@ describe('End of innings → start next innings gate', () => {
     })
 
     cy.get('[data-testid="submit-delivery"]').should('not.be.disabled')
-    cy.get('[data-testid="scoreboard-striker-name"]').should('contain', striker.name)
-    cy.get('[data-testid="scoreboard-nonstriker-name"]').should('contain', nonStriker.name)
-    cy.get('[data-testid="scoreboard-bowler-name"]').should('contain', openingBowler.name)
+    cy.get('[data-testid="scorer-striker-select"]').should('have.value', striker.id)
+    cy.get('[data-testid="scorer-nonstriker-select"]').should('have.value', nonStriker.id)
+    cy.get('[data-testid="scorer-bowler-select"]').should('have.value', openingBowler.id)
     cy.get('[data-testid="scoreboard-target"]')
       .should('contain.text', 'Target')
       .invoke('text')
-      .should('match', /Target\s+\d+/)
-    cy.contains('.info-strip .lbl', 'RRR').should('exist')
+      .should('match', /Target:\s*\d+/)
+    cy.contains('.rate-item', 'RRR').should('exist')
   })
 })

@@ -1,11 +1,11 @@
 const ensureDialogOpen = (dialogTestId: string, triggerTestId: string) => {
   cy.get('body').then(($body) => {
-    const isOpen = $body.find(`[data-testid="${dialogTestId}"][open]`).length > 0
+    const isOpen = $body.find(`[data-testid="${dialogTestId}"]`).length > 0
     if (!isOpen) {
-      cy.get(`[data-testid="${triggerTestId}"]`).should('be.visible').click()
+      cy.get(`[data-testid="${triggerTestId}"]`).should('be.visible').click({ force: true })
     }
   })
-  cy.get(`[data-testid="${dialogTestId}"]`).should('have.attr', 'open')
+  cy.get(`[data-testid="${dialogTestId}"]`).should('be.visible').and('have.attr', 'role', 'dialog')
 }
 
 describe('Over completion → needs_new_over gate', () => {
@@ -52,6 +52,6 @@ describe('Over completion → needs_new_over gate', () => {
     // cy.waitForSnapshotFlag('needs_new_over', false)
 
     cy.get('[data-testid="submit-delivery"]').should('not.be.disabled')
-    cy.get('[data-testid="scoreboard-bowler-name"]').should('contain', nextBowler.name)
+    cy.get('[data-testid="scorer-bowler-select"]').should('have.value', nextBowler.id)
   })
 })

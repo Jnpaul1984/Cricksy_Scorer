@@ -2,12 +2,12 @@ const API_BASE: string = (Cypress.env('API_BASE') as string) || 'http://127.0.0.
 
 const ensureDialogOpen = (dialogTestId: string, triggerTestId: string) => {
   cy.get('body').then(($body) => {
-    const isOpen = $body.find(`[data-testid="${dialogTestId}"][open]`).length > 0
+    const isOpen = $body.find(`[data-testid="${dialogTestId}"]`).length > 0
     if (!isOpen) {
       cy.get(`[data-testid="${triggerTestId}"]`).scrollIntoView().should('be.visible').click({ force: true })
     }
   })
-  cy.get(`[data-testid="${dialogTestId}"]`).should('have.attr', 'open')
+  cy.get(`[data-testid="${dialogTestId}"]`).should('be.visible').and('have.attr', 'role', 'dialog')
 }
 
 const addPlayers = (editorIndex: number, names: string[]) => {
