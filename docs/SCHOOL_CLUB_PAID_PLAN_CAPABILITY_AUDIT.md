@@ -489,4 +489,3 @@ This audit does not:
 Proceed toward one shared organization capability architecture for Schools and Clubs. First approve the contextual paid-plan/seat contract and hybrid-history/privacy decisions. Then implement Team Operations, Coaching & Development, and deterministic Analytics/Exports before introducing organization AI or video. Video and automation belong in Elite only after enforceable usage accounting, retention, provider, consent and tenant controls exist.
 
 The repository can reuse substantial Coach Pro, Coach Pro Plus and Analyst Pro functionality, but reuse means adapting authorization and ownership—not granting global roles to organization members and not treating legacy `User.org_id` or personal Org Pro as the new tenancy model. Free must remain the complete “run cricket” product already proven for both Schools and Clubs.
-
