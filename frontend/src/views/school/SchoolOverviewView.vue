@@ -6,6 +6,8 @@ import { listSchoolPlayers, listSchoolTeams } from '@/services/schoolAdminApi';
 
 const {
   organizationId,
+  organizationBasePath,
+  terminology,
   organization,
   membership,
   entitlement,
@@ -24,7 +26,9 @@ onMounted(async () => { try { const [players, teams] = await Promise.all([listSc
     <header>
       <p class="eyebrow">Overview</p>
       <h2 id="overview-heading">{{ organization?.name }}</h2>
-      <p>Your access comes from this School’s active organization membership.</p>
+      <p>
+        Your access comes from this {{ terminology.kindLabel }}’s active organization membership.
+      </p>
     </header>
     <dl class="summary-grid">
       <div>
@@ -32,7 +36,7 @@ onMounted(async () => { try { const [players, teams] = await Promise.all([listSc
         <dd>{{ organization?.status }}</dd>
       </div>
       <div>
-        <dt>Your School role</dt>
+        <dt>Your {{ terminology.kindLabel }} role</dt>
         <dd>{{ membership?.role }}</dd>
       </div>
       <div>
@@ -45,37 +49,46 @@ onMounted(async () => { try { const [players, teams] = await Promise.all([listSc
       </div>
     </dl>
     <section aria-labelledby="capabilities-heading">
-      <h3 id="capabilities-heading">Enabled School capabilities</h3>
+      <h3 id="capabilities-heading">Enabled {{ terminology.kindLabel }} capabilities</h3>
       <ul class="capabilities">
         <li v-for="capability in entitlement?.capabilities" :key="capability">
           {{ capability.replace(/_/g, ' ') }}
         </li>
       </ul>
     </section>
-    <nav class="quick-actions" aria-label="School actions">
-      <RouterLink :to="`/schools/${organizationId}/teams`">Manage teams</RouterLink>
-      <RouterLink :to="`/schools/${organizationId}/players`">View master roster</RouterLink>
-      <RouterLink v-if="canImport" :to="`/schools/${organizationId}/imports`"
+    <nav class="quick-actions" :aria-label="`${terminology.kindLabel} actions`">
+      <RouterLink :to="`${organizationBasePath}/${organizationId}/teams`">Manage teams</RouterLink>
+      <RouterLink :to="`${organizationBasePath}/${organizationId}/players`"
+        >View master roster</RouterLink
+      >
+      <RouterLink v-if="canImport" :to="`${organizationBasePath}/${organizationId}/imports`"
         >Import players</RouterLink
       >
-      <RouterLink v-if="canCreateSchoolMatch" :to="`/schools/${organizationId}/matches/new`"
-        >Create School match</RouterLink
+      <RouterLink
+        v-if="canCreateSchoolMatch"
+        :to="`${organizationBasePath}/${organizationId}/matches/new`"
+        >Create {{ terminology.kindLabel }} match</RouterLink
       >
-      <RouterLink v-if="canViewStatistics" :to="`/schools/${organizationId}/statistics`"
+      <RouterLink
+        v-if="canViewStatistics"
+        :to="`${organizationBasePath}/${organizationId}/statistics`"
         >View statistics</RouterLink
       >
       <RouterLink
         v-if="canViewFixturesResults"
-        :to="`/schools/${organizationId}/fixtures-results`"
+        :to="`${organizationBasePath}/${organizationId}/fixtures-results`"
         >View fixtures and results</RouterLink
       >
-      <RouterLink v-if="canViewCompetitions" :to="`/schools/${organizationId}/competitions`"
+      <RouterLink
+        v-if="canViewCompetitions"
+        :to="`${organizationBasePath}/${organizationId}/competitions`"
         >Manage competitions</RouterLink
       >
     </nav>
-    <section v-if="!hasSetup" class="onboarding" aria-labelledby="onboarding-heading"><h3 id="onboarding-heading">Start your School workspace</h3><ol><li><RouterLink v-if="canImport" :to="`/schools/${organizationId}/imports`">Upload Players</RouterLink></li><li><RouterLink :to="`/schools/${organizationId}/teams`">Create Teams</RouterLink></li><li><RouterLink :to="`/schools/${organizationId}/teams`">Assign Players</RouterLink></li><li><RouterLink v-if="canCreateSchoolMatch" :to="`/schools/${organizationId}/matches/new`">Create First Match</RouterLink></li></ol></section>
+    <section v-if="!hasSetup" class="onboarding" aria-labelledby="onboarding-heading"><h3 id="onboarding-heading">Start your {{ terminology.kindLabel }} workspace</h3><ol><li><RouterLink v-if="canImport" :to="`${organizationBasePath}/${organizationId}/imports`">Upload Players</RouterLink></li><li><RouterLink :to="`${organizationBasePath}/${organizationId}/teams`">Create Teams</RouterLink></li><li><RouterLink :to="`${organizationBasePath}/${organizationId}/teams`">Assign Players</RouterLink></li><li><RouterLink v-if="canCreateSchoolMatch" :to="`${organizationBasePath}/${organizationId}/matches/new`">Create First Match</RouterLink></li></ol></section>
     <p class="boundary-note">
-      Advanced AI, video, advanced analytics, and premium coaching are not included in School Free.
+      Advanced AI, video, advanced analytics, and premium coaching are not included in
+      {{ terminology.freePlanLabel }}.
     </p>
   </section>
 </template>

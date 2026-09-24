@@ -19,6 +19,7 @@ from backend.api.schemas.school_competitions import (
 )
 from backend.services import organization_service
 from backend.services.organization_entitlement_service import (
+    FREE_CRICKET_ORGANIZATION_TYPES,
     organization_has_capability,
     require_organization_capability,
 )
@@ -69,7 +70,10 @@ async def _authorize(
     organization, membership = await organization_service.get_organization_for_member(
         db, organization_id=organization_id, user_id=actor_user_id
     )
-    if organization.organization_type != "school" or membership.role not in allowed_roles:
+    if (
+        organization.organization_type not in FREE_CRICKET_ORGANIZATION_TYPES
+        or membership.role not in allowed_roles
+    ):
         logger.warning(
             "organization.school_competition_authorization_denied",
             organization_id=organization_id,
@@ -714,7 +718,7 @@ async def school_game_scoring_authorization(
         raise _not_found("Game") from exc
 
     can_score = (
-        organization.organization_type == "school"
+        organization.organization_type in FREE_CRICKET_ORGANIZATION_TYPES
         and membership.role in SCORE_ROLES
         and await organization_has_capability(
             db,
@@ -824,10 +828,17 @@ async def public_scorecard(db: AsyncSession, *, game_id: str) -> PublicSchoolSco
         db, organization_id=organization_id, capability="school_live_scorecards"
     ):
         raise _not_found("Scorecard")
+    organization = await db.get(models.Organization, organization_id)
+    if (
+        organization is None
+        or organization.organization_type not in FREE_CRICKET_ORGANIZATION_TYPES
+    ):
+        raise _not_found("Scorecard")
     if game.publication_state not in {"published_live", "published_final"}:
         raise _not_found("Scorecard")
     return PublicSchoolScorecard(
         game_id=game.id,
+        organization_type=organization.organization_type,
         publication_state=game.publication_state,
         status=game.status.value,
         team_a=_public_team(game.team_a),

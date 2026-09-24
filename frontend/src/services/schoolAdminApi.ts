@@ -23,14 +23,29 @@ import type {
   SchoolTeamRosterPlayer,
   SchoolTeamStatistics,
   PublicSchoolScorecard,
+  FreeOrganizationType,
 } from '@/types/schoolAdmin';
 
 const orgPath = (organizationId: string, suffix = '') =>
   `/api/organizations/${encodeURIComponent(organizationId)}${suffix}`;
 
-export const listSchools = () => apiRequest<SchoolOrganization[]>('/api/organizations');
+export const listOrganizations = async (organizationType?: FreeOrganizationType) => {
+  const organizations = await apiRequest<SchoolOrganization[]>('/api/organizations');
+  return organizationType
+    ? organizations.filter((organization) => organization.organization_type === organizationType)
+    : organizations;
+};
+export const listSchools = () => listOrganizations('school');
+export const listClubs = () => listOrganizations('club');
+export const createOrganization = (payload: SchoolCreateInput & { organization_type: FreeOrganizationType }) =>
+  apiRequest<SchoolOrganization>('/api/organizations', {
+    method: 'POST',
+    body: JSON.stringify({ name: payload.name, organization_type: payload.organization_type }),
+  });
 export const createSchool = (payload: SchoolCreateInput) =>
-  apiRequest<SchoolOrganization>('/api/organizations', { method: 'POST', body: JSON.stringify({ name: payload.name, organization_type: 'school' }) });
+  createOrganization({ name: payload.name, organization_type: 'school' });
+export const createClub = (payload: SchoolCreateInput) =>
+  createOrganization({ name: payload.name, organization_type: 'club' });
 export const getSchool = (organizationId: string) =>
   apiRequest<SchoolOrganization>(orgPath(organizationId));
 export const getMySchoolMembership = (organizationId: string) =>

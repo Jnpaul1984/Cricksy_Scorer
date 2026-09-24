@@ -13,7 +13,10 @@ from backend.api.schemas.school_matches import (
     SchoolMatchSideSelection,
 )
 from backend.services import organization_service
-from backend.services.organization_entitlement_service import require_organization_capability
+from backend.services.organization_entitlement_service import (
+    FREE_CRICKET_ORGANIZATION_TYPES,
+    require_organization_capability,
+)
 from backend.sql_app import models
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -80,7 +83,7 @@ async def _authorize(
         user_id=actor_user_id,
     )
     if (
-        organization.organization_type != "school"
+        organization.organization_type not in FREE_CRICKET_ORGANIZATION_TYPES
         or membership.role not in SCHOOL_MATCH_CREATE_ROLES
     ):
         raise _forbidden()

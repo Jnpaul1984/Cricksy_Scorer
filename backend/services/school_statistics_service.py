@@ -15,7 +15,10 @@ from backend.api.schemas.school_statistics import (
 )
 from backend.domain.constants import CREDIT_BOWLER, norm_extra
 from backend.services import organization_service
-from backend.services.organization_entitlement_service import require_organization_capability
+from backend.services.organization_entitlement_service import (
+    FREE_CRICKET_ORGANIZATION_TYPES,
+    require_organization_capability,
+)
 from backend.sql_app import models
 from sqlalchemy import Select, and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -51,7 +54,10 @@ async def _authorize(
         organization_id=organization_id,
         user_id=actor_user_id,
     )
-    if organization.organization_type != "school" or membership.role not in READ_ROLES:
+    if (
+        organization.organization_type not in FREE_CRICKET_ORGANIZATION_TYPES
+        or membership.role not in READ_ROLES
+    ):
         raise SchoolStatisticsServiceError(403, "Insufficient organization role")
 
 

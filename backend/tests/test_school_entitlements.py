@@ -74,7 +74,11 @@ async def test_school_creation_rolls_back_if_entitlement_provisioning_fails(
     async def fail_provisioning(*args: Any, **kwargs: Any) -> None:
         raise RuntimeError("forced School Free provisioning failure")
 
-    monkeypatch.setattr(organization_service, "ensure_school_free_entitlement", fail_provisioning)
+    monkeypatch.setattr(
+        organization_service,
+        "ensure_free_organization_entitlement",
+        fail_provisioning,
+    )
     async with session_maker() as session:
         actor = await session.get(User, owner.id)
         assert actor is not None

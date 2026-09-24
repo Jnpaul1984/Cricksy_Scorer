@@ -237,7 +237,7 @@ async def get_organization_entitlements(
             organization_entitlement_service.capabilities_for_plan(entitlement.plan_key)
         ),
         excluded_capabilities=sorted(
-            organization_entitlement_service.SCHOOL_FREE_EXCLUDED_CAPABILITIES
+            organization_entitlement_service.excluded_capabilities_for_plan(entitlement.plan_key)
         ),
     )
 

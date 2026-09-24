@@ -12,7 +12,7 @@ import {
 } from '@/services/schoolAdminApi';
 import type { SchoolTeam } from '@/types/schoolAdmin';
 
-const { organizationId, canManageTeams } = useSchoolContext();
+const { organizationId, organizationBasePath, canManageTeams } = useSchoolContext();
 const teams = ref<SchoolTeam[]>([]);
 const loading = ref(true);
 const saving = ref(false);
@@ -128,7 +128,7 @@ onMounted(load);
         <tbody>
           <tr v-for="team in teams" :key="team.id">
             <td>
-              <RouterLink :to="`/schools/${organizationId}/teams/${team.id}`">{{
+              <RouterLink :to="`${organizationBasePath}/${organizationId}/teams/${team.id}`">{{
                 team.name
               }}</RouterLink>
             </td>
@@ -140,7 +140,8 @@ onMounted(load);
             </td>
             <td>
               <div class="button-row">
-                <RouterLink :to="`/schools/${organizationId}/teams/${team.id}`">Roster</RouterLink
+                <RouterLink :to="`${organizationBasePath}/${organizationId}/teams/${team.id}`"
+                  >Roster</RouterLink
                 ><button
                   v-if="canManageTeams"
                   type="button"

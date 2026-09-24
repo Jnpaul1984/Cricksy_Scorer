@@ -29,6 +29,7 @@ import type {
 
 const {
   organizationId,
+  terminology,
   canViewCompetitions,
   canManageCompetitions,
   canDeleteCompetitions,
@@ -197,7 +198,7 @@ async function linkFixture(fixture: SchoolFixture) {
   if (!gameId || !window.confirm(`Link this fixture to match ${gameId}?`)) return;
   await run(
     () => linkSchoolFixtureGame(organizationId.value, selectedId.value, fixture.id, gameId),
-    'Fixture linked to the selected School match.',
+    `Fixture linked to the selected ${terminology.value.kindLabel} match.`,
   );
 }
 
@@ -207,7 +208,7 @@ watch(organizationId, load, { immediate: true });
 <template>
   <section class="panel" aria-labelledby="competitions-heading">
     <header>
-      <p class="eyebrow">School competitions</p>
+      <p class="eyebrow">{{ terminology.kindLabel }} competitions</p>
       <h2 id="competitions-heading">Competitions, fixtures, and standings</h2>
       <p>
         Fixtures are planning records. Match linkage is explicit and never creates a match
@@ -235,7 +236,9 @@ watch(organizationId, load, { immediate: true });
         <button type="submit">Create competition</button>
       </form>
 
-      <p v-if="!competitions.length" class="notice">No School competitions yet.</p>
+      <p v-if="!competitions.length" class="notice">
+        No {{ terminology.kindLabel }} competitions yet.
+      </p>
       <template v-else>
         <div class="selector-row">
           <label
@@ -280,7 +283,7 @@ watch(organizationId, load, { immediate: true });
           <h4>Teams</h4>
           <form v-if="canManageCompetitions" class="inline-form" @submit.prevent="addEntrant">
             <select v-model="entrantTeamId" required aria-label="Team to add">
-              <option value="" disabled>Select an active School team</option>
+              <option value="" disabled>Select an active {{ terminology.kindLabel }} team</option>
               <option
                 v-for="team in schoolTeams.filter((row) => row.status === 'active')"
                 :key="team.id"
@@ -363,8 +366,8 @@ watch(organizationId, load, { immediate: true });
                 <input
                   v-model.trim="linkGameIds[fixture.id]"
                   required
-                  placeholder="Existing School match ID"
-                  aria-label="School match ID"
+                  :placeholder="`Existing ${terminology.kindLabel} match ID`"
+                  :aria-label="`${terminology.kindLabel} match ID`"
                 />
                 <button type="submit">Link match</button>
               </form>

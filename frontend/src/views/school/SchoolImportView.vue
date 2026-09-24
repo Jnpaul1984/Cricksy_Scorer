@@ -18,7 +18,13 @@ interface ResolutionDraft {
   teamId: string;
 }
 
-const { organizationId, canImport, canManageRosterLifecycle } = useSchoolContext();
+const {
+  organizationId,
+  organizationBasePath,
+  terminology,
+  canImport,
+  canManageRosterLifecycle,
+} = useSchoolContext();
 const file = ref<File | null>(null);
 const fileInput = ref<HTMLInputElement | null>(null);
 const mapping = reactive({
@@ -136,8 +142,10 @@ async function createPreview() {
 }
 function friendlyError(reason: unknown) {
   const status = (reason as { status?: number })?.status;
-  if (status === 403) return 'Your School role cannot perform this import action.';
-  if (status === 404) return 'This School or import preview is unavailable.';
+  if (status === 403)
+    return `Your ${terminology.value.kindLabel} role cannot perform this import action.`;
+  if (status === 404)
+    return `This ${terminology.value.kindLabel} or import preview is unavailable.`;
   if (status === 422) return `The import could not be validated: ${getErrorMessage(reason)}`;
   return getErrorMessage(reason);
 }
@@ -219,7 +227,8 @@ watch(organizationId, resetImport);
     <div v-if="error" class="notice error" role="alert">{{ error }}</div>
     <div v-if="conflict" class="notice warning" role="alert">{{ conflict }}</div>
     <div v-if="!canImport" class="notice warning" role="status">
-      Your School role is read-only. Player imports are available to owners, admins, and coaches.
+      Your {{ terminology.kindLabel }} role is read-only. Player imports are available to owners,
+      admins, and coaches.
     </div>
     <section v-else-if="!result" class="upload-card" aria-labelledby="upload-heading">
       <h3 id="upload-heading">1. Upload and map</h3>
@@ -420,8 +429,9 @@ watch(organizationId, resetImport);
         </table>
       </div>
       <nav class="result-links">
-        <RouterLink :to="`/schools/${organizationId}/players`">Go to Players</RouterLink
-        ><RouterLink :to="`/schools/${organizationId}/teams`">Go to Teams</RouterLink
+        <RouterLink :to="`${organizationBasePath}/${organizationId}/players`"
+          >Go to Players</RouterLink
+        ><RouterLink :to="`${organizationBasePath}/${organizationId}/teams`">Go to Teams</RouterLink
         ><button type="button" class="secondary" @click="resetImport">Start another import</button>
       </nav>
     </section>

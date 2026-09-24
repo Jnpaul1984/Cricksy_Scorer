@@ -2,6 +2,10 @@ import { flushPromises, mount, type VueWrapper } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, ref, type Ref } from 'vue';
 
+import {
+  organizationBasePath,
+  organizationTerminology,
+} from '@/composables/useOrganizationTerminology';
 import { schoolContextKey, type SchoolContext } from '@/composables/useSchoolContext';
 import * as schoolApi from '@/services/schoolAdminApi';
 import type { SchoolTeam, SchoolTeamRosterPlayer } from '@/types/schoolAdmin';
@@ -54,6 +58,9 @@ function context(
   const writes = computed(() => true);
   return {
     organizationId: computed(() => organizationId.value),
+    organizationType: computed(() => 'school'),
+    organizationBasePath: computed(() => organizationBasePath('school')),
+    terminology: computed(() => organizationTerminology('school')),
     organization: ref(null),
     membership: ref(null),
     entitlement: ref(null),
@@ -65,6 +72,13 @@ function context(
     canCreateSchoolMatch: computed(() =>
       typeof canCreate === 'boolean' ? canCreate : canCreate.value,
     ),
+    canViewStatistics: computed(() => true),
+    canViewFixturesResults: computed(() => true),
+    canViewCompetitions: computed(() => true),
+    canManageCompetitions: writes,
+    canDeleteCompetitions: writes,
+    canLinkFixtures: writes,
+    canPublishScorecards: writes,
   };
 }
 

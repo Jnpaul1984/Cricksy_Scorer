@@ -56,6 +56,16 @@ def create_school(client: TestClient, owner: RegisteredUser, name: str) -> dict:
     return response.json()
 
 
+def create_club(client: TestClient, owner: RegisteredUser, name: str) -> dict:
+    response = client.post(
+        "/api/organizations",
+        json={"name": name, "organization_type": "club"},
+        headers=owner.headers,
+    )
+    assert response.status_code == 201, response.text
+    return response.json()
+
+
 def add_membership(
     client: TestClient,
     actor: RegisteredUser,

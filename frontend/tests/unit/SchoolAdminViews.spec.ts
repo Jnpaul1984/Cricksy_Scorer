@@ -2,6 +2,10 @@ import { flushPromises, mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, ref } from 'vue';
 
+import {
+  organizationBasePath,
+  organizationTerminology,
+} from '@/composables/useOrganizationTerminology';
 import { schoolContextKey, type SchoolContext } from '@/composables/useSchoolContext';
 import * as schoolApi from '@/services/schoolAdminApi';
 import type { PlayerImportPreview, SchoolMembershipRole } from '@/types/schoolAdmin';
@@ -14,7 +18,11 @@ import SchoolTeamsView from '@/views/school/SchoolTeamsView.vue';
 
 vi.mock('@/services/schoolAdminApi');
 vi.mock('vue-router', () => ({
-  useRoute: () => ({ params: { organizationId: 'school-a', teamId: 'team-a' } }),
+  useRoute: () => ({
+    params: { organizationId: 'school-a', teamId: 'team-a' },
+    meta: { organizationType: 'school' },
+    fullPath: '/schools/school-a',
+  }),
   RouterLink: { props: ['to'], template: '<a :href="String(to)"><slot /></a>' },
   RouterView: { template: '<div data-test="router-view" />' },
 }));
@@ -56,6 +64,9 @@ function context(role: SchoolMembershipRole, organizationId = ref('school-a')): 
   const writes = computed(() => ['owner', 'admin', 'coach'].includes(role));
   return {
     organizationId: computed(() => organizationId.value),
+    organizationType: computed(() => 'school'),
+    organizationBasePath: computed(() => organizationBasePath('school')),
+    terminology: computed(() => organizationTerminology('school')),
     organization: ref({ ...school, id: organizationId.value, membership_role: role }),
     membership: ref({
       id: 'member-a',

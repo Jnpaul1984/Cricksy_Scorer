@@ -1,10 +1,19 @@
 import type { ComputedRef, InjectionKey, Ref } from 'vue';
 import { inject } from 'vue';
 
-import type { SchoolEntitlement, SchoolMembership, SchoolOrganization } from '@/types/schoolAdmin';
+import type { OrganizationTerminology } from '@/composables/useOrganizationTerminology';
+import type {
+  FreeOrganizationType,
+  SchoolEntitlement,
+  SchoolMembership,
+  SchoolOrganization,
+} from '@/types/schoolAdmin';
 
 export interface SchoolContext {
   organizationId: ComputedRef<string>;
+  organizationType: ComputedRef<FreeOrganizationType>;
+  organizationBasePath: ComputedRef<string>;
+  terminology: ComputedRef<OrganizationTerminology>;
   organization: Ref<SchoolOrganization | null>;
   membership: Ref<SchoolMembership | null>;
   entitlement: Ref<SchoolEntitlement | null>;
@@ -27,6 +36,6 @@ export const schoolContextKey: InjectionKey<SchoolContext> = Symbol('school-cont
 
 export function useSchoolContext(): SchoolContext {
   const context = inject(schoolContextKey);
-  if (!context) throw new Error('School context is unavailable');
+  if (!context) throw new Error('Organization context is unavailable');
   return context;
 }

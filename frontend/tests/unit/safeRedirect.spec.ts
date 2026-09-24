@@ -5,6 +5,7 @@ import { authEntryRedirect, safeInternalRedirect } from '@/utils/safeRedirect';
 describe('safeInternalRedirect', () => {
   it('retains internal routes including query strings', () => {
     expect(safeInternalRedirect('/schools/create?source=free')).toBe('/schools/create?source=free');
+    expect(safeInternalRedirect('/clubs/create?source=free')).toBe('/clubs/create?source=free');
   });
 
   it.each(['https://evil.example', '//evil.example', 'schools/create', '/\\evil.example'])(
@@ -14,8 +15,9 @@ describe('safeInternalRedirect', () => {
 });
 
 describe('authEntryRedirect', () => {
-  it.each(['/login', '/register'])('preserves School continuation from %s', () => {
+  it.each(['/login', '/register'])('preserves free organization continuation from %s', () => {
     expect(authEntryRedirect('/schools/create')).toBe('/schools/create');
+    expect(authEntryRedirect('/clubs/create')).toBe('/clubs/create');
   });
   it('falls back for unsafe continuation', () => expect(authEntryRedirect('https://evil.example')).toBe('/setup'));
   it('falls back without continuation', () => expect(authEntryRedirect(undefined)).toBe('/setup'));

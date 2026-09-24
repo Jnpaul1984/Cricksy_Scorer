@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 
 import { getErrorMessage } from '@/services/api'
@@ -8,6 +8,11 @@ import { useAuthStore } from '@/stores/authStore'
 import { authEntryRedirect } from '@/utils/safeRedirect'
 
 const route = useRoute(); const router = useRouter(); const auth = useAuthStore()
+const organizationLabel = computed(() =>
+  typeof route.query.redirect === 'string' && route.query.redirect.startsWith('/clubs')
+    ? 'Club Free'
+    : 'School Free',
+)
 const email = ref(''); const password = ref(''); const confirmPassword = ref(''); const error = ref(''); const loading = ref(false)
 async function submit() {
   error.value = ''
@@ -17,5 +22,5 @@ async function submit() {
   catch (reason) { error.value = getErrorMessage(reason) } finally { loading.value = false }
 }
 </script>
-<template><section class="auth-page"><h1>Create your Cricksy account</h1><p>Create an account, then set up your School Free workspace.</p><form @submit.prevent="submit"><label>Email<input v-model="email" type="email" autocomplete="email" required /></label><label>Password<input v-model="password" type="password" autocomplete="new-password" required /></label><label>Confirm password<input v-model="confirmPassword" type="password" autocomplete="new-password" required /></label><p v-if="error" role="alert">{{ error }}</p><button :disabled="loading">{{ loading ? 'Creating account…' : 'Create account' }}</button></form><p>Already have an account? <RouterLink :to="{ path: '/login', query: route.query }">Sign in</RouterLink></p></section></template>
+<template><section class="auth-page"><h1>Create your Cricksy account</h1><p>Create an account, then set up your {{ organizationLabel }} workspace.</p><form @submit.prevent="submit"><label>Email<input v-model="email" type="email" autocomplete="email" required /></label><label>Password<input v-model="password" type="password" autocomplete="new-password" required /></label><label>Confirm password<input v-model="confirmPassword" type="password" autocomplete="new-password" required /></label><p v-if="error" role="alert">{{ error }}</p><button :disabled="loading">{{ loading ? 'Creating account…' : 'Create account' }}</button></form><p>Already have an account? <RouterLink :to="{ path: '/login', query: route.query }">Sign in</RouterLink></p></section></template>
 <style scoped>.auth-page{max-width:28rem;margin:3rem auto;padding:2rem;background:#1b2235;border-radius:12px;color:#eef2ff}form{display:grid;gap:1rem}label{display:grid;gap:.35rem}input{padding:.65rem}button{padding:.75rem;background:#70d7b0;border:0;border-radius:8px;font-weight:700}</style>

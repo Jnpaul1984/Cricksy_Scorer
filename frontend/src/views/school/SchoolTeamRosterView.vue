@@ -15,7 +15,8 @@ import {
 import type { SchoolRosterPlayer, SchoolTeam, SchoolTeamRosterPlayer } from '@/types/schoolAdmin';
 
 const route = useRoute();
-const { organizationId, canManageTeamRoster } = useSchoolContext();
+const { organizationId, organizationBasePath, terminology, canManageTeamRoster } =
+  useSchoolContext();
 const teamId = computed(() => String(route.params.teamId || ''));
 const team = ref<SchoolTeam | null>(null);
 const roster = ref<SchoolTeamRosterPlayer[]>([]);
@@ -89,13 +90,13 @@ onMounted(load);
 
 <template>
   <section class="panel" aria-labelledby="team-roster-heading">
-    <RouterLink :to="`/schools/${organizationId}/teams`">← Teams</RouterLink>
+    <RouterLink :to="`${organizationBasePath}/${organizationId}/teams`">← Teams</RouterLink>
     <header>
       <p class="eyebrow">Team roster</p>
       <h2 id="team-roster-heading">{{ team?.name || 'Team' }}</h2>
       <p>
-        Assignments use the exact School roster membership ID. The School master roster remains
-        canonical.
+        Assignments use the exact retained roster membership ID. The
+        {{ terminology.kindLabel }} master roster remains canonical.
       </p>
     </header>
     <div v-if="error" class="notice error" role="alert">{{ error }}</div>
@@ -106,7 +107,7 @@ onMounted(load);
       @submit.prevent="assign"
     >
       <label
-        >Add active School player
+        >Add active {{ terminology.kindLabel }} player
         <select v-model="selectedMembershipId" required>
           <option value="">Select a player</option>
           <option v-for="player in availablePlayers" :key="player.id" :value="player.id">
@@ -126,7 +127,7 @@ onMounted(load);
           <tr>
             <th>Player</th>
             <th>Team status</th>
-            <th>School status</th>
+            <th>{{ terminology.kindLabel }} status</th>
             <th>Available</th>
             <th>Actions</th>
           </tr>

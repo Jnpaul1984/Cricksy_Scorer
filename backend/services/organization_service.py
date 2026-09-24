@@ -10,7 +10,7 @@ from backend.api.schemas.organizations import (
     OrganizationMembershipCreate,
     OrganizationMembershipUpdate,
 )
-from backend.services.organization_entitlement_service import ensure_school_free_entitlement
+from backend.services.organization_entitlement_service import ensure_free_organization_entitlement
 from backend.sql_app.models import Organization, OrganizationMembership, User
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
@@ -47,7 +47,7 @@ async def create_organization(
     payload: OrganizationCreate,
     actor: User,
 ) -> tuple[Organization, OrganizationMembership]:
-    """Create a school and its owner membership in one transaction."""
+    """Create a supported organization, owner, and matching free plan atomically."""
     actor_user_id = actor.id
     organization = Organization(
         name=payload.name,
@@ -65,7 +65,7 @@ async def create_organization(
     db.add_all([organization, owner_membership])
     try:
         await db.flush()
-        await ensure_school_free_entitlement(db, organization_id=organization.id)
+        await ensure_free_organization_entitlement(db, organization_id=organization.id)
         await db.commit()
     except Exception:
         await db.rollback()
