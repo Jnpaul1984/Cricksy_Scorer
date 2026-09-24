@@ -44,7 +44,9 @@ jobs:
           test -f frontend/dist/index.html
 
       - name: Install Firebase CLI
-        run: npm install -g firebase-tools
+        run: |
+          npm install -g firebase-tools@15.30.2
+          firebase --version
 
       - name: Validate required deploy secrets
         env:
