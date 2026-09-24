@@ -15,7 +15,7 @@ type Side = 'a' | 'b';
 type MatchMode = 'school_vs_school' | 'school_vs_external';
 
 const router = useRouter();
-const { organizationId, canCreateSchoolMatch } = useSchoolContext();
+const { organizationId, terminology, canCreateSchoolMatch } = useSchoolContext();
 const teams = ref<SchoolTeam[]>([]);
 const teamAId = ref('');
 const teamBId = ref('');
@@ -59,7 +59,7 @@ const displayTeamBName = computed(() =>
   mode.value === 'school_vs_external' && schoolOrientation.value === 'team_a'
     ? externalTeamName.value.trim() || 'External opponent'
     : mode.value === 'school_vs_external'
-      ? teamA.value?.name || 'School Team'
+      ? teamA.value?.name || `${terminology.value.kindLabel} Team`
       : teamB.value?.name || 'Team B',
 );
 
@@ -171,17 +171,18 @@ function selectedPlayers(side: Side) {
 }
 
 function validationMessage(): string {
-  if (!teamAId.value) return 'Choose a saved School Team.';
-  if (mode.value === 'school_vs_school' && !teamBId.value) return 'Choose two saved School Teams.';
+  if (!teamAId.value) return `Choose a saved ${terminology.value.kindLabel} Team.`;
+  if (mode.value === 'school_vs_school' && !teamBId.value)
+    return `Choose two saved ${terminology.value.kindLabel} Teams.`;
   if (mode.value === 'school_vs_school' && teamAId.value === teamBId.value)
-    return 'Choose two different saved School Teams.';
+    return `Choose two different saved ${terminology.value.kindLabel} Teams.`;
   if (
     selectedA.value.length !== 11 ||
     (mode.value === 'school_vs_school' && selectedB.value.length !== 11)
   )
     return mode.value === 'school_vs_school'
       ? 'Explicitly select exactly 11 eligible players for each playing XI.'
-      : 'Explicitly select exactly 11 eligible School players.';
+      : `Explicitly select exactly 11 eligible ${terminology.value.kindLabel} players.`;
   if (
     !captainA.value ||
     !wicketkeeperA.value ||
@@ -211,7 +212,7 @@ function validationMessage(): string {
       externalTeamName.value.trim().toLocaleLowerCase() ===
       schoolTeam.value?.name.toLocaleLowerCase()
     )
-      return 'School and external opponent Team names must be different.';
+      return `${terminology.value.kindLabel} and external opponent Team names must be different.`;
   }
   if (matchType.value === 'limited' && !oversLimit.value)
     return 'Set the overs limit for this limited-overs match.';
@@ -227,7 +228,8 @@ const canSubmit = computed(
 async function createMatch() {
   const validation = validationMessage();
   if (validation || creating.value || !canCreateSchoolMatch.value) {
-    error.value = validation || 'Your School membership cannot create matches.';
+    error.value =
+      validation || `Your ${terminology.value.kindLabel} membership cannot create matches.`;
     return;
   }
   const payload: SchoolMatchCreate = {
@@ -297,7 +299,7 @@ watch(teamBId, (teamId) => loadRoster('b', teamId));
   <section class="panel" aria-labelledby="school-match-heading">
     <header>
       <p class="eyebrow">Phase 7I · Match setup</p>
-      <h2 id="school-match-heading">Create a School match</h2>
+      <h2 id="school-match-heading">Create a {{ terminology.kindLabel }} match</h2>
       <p class="boundary">
         A Team roster is not a playing XI. Select exactly eleven eligible players for this match; no
         roster is selected automatically.
@@ -306,7 +308,7 @@ watch(teamBId, (teamId) => loadRoster('b', teamId));
     </header>
 
     <p v-if="!canCreateSchoolMatch" class="notice" role="alert">
-      Your active School role or entitlement does not permit match setup.
+      Your active {{ terminology.kindLabel }} role or entitlement does not permit match setup.
     </p>
     <p v-else-if="loadingTeams" role="status">Loading saved Teams…</p>
     <div v-else class="mode-picker" aria-label="Match opponent mode">
@@ -316,7 +318,7 @@ watch(teamBId, (teamId) => loadRoster('b', teamId));
         data-testid="mode-school-vs-school"
         @click="setMode('school_vs_school')"
       >
-        School Team vs School Team
+        {{ terminology.kindLabel }} Team vs {{ terminology.kindLabel }} Team
       </button>
       <button
         type="button"
@@ -324,7 +326,7 @@ watch(teamBId, (teamId) => loadRoster('b', teamId));
         data-testid="mode-school-vs-external"
         @click="setMode('school_vs_external')"
       >
-        School Team vs External Opponent
+        {{ terminology.kindLabel }} Team vs External Opponent
       </button>
     </div>
     <p
@@ -340,7 +342,7 @@ watch(teamBId, (teamId) => loadRoster('b', teamId));
       {{
         mode === 'school_vs_school'
           ? 'Create at least two active saved Teams before starting this match.'
-          : 'Create an active saved School Team before starting this match.'
+          : `Create an active saved ${terminology.kindLabel} Team before starting this match.`
       }}
     </p>
 
@@ -358,10 +360,12 @@ watch(teamBId, (teamId) => loadRoster('b', teamId));
         <fieldset>
           <legend>
             {{
-              mode === 'school_vs_external' ? 'School Team and playing XI' : 'Team A and playing XI'
+              mode === 'school_vs_external'
+                ? `${terminology.kindLabel} Team and playing XI`
+                : 'Team A and playing XI'
             }}
           </legend>
-          <label for="school-team-a">Saved School Team</label>
+          <label for="school-team-a">Saved {{ terminology.kindLabel }} Team</label>
           <select id="school-team-a" v-model="teamAId" data-testid="school-team-a">
             <option value="">Choose Team A…</option>
             <option v-for="team in teams" :key="team.id" :value="team.id">{{ team.name }}</option>
@@ -458,10 +462,10 @@ watch(teamBId, (teamId) => loadRoster('b', teamId));
         <fieldset v-else data-testid="external-opponent-fields">
           <legend>External opponent and playing XI</legend>
           <p class="boundary">
-            These players are match-local only. No School Team, roster membership, or Cricksy
-            account will be created.
+            These players are match-local only. No {{ terminology.kindLabel }} Team, roster
+            membership, or Cricksy account will be created.
           </p>
-          <label for="school-orientation">School side</label>
+          <label for="school-orientation">{{ terminology.kindLabel }} side</label>
           <select
             id="school-orientation"
             v-model="schoolOrientation"

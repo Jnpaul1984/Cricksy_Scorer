@@ -14,7 +14,8 @@ import type {
   SchoolPublicationState,
 } from '@/types/schoolAdmin';
 
-const { organizationId, canViewFixturesResults, canPublishScorecards } = useSchoolContext();
+const { organizationId, terminology, canViewFixturesResults, canPublishScorecards } =
+  useSchoolContext();
 const fixtures = ref<SchoolFixtureSummary[]>([]);
 const results = ref<SchoolMatchResult[]>([]);
 const loading = ref(true);
@@ -59,7 +60,7 @@ watch(organizationId, load, { immediate: true });
 <template>
   <section class="panel" aria-labelledby="fixtures-results-heading">
     <header>
-      <p class="eyebrow">School match experience</p>
+      <p class="eyebrow">{{ terminology.kindLabel }} match experience</p>
       <h2 id="fixtures-results-heading">Fixtures and results</h2>
       <p>Competition fixtures stay separate from matches until an authorized user links them.</p>
     </header>
@@ -96,8 +97,10 @@ watch(organizationId, load, { immediate: true });
         </article>
       </div>
 
-      <h3>School matches</h3>
-      <p v-if="!results.length" class="notice">No attributable School matches yet.</p>
+      <h3>{{ terminology.kindLabel }} matches</h3>
+      <p v-if="!results.length" class="notice">
+        No attributable {{ terminology.kindLabel }} matches yet.
+      </p>
       <div v-else class="table-wrap">
         <table data-test="school-results">
           <thead>

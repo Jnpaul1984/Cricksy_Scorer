@@ -4,11 +4,15 @@ import { apiRequest } from '@/services/api';
 import {
   addTeamRosterPlayer,
   applyPlayerImport,
+  createClub,
+  createSchool,
   createSchoolMatch,
   getPublicSchoolScorecard,
   linkSchoolFixtureGame,
   listSchoolPlayerStatistics,
   listSchoolPlayers,
+  listClubs,
+  listSchools,
   previewPlayerImport,
 } from '@/services/schoolAdminApi';
 
@@ -16,6 +20,26 @@ vi.mock('@/services/api', () => ({ apiRequest: vi.fn() }));
 
 describe('schoolAdminApi', () => {
   beforeEach(() => vi.resetAllMocks());
+
+  it('uses one organization contract while preserving explicit School and Club types', async () => {
+    vi.mocked(apiRequest).mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+    await listSchools();
+    await listClubs();
+    expect(apiRequest).toHaveBeenNthCalledWith(1, '/api/organizations');
+    expect(apiRequest).toHaveBeenNthCalledWith(2, '/api/organizations');
+
+    vi.mocked(apiRequest).mockResolvedValue({});
+    await createSchool({ name: 'Central School' });
+    expect(apiRequest).toHaveBeenLastCalledWith('/api/organizations', {
+      method: 'POST',
+      body: JSON.stringify({ name: 'Central School', organization_type: 'school' }),
+    });
+    await createClub({ name: 'Central Cricket Club' });
+    expect(apiRequest).toHaveBeenLastCalledWith('/api/organizations', {
+      method: 'POST',
+      body: JSON.stringify({ name: 'Central Cricket Club', organization_type: 'club' }),
+    });
+  });
 
   it('scopes roster reads by organization and lifecycle status', async () => {
     vi.mocked(apiRequest).mockResolvedValue([]);

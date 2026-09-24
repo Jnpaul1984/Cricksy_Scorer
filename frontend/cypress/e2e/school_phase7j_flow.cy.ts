@@ -155,6 +155,7 @@ describe('Phase 7J School statistics and competition journey', () => {
   it('renders a published scorecard without authentication or School metadata', () => {
     cy.intercept('GET', '**/public/school-scorecards/game-a', {
       game_id: 'game-a',
+      organization_type: 'school',
       publication_state: 'published_final',
       status: 'completed',
       team_a: { name: 'First XI', players: [{ name: 'Asha' }] },

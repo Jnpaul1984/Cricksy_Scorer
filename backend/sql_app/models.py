@@ -226,7 +226,7 @@ class Organization(Base):
     __tablename__ = "organizations"
     __table_args__ = (
         CheckConstraint(
-            "organization_type IN ('school')",
+            "organization_type IN ('school', 'club')",
             name="ck_organizations_type",
         ),
         CheckConstraint(
@@ -333,7 +333,7 @@ class OrganizationEntitlement(Base):
             name="uq_organization_entitlements_organization_plan",
         ),
         CheckConstraint(
-            "plan_key IN ('school_free')",
+            "plan_key IN ('school_free', 'club_free')",
             name="ck_organization_entitlements_plan_key",
         ),
         CheckConstraint(

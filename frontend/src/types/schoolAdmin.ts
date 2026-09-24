@@ -1,10 +1,11 @@
 export type SchoolMembershipRole = 'owner' | 'admin' | 'coach' | 'scorer' | 'viewer';
 export type SchoolRosterStatus = 'active' | 'inactive';
+export type FreeOrganizationType = 'school' | 'club';
 
 export interface SchoolOrganization {
   id: string;
   name: string;
-  organization_type: 'school';
+  organization_type: FreeOrganizationType;
   status: 'active' | 'suspended' | 'archived';
   membership_role: SchoolMembershipRole;
   created_by_user_id: string | null;
@@ -13,7 +14,7 @@ export interface SchoolOrganization {
 }
 export interface SchoolCreateInput {
   name: string;
-  organization_type?: 'school';
+  organization_type?: FreeOrganizationType;
 }
 
 export interface SchoolMembership {
@@ -30,7 +31,7 @@ export interface SchoolMembership {
 export interface SchoolEntitlement {
   id: string;
   organization_id: string;
-  plan_key: 'school_free';
+  plan_key: 'school_free' | 'club_free';
   status: 'active' | 'disabled';
   source: 'system' | 'admin' | 'billing';
   effective_from: string;
@@ -260,6 +261,7 @@ export interface SchoolStandings {
 
 export interface PublicSchoolScorecard {
   game_id: string;
+  organization_type: FreeOrganizationType;
   publication_state: Exclude<SchoolPublicationState, 'private'>;
   status: string;
   team_a: { name: string; players: Array<{ name: string }> };

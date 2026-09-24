@@ -16,7 +16,7 @@ onMounted(async () => {
   } catch (reason) {
     const status = (reason as { status?: number })?.status;
     error.value =
-      status === 404 ? 'This School scorecard is not published.' : getErrorMessage(reason);
+      status === 404 ? 'This scorecard is not published.' : getErrorMessage(reason);
   } finally {
     loading.value = false;
   }
@@ -32,7 +32,7 @@ onMounted(async () => {
     </section>
     <template v-else-if="scorecard">
       <header>
-        <p class="eyebrow">Published School scorecard</p>
+        <p class="eyebrow">Published scorecard</p>
         <h1>{{ scorecard.team_a.name }} vs {{ scorecard.team_b.name }}</h1>
         <p>{{ scorecard.status }} · {{ scorecard.publication_state.replace('_', ' ') }}</p>
       </header>
@@ -91,8 +91,11 @@ onMounted(async () => {
         </section>
       </div>
       <p class="privacy-note">
-        This public view contains only published cricket information. School membership and student
-        metadata are not displayed.
+        This public view contains only published cricket information.
+        <template v-if="scorecard.organization_type === 'club'">
+          Club membership and private player metadata are not displayed.
+        </template>
+        <template v-else> School membership and student metadata are not displayed. </template>
       </p>
     </template>
   </main>

@@ -24,6 +24,7 @@ const SUITES = {
     'cypress/e2e/school_phase7j_flow.cy.ts',
     'cypress/e2e/school_self_service_onboarding.cy.ts',
     'cypress/e2e/school_scorer_first_innings.cy.ts',
+    'cypress/e2e/club_free_flow.cy.ts',
   ].join(','),
   scoring: [
     'cypress/e2e/scoring_gate_smoke.cy.ts',

@@ -97,6 +97,9 @@ const showAdminNav = computed(() => auth.isSuper)
         <RouterLink v-if="auth.isLoggedIn" to="/schools">Your Schools</RouterLink>
         <RouterLink v-if="auth.isLoggedIn" to="/schools/create">Create School</RouterLink>
         <RouterLink v-else to="/schools/free">Schools</RouterLink>
+        <RouterLink v-if="auth.isLoggedIn" to="/clubs">Your Clubs</RouterLink>
+        <RouterLink v-if="auth.isLoggedIn" to="/clubs/create">Create Club</RouterLink>
+        <RouterLink v-else to="/clubs/free">Clubs</RouterLink>
         <RouterLink v-if="showCoachNav" to="/coach/dashboard">Coach</RouterLink>
         <RouterLink v-if="showAnalystNav" to="/analyst/workspace">Analyst</RouterLink>
         <RouterLink v-if="showAdminNav" to="/admin/beta-users" class="nav-admin">Admin</RouterLink>

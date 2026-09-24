@@ -152,6 +152,7 @@ class PublicScorecardEntry(BaseModel):
 
 class PublicSchoolScorecard(BaseModel):
     game_id: str
+    organization_type: Literal["school", "club"]
     publication_state: Literal["published_live", "published_final"]
     status: str
     team_a: PublicTeam

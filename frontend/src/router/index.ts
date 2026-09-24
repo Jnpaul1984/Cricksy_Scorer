@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory, createWebHashHistory } from 'vue-router'
+import type { RouteRecordRaw } from 'vue-router'
 
 import { getStoredToken } from '@/services/api'
 import { useAuthStore } from '@/stores/authStore'
@@ -11,6 +12,54 @@ const ROUTER_MODE = (import.meta as any).env?.VITE_ROUTER_MODE || 'history'
 const history = ROUTER_MODE === 'hash'
   ? createWebHashHistory(import.meta.env.BASE_URL)
   : createWebHistory(import.meta.env.BASE_URL)
+
+const organizationAdminChildren = (namePrefix: 'school' | 'club'): RouteRecordRaw[] => [
+  {
+    path: '',
+    name: `${namePrefix}-overview`,
+    component: () => import('@/views/school/SchoolOverviewView.vue'),
+  },
+  {
+    path: 'teams',
+    name: `${namePrefix}-teams`,
+    component: () => import('@/views/school/SchoolTeamsView.vue'),
+  },
+  {
+    path: 'teams/:teamId',
+    name: `${namePrefix}-team-roster`,
+    component: () => import('@/views/school/SchoolTeamRosterView.vue'),
+  },
+  {
+    path: 'players',
+    name: `${namePrefix}-players`,
+    component: () => import('@/views/school/SchoolPlayersView.vue'),
+  },
+  {
+    path: 'imports',
+    name: `${namePrefix}-import`,
+    component: () => import('@/views/school/SchoolImportView.vue'),
+  },
+  {
+    path: 'matches/new',
+    name: `${namePrefix}-match-setup`,
+    component: () => import('@/views/school/SchoolMatchSetupView.vue'),
+  },
+  {
+    path: 'statistics',
+    name: `${namePrefix}-statistics`,
+    component: () => import('@/views/school/SchoolStatisticsView.vue'),
+  },
+  {
+    path: 'fixtures-results',
+    name: `${namePrefix}-fixtures-results`,
+    component: () => import('@/views/school/SchoolFixturesResultsView.vue'),
+  },
+  {
+    path: 'competitions',
+    name: `${namePrefix}-competitions`,
+    component: () => import('@/views/school/SchoolCompetitionsView.vue'),
+  },
+]
 
 const router = createRouter({
   history,
@@ -45,7 +94,18 @@ const router = createRouter({
       component: () => import('@/views/LoginView.vue'),
     },
     { path: '/register', name: 'register', component: () => import('@/views/RegisterView.vue') },
-    { path: '/schools/free', name: 'school-free', component: () => import('@/views/school/SchoolFreeView.vue') },
+    {
+      path: '/schools/free',
+      name: 'school-free',
+      component: () => import('@/views/school/SchoolFreeView.vue'),
+      meta: { organizationType: 'school' },
+    },
+    {
+      path: '/clubs/free',
+      name: 'club-free',
+      component: () => import('@/views/school/SchoolFreeView.vue'),
+      meta: { organizationType: 'club' },
+    },
     {
       path: '/player/:playerId',
       name: 'PlayerProfile',
@@ -197,65 +257,50 @@ const router = createRouter({
       meta: { requiresAuth: true, title: 'Profile — Cricksy' },
     },
 
-    // --- Route-scoped School Administration (Phase 7H) ---
+    // --- Route-scoped free organization administration (shared School/Club implementation) ---
     {
       path: '/schools',
       name: 'school-directory',
       component: () => import('@/views/school/SchoolDirectoryView.vue'),
-      meta: { requiresAuth: true, title: 'Your Schools — Cricksy' },
+      meta: { requiresAuth: true, title: 'Your Schools — Cricksy', organizationType: 'school' },
     },
-    { path: '/schools/create', name: 'school-create', component: () => import('@/views/school/SchoolCreateView.vue'), meta: { requiresAuth: true, title: 'Create School — Cricksy' } },
+    {
+      path: '/schools/create',
+      name: 'school-create',
+      component: () => import('@/views/school/SchoolCreateView.vue'),
+      meta: { requiresAuth: true, title: 'Create School — Cricksy', organizationType: 'school' },
+    },
     {
       path: '/schools/:organizationId',
       component: () => import('@/views/school/SchoolAdminShellView.vue'),
-      meta: { requiresAuth: true, title: 'School Administration — Cricksy' },
-      children: [
-        {
-          path: '',
-          name: 'school-overview',
-          component: () => import('@/views/school/SchoolOverviewView.vue'),
-        },
-        {
-          path: 'teams',
-          name: 'school-teams',
-          component: () => import('@/views/school/SchoolTeamsView.vue'),
-        },
-        {
-          path: 'teams/:teamId',
-          name: 'school-team-roster',
-          component: () => import('@/views/school/SchoolTeamRosterView.vue'),
-        },
-        {
-          path: 'players',
-          name: 'school-players',
-          component: () => import('@/views/school/SchoolPlayersView.vue'),
-        },
-        {
-          path: 'imports',
-          name: 'school-import',
-          component: () => import('@/views/school/SchoolImportView.vue'),
-        },
-        {
-          path: 'matches/new',
-          name: 'school-match-setup',
-          component: () => import('@/views/school/SchoolMatchSetupView.vue'),
-        },
-        {
-          path: 'statistics',
-          name: 'school-statistics',
-          component: () => import('@/views/school/SchoolStatisticsView.vue'),
-        },
-        {
-          path: 'fixtures-results',
-          name: 'school-fixtures-results',
-          component: () => import('@/views/school/SchoolFixturesResultsView.vue'),
-        },
-        {
-          path: 'competitions',
-          name: 'school-competitions',
-          component: () => import('@/views/school/SchoolCompetitionsView.vue'),
-        },
-      ],
+      meta: {
+        requiresAuth: true,
+        title: 'School Administration — Cricksy',
+        organizationType: 'school',
+      },
+      children: organizationAdminChildren('school'),
+    },
+    {
+      path: '/clubs',
+      name: 'club-directory',
+      component: () => import('@/views/school/SchoolDirectoryView.vue'),
+      meta: { requiresAuth: true, title: 'Your Clubs — Cricksy', organizationType: 'club' },
+    },
+    {
+      path: '/clubs/create',
+      name: 'club-create',
+      component: () => import('@/views/school/SchoolCreateView.vue'),
+      meta: { requiresAuth: true, title: 'Create Club — Cricksy', organizationType: 'club' },
+    },
+    {
+      path: '/clubs/:organizationId',
+      component: () => import('@/views/school/SchoolAdminShellView.vue'),
+      meta: {
+        requiresAuth: true,
+        title: 'Club Administration — Cricksy',
+        organizationType: 'club',
+      },
+      children: organizationAdminChildren('club'),
     },
 
     // --- Admin routes ---
@@ -332,13 +377,13 @@ router.beforeEach(async (to, _from, next) => {
 
   // --- General auth guard -------------------------------------------------
   // Public: /login, /landing, /pricing and viewer/embed routes
-  const publicPaths = ['/login', '/register', '/landing', '/pricing', '/schools/free']
+  const publicPaths = ['/login', '/register', '/landing', '/pricing', '/schools/free', '/clubs/free']
   const publicNames = [
     'landing',
     'pricing',
     'viewer-scoreboard',
     'embed-scoreboard',
-    'school-public-scorecard', 'register', 'school-free',
+    'school-public-scorecard', 'register', 'school-free', 'club-free',
   ]
 
   const isPublic = publicPaths.includes(to.path) || (to.name != null && publicNames.includes(String(to.name)))

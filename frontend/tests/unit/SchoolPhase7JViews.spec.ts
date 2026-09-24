@@ -2,6 +2,10 @@ import { flushPromises, mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, ref } from 'vue';
 
+import {
+  organizationBasePath,
+  organizationTerminology,
+} from '@/composables/useOrganizationTerminology';
 import { schoolContextKey, type SchoolContext } from '@/composables/useSchoolContext';
 import * as schoolApi from '@/services/schoolAdminApi';
 import type { SchoolMembershipRole } from '@/types/schoolAdmin';
@@ -17,6 +21,9 @@ function context(role: SchoolMembershipRole, organizationId = ref('school-a')): 
   const broad = computed(() => ['owner', 'admin', 'coach', 'scorer'].includes(role));
   return {
     organizationId: computed(() => organizationId.value),
+    organizationType: computed(() => 'school'),
+    organizationBasePath: computed(() => organizationBasePath('school')),
+    terminology: computed(() => organizationTerminology('school')),
     organization: ref(null),
     membership: ref(null),
     entitlement: ref(null),

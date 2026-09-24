@@ -1,4 +1,4 @@
-"""Organization-scoped School Free entitlement persistence and capability checks."""
+"""Organization-scoped free cricket entitlement persistence and capability checks."""
 
 from __future__ import annotations
 
@@ -6,20 +6,26 @@ import datetime as dt
 from collections.abc import Awaitable, Callable
 
 import structlog
+from backend.sql_app.database import get_db
+from backend.sql_app.models import Organization, OrganizationEntitlement, User
 from fastapi import Depends, HTTPException, status
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.sql_app.database import get_db
-from backend.sql_app.models import Organization, OrganizationEntitlement, User
-
 logger = structlog.get_logger(__name__)
 
 SCHOOL_FREE_PLAN_KEY = "school_free"
+CLUB_FREE_PLAN_KEY = "club_free"
 ACTIVE_ENTITLEMENT_STATUS = "active"
 SYSTEM_ENTITLEMENT_SOURCE = "system"
 
-SCHOOL_FREE_CAPABILITIES = frozenset(
+FREE_ORGANIZATION_PLAN_BY_TYPE = {
+    "school": SCHOOL_FREE_PLAN_KEY,
+    "club": CLUB_FREE_PLAN_KEY,
+}
+FREE_CRICKET_ORGANIZATION_TYPES = frozenset(FREE_ORGANIZATION_PLAN_BY_TYPE)
+
+FREE_ORGANIZATION_CAPABILITIES = frozenset(
     {
         "school_matches_unlimited",
         "school_master_roster",
@@ -32,7 +38,7 @@ SCHOOL_FREE_CAPABILITIES = frozenset(
         "school_competitions",
     }
 )
-SCHOOL_FREE_EXCLUDED_CAPABILITIES = frozenset(
+FREE_ORGANIZATION_EXCLUDED_CAPABILITIES = frozenset(
     {
         "advanced_ai",
         "video_analysis",
@@ -42,8 +48,17 @@ SCHOOL_FREE_EXCLUDED_CAPABILITIES = frozenset(
         "premium_broadcast_video",
     }
 )
+# Compatibility aliases for established School-prefixed imports. Both plans use
+# these exact immutable objects rather than independently maintained copies.
+SCHOOL_FREE_CAPABILITIES = FREE_ORGANIZATION_CAPABILITIES
+SCHOOL_FREE_EXCLUDED_CAPABILITIES = FREE_ORGANIZATION_EXCLUDED_CAPABILITIES
 PLAN_CAPABILITIES: dict[str, frozenset[str]] = {
-    SCHOOL_FREE_PLAN_KEY: SCHOOL_FREE_CAPABILITIES,
+    SCHOOL_FREE_PLAN_KEY: FREE_ORGANIZATION_CAPABILITIES,
+    CLUB_FREE_PLAN_KEY: FREE_ORGANIZATION_CAPABILITIES,
+}
+PLAN_EXCLUDED_CAPABILITIES: dict[str, frozenset[str]] = {
+    SCHOOL_FREE_PLAN_KEY: FREE_ORGANIZATION_EXCLUDED_CAPABILITIES,
+    CLUB_FREE_PLAN_KEY: FREE_ORGANIZATION_EXCLUDED_CAPABILITIES,
 }
 
 
@@ -60,43 +75,57 @@ def capabilities_for_plan(plan_key: str) -> frozenset[str]:
     return PLAN_CAPABILITIES.get(plan_key, frozenset())
 
 
-async def _get_school_for_provisioning(
+def excluded_capabilities_for_plan(plan_key: str) -> frozenset[str]:
+    """Return capabilities explicitly excluded from an organization plan."""
+    return PLAN_EXCLUDED_CAPABILITIES.get(plan_key, frozenset())
+
+
+def plan_key_for_organization_type(organization_type: str) -> str:
+    """Resolve the one approved free plan for a supported organization type."""
+    try:
+        return FREE_ORGANIZATION_PLAN_BY_TYPE[organization_type]
+    except KeyError as exc:
+        raise ValueError("Unsupported free cricket organization type") from exc
+
+
+async def _get_organization_for_provisioning(
     db: AsyncSession,
     *,
     organization_id: str,
+    expected_type: str | None = None,
 ) -> Organization:
-    result = await db.execute(
-        select(Organization)
-        .where(
-            Organization.id == organization_id,
-            Organization.organization_type == "school",
-        )
-        .with_for_update()
-    )
+    predicates = [
+        Organization.id == organization_id,
+        Organization.organization_type.in_(FREE_CRICKET_ORGANIZATION_TYPES),
+    ]
+    if expected_type is not None:
+        predicates.append(Organization.organization_type == expected_type)
+    result = await db.execute(select(Organization).where(*predicates).with_for_update())
     organization = result.scalar_one_or_none()
     if organization is None:
-        raise ValueError("School organization not found")
+        label = "School" if expected_type == "school" else "Free cricket"
+        raise ValueError(f"{label} organization not found")
     return organization
 
 
-async def ensure_school_free_entitlement(
+async def _ensure_entitlement_for_organization(
     db: AsyncSession,
     *,
-    organization_id: str,
+    organization: Organization,
 ) -> tuple[OrganizationEntitlement, bool]:
-    """Idempotently add School Free to one exact school without committing."""
-    await _get_school_for_provisioning(db, organization_id=organization_id)
+    organization_id = organization.id
+    plan_key = plan_key_for_organization_type(organization.organization_type)
     for pending in db.new:
         if (
             isinstance(pending, OrganizationEntitlement)
             and pending.organization_id == organization_id
-            and pending.plan_key == SCHOOL_FREE_PLAN_KEY
+            and pending.plan_key == plan_key
         ):
             return pending, False
     result = await db.execute(
         select(OrganizationEntitlement).where(
             OrganizationEntitlement.organization_id == organization_id,
-            OrganizationEntitlement.plan_key == SCHOOL_FREE_PLAN_KEY,
+            OrganizationEntitlement.plan_key == plan_key,
         )
     )
     existing = result.scalar_one_or_none()
@@ -105,12 +134,39 @@ async def ensure_school_free_entitlement(
 
     entitlement = OrganizationEntitlement(
         organization_id=organization_id,
-        plan_key=SCHOOL_FREE_PLAN_KEY,
+        plan_key=plan_key,
         status=ACTIVE_ENTITLEMENT_STATUS,
         source=SYSTEM_ENTITLEMENT_SOURCE,
     )
     db.add(entitlement)
     return entitlement, True
+
+
+async def ensure_free_organization_entitlement(
+    db: AsyncSession,
+    *,
+    organization_id: str,
+) -> tuple[OrganizationEntitlement, bool]:
+    """Idempotently add the matching free plan without committing."""
+    organization = await _get_organization_for_provisioning(
+        db,
+        organization_id=organization_id,
+    )
+    return await _ensure_entitlement_for_organization(db, organization=organization)
+
+
+async def ensure_school_free_entitlement(
+    db: AsyncSession,
+    *,
+    organization_id: str,
+) -> tuple[OrganizationEntitlement, bool]:
+    """Compatibility wrapper that provisions only an exact School."""
+    organization = await _get_organization_for_provisioning(
+        db,
+        organization_id=organization_id,
+        expected_type="school",
+    )
+    return await _ensure_entitlement_for_organization(db, organization=organization)
 
 
 async def provision_existing_school_free_entitlement(
@@ -156,9 +212,14 @@ async def get_effective_organization_entitlement(
         .where(
             OrganizationEntitlement.organization_id == organization_id,
             Organization.id == organization_id,
-            Organization.organization_type == "school",
             Organization.status == "active",
-            OrganizationEntitlement.plan_key == SCHOOL_FREE_PLAN_KEY,
+            or_(
+                *(
+                    (Organization.organization_type == organization_type)
+                    & (OrganizationEntitlement.plan_key == plan_key)
+                    for organization_type, plan_key in FREE_ORGANIZATION_PLAN_BY_TYPE.items()
+                )
+            ),
             OrganizationEntitlement.status == ACTIVE_ENTITLEMENT_STATUS,
             OrganizationEntitlement.effective_from <= now,
             or_(
@@ -176,7 +237,7 @@ async def organization_has_capability(
     organization_id: str,
     capability: str,
 ) -> bool:
-    """Return whether one active school organization has an approved capability."""
+    """Return whether one active free cricket organization has a capability."""
     entitlement = await get_effective_organization_entitlement(
         db,
         organization_id=organization_id,

@@ -11,7 +11,8 @@ import {
 } from '@/services/schoolAdminApi';
 import type { SchoolRosterPlayer } from '@/types/schoolAdmin';
 
-const { organizationId, canManageRosterMetadata, canManageRosterLifecycle } = useSchoolContext();
+const { organizationId, terminology, canManageRosterMetadata, canManageRosterLifecycle } =
+  useSchoolContext();
 const players = ref<SchoolRosterPlayer[]>([]);
 const filter = ref<'active' | 'inactive' | 'all'>('active');
 const loading = ref(true);
@@ -44,7 +45,7 @@ async function create() {
       year_group: createForm.year_group || null,
     });
     Object.assign(createForm, { player_name: '', student_identifier: '', year_group: '' });
-    success.value = 'Player added to the School master roster.';
+    success.value = `Player added to the ${terminology.value.kindLabel} master roster.`;
     await load();
   } catch (reason) {
     error.value = getErrorMessage(reason);
@@ -70,7 +71,7 @@ async function saveMetadata() {
       year_group: editForm.year_group || null,
     });
     editing.value = null;
-    success.value = 'School-local player details updated.';
+    success.value = `${terminology.value.kindLabel}-local player details updated.`;
     await load();
   } catch (reason) {
     error.value = getErrorMessage(reason);
@@ -100,10 +101,9 @@ onMounted(load);
   <section class="panel" aria-labelledby="players-heading">
     <header>
       <p class="eyebrow">Reusable player identities</p>
-      <h2 id="players-heading">School master roster</h2>
+      <h2 id="players-heading">{{ terminology.kindLabel }} master roster</h2>
       <p>
-        Students can be rostered without a Cricksy login. A player can be reused across multiple
-        teams.
+        Players can be rostered without a Cricksy login and reused across multiple teams.
       </p>
     </header>
     <div v-if="error" class="notice error" role="alert">{{ error }}</div>
@@ -114,9 +114,9 @@ onMounted(load);
         >Player name <input v-model.trim="createForm.player_name" required maxlength="255"
       /></label>
       <label
-        >Student identifier <input v-model.trim="createForm.student_identifier" maxlength="128"
+        >Local player identifier <input v-model.trim="createForm.student_identifier" maxlength="128"
       /></label>
-      <label>Year group <input v-model.trim="createForm.year_group" maxlength="64" /></label>
+      <label>Group <input v-model.trim="createForm.year_group" maxlength="64" /></label>
       <button type="submit" :disabled="saving" :aria-busy="saving">Add to roster</button>
     </form>
     <div class="toolbar">
@@ -136,8 +136,8 @@ onMounted(load);
         <thead>
           <tr>
             <th>Player</th>
-            <th>Student ID</th>
-            <th>Year group</th>
+            <th>Local player ID</th>
+            <th>Group</th>
             <th>Status</th>
             <th>Actions</th>
           </tr>
@@ -186,9 +186,9 @@ onMounted(load);
       <form v-if="editing" method="dialog" @submit.prevent="saveMetadata">
         <h3 id="edit-player-title">Edit {{ editing.player_name }}</h3>
         <label
-          >Student identifier
+          >Local player identifier
           <input v-model.trim="editForm.student_identifier" maxlength="128" /></label
-        ><label>Year group <input v-model.trim="editForm.year_group" maxlength="64" /></label>
+        ><label>Group <input v-model.trim="editForm.year_group" maxlength="64" /></label>
         <div class="button-row">
           <button type="submit" :disabled="saving">Save</button
           ><button type="button" class="secondary" @click="editing = null">Cancel</button>

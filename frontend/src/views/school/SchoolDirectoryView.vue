@@ -1,50 +1,80 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
-import { RouterLink } from 'vue-router';
+import { computed, ref, watch } from 'vue';
+import { RouterLink, useRoute } from 'vue-router';
 
+import {
+  organizationBasePath,
+  organizationTerminology,
+} from '@/composables/useOrganizationTerminology';
 import { getErrorMessage } from '@/services/api';
-import { listSchools } from '@/services/schoolAdminApi';
-import type { SchoolOrganization } from '@/types/schoolAdmin';
+import { listOrganizations } from '@/services/schoolAdminApi';
+import type { FreeOrganizationType, SchoolOrganization } from '@/types/schoolAdmin';
 
-const schools = ref<SchoolOrganization[]>([]);
+const route = useRoute();
+const organizationType = computed(
+  () => (route.meta.organizationType === 'club' ? 'club' : 'school') as FreeOrganizationType,
+);
+const terminology = computed(() => organizationTerminology(organizationType.value));
+const basePath = computed(() => organizationBasePath(organizationType.value));
+const organizations = ref<SchoolOrganization[]>([]);
 const loading = ref(true);
 const error = ref('');
 
-onMounted(async () => {
+async function load() {
+  organizations.value = [];
+  error.value = '';
+  loading.value = true;
   try {
-    schools.value = await listSchools();
+    organizations.value = await listOrganizations(organizationType.value);
   } catch (reason) {
     error.value = getErrorMessage(reason);
   } finally {
     loading.value = false;
   }
-});
+}
+
+watch(organizationType, load, { immediate: true });
 </script>
 
 <template>
   <main class="school-page">
     <header class="page-heading">
-      <p class="eyebrow">School Free</p>
-      <h1>Your schools</h1>
-      <p>Choose a School workspace. Access is based on your active School membership.</p>
+      <p class="eyebrow">{{ terminology.freePlanLabel }}</p>
+      <h1>{{ terminology.directoryLabel }}</h1>
+      <p>
+        Choose a {{ terminology.kindLabel }} workspace. Access is based on your active
+        {{ terminology.kindLabel }} membership.
+      </p>
     </header>
-    <p v-if="loading" role="status">Loading your schools…</p>
+    <p v-if="loading" role="status">Loading your {{ terminology.kindLabelPluralLower }}…</p>
     <div v-else-if="error" class="notice error" role="alert">{{ error }}</div>
-    <div v-else-if="!schools.length" class="notice">
-      <p>You do not have an active School membership. If you are joining an existing School, ask its administrator for access.</p>
-      <RouterLink to="/schools/create" class="action-link">Create School Free</RouterLink>
+    <div v-else-if="!organizations.length" class="notice">
+      <p>
+        You do not have an active {{ terminology.kindLabel }} membership. If you are joining an
+        existing {{ terminology.kindLabel }}, ask its administrator for access.
+      </p>
+      <RouterLink :to="`${basePath}/create`" class="action-link"
+        >Create {{ terminology.freePlanLabel }}</RouterLink
+      >
     </div>
-    <ul v-else class="school-grid" aria-label="Available schools">
-      <li v-for="school in schools" :key="school.id" class="school-card">
+    <ul v-else class="school-grid" :aria-label="`Available ${terminology.kindLabelPluralLower}`">
+      <li v-for="organization in organizations" :key="organization.id" class="school-card">
         <div>
-          <h2>{{ school.name }}</h2>
-          <p><strong>Role:</strong> {{ school.membership_role }}</p>
-          <p><strong>Status:</strong> {{ school.status }}</p>
+          <h2>{{ organization.name }}</h2>
+          <p><strong>Role:</strong> {{ organization.membership_role }}</p>
+          <p><strong>Status:</strong> {{ organization.status }}</p>
         </div>
-        <RouterLink :to="`/schools/${school.id}`" class="action-link">Open School</RouterLink>
+        <RouterLink :to="`${basePath}/${organization.id}`" class="action-link"
+          >Open {{ terminology.kindLabel }}</RouterLink
+        >
       </li>
     </ul>
-    <RouterLink v-if="schools.length" to="/schools/create" class="action-link create-school">Create School</RouterLink>
+    <RouterLink
+      v-if="organizations.length"
+      :to="`${basePath}/create`"
+      class="action-link create-school"
+      >Create {{ terminology.kindLabel }}</RouterLink
+    >
   </main>
 </template>
 

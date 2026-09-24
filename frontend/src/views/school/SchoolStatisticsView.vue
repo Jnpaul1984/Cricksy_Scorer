@@ -6,7 +6,7 @@ import { getErrorMessage } from '@/services/api';
 import { listSchoolPlayerStatistics, listSchoolTeamStatistics } from '@/services/schoolAdminApi';
 import type { SchoolPlayerStatistics, SchoolTeamStatistics } from '@/types/schoolAdmin';
 
-const { organizationId, canViewStatistics } = useSchoolContext();
+const { organizationId, terminology, canViewStatistics } = useSchoolContext();
 const players = ref<SchoolPlayerStatistics[]>([]);
 const teams = ref<SchoolTeamStatistics[]>([]);
 const loading = ref(true);
@@ -35,18 +35,23 @@ watch(organizationId, load, { immediate: true });
 <template>
   <section class="panel" aria-labelledby="statistics-heading">
     <header>
-      <p class="eyebrow">School Free statistics</p>
+      <p class="eyebrow">{{ terminology.freePlanLabel }} statistics</p>
       <h2 id="statistics-heading">Player and team statistics</h2>
-      <p>Calculated from completed School match scoring records and canonical player identities.</p>
+      <p>
+        Calculated from completed {{ terminology.kindLabel }} match scoring records and canonical
+        player identities.
+      </p>
     </header>
     <p v-if="!canViewStatistics" class="notice error" role="alert">
-      School statistics are not enabled for this organization.
+      {{ terminology.kindLabel }} statistics are not enabled for this organization.
     </p>
     <p v-else-if="loading" role="status">Loading statistics…</p>
     <p v-else-if="error" class="notice error" role="alert">{{ error }}</p>
     <template v-else>
       <h3>Players</h3>
-      <p v-if="!players.length" class="notice">No attributable School match statistics yet.</p>
+      <p v-if="!players.length" class="notice">
+        No attributable {{ terminology.kindLabel }} match statistics yet.
+      </p>
       <div v-else class="table-wrap">
         <table data-test="player-statistics">
           <thead>
@@ -86,7 +91,9 @@ watch(organizationId, load, { immediate: true });
       </div>
 
       <h3>Teams</h3>
-      <p v-if="!teams.length" class="notice">No persistent School teams are available.</p>
+      <p v-if="!teams.length" class="notice">
+        No persistent {{ terminology.kindLabel }} teams are available.
+      </p>
       <div v-else class="table-wrap">
         <table data-test="team-statistics">
           <thead>
@@ -124,7 +131,7 @@ watch(organizationId, load, { immediate: true });
       </div>
       <p class="boundary-note">
         Fielding statistics are not shown because the current scoring ledger does not reliably
-        retain fielder identity. Advanced analytics are outside School Free.
+        retain fielder identity. Advanced analytics are outside {{ terminology.freePlanLabel }}.
       </p>
     </template>
   </section>

@@ -2,13 +2,27 @@
 import { computed, provide, ref, watch } from 'vue';
 import { RouterLink, RouterView, useRoute } from 'vue-router';
 
+import {
+  organizationBasePath as organizationBasePathForType,
+  organizationTerminology,
+} from '@/composables/useOrganizationTerminology';
 import { schoolContextKey } from '@/composables/useSchoolContext';
 import { getErrorMessage } from '@/services/api';
 import { getMySchoolMembership, getSchool, getSchoolEntitlement } from '@/services/schoolAdminApi';
-import type { SchoolEntitlement, SchoolMembership, SchoolOrganization } from '@/types/schoolAdmin';
+import type {
+  FreeOrganizationType,
+  SchoolEntitlement,
+  SchoolMembership,
+  SchoolOrganization,
+} from '@/types/schoolAdmin';
 
 const route = useRoute();
 const organizationId = computed(() => String(route.params.organizationId || ''));
+const organizationType = computed(
+  () => (route.meta.organizationType === 'club' ? 'club' : 'school') as FreeOrganizationType,
+);
+const terminology = computed(() => organizationTerminology(organizationType.value));
+const organizationBasePath = computed(() => organizationBasePathForType(organizationType.value));
 const routeViewKey = computed(() => String(route.fullPath || organizationId.value));
 const organization = ref<SchoolOrganization | null>(null);
 const membership = ref<SchoolMembership | null>(null);
@@ -55,6 +69,9 @@ const canPublishScorecards = computed(
 
 provide(schoolContextKey, {
   organizationId,
+  organizationType,
+  organizationBasePath,
+  terminology,
   organization,
   membership,
   entitlement,
@@ -73,52 +90,66 @@ provide(schoolContextKey, {
   canPublishScorecards,
 });
 
+let loadGeneration = 0;
 async function loadContext() {
+  const generation = ++loadGeneration;
   organization.value = null;
   membership.value = null;
   entitlement.value = null;
   error.value = '';
   loading.value = true;
   try {
-    const [school, currentMembership, currentEntitlement] = await Promise.all([
+    const [currentOrganization, currentMembership, currentEntitlement] = await Promise.all([
       getSchool(organizationId.value),
       getMySchoolMembership(organizationId.value),
       getSchoolEntitlement(organizationId.value),
     ]);
     if (
-      school.id !== organizationId.value ||
-      currentMembership.organization_id !== organizationId.value
+      currentOrganization.id !== organizationId.value ||
+      currentMembership.organization_id !== organizationId.value ||
+      currentEntitlement.organization_id !== organizationId.value ||
+      currentOrganization.organization_type !== organizationType.value
     ) {
-      throw new Error('School context could not be verified');
+      throw Object.assign(new Error('Organization context could not be verified'), { status: 404 });
     }
-    organization.value = school;
+    if (generation !== loadGeneration) return;
+    organization.value = currentOrganization;
     membership.value = currentMembership;
     entitlement.value = currentEntitlement;
   } catch (reason) {
+    if (generation !== loadGeneration) return;
     const status = (reason as { status?: number })?.status;
     error.value =
-      status === 404 ? 'School not found or you do not have access.' : getErrorMessage(reason);
+      status === 404
+        ? `${terminology.value.kindLabel} not found or you do not have access.`
+        : getErrorMessage(reason);
   } finally {
-    loading.value = false;
+    if (generation === loadGeneration) loading.value = false;
   }
 }
 
-watch(organizationId, loadContext, { immediate: true });
+watch([organizationId, organizationType], loadContext, { immediate: true });
 </script>
 
 <template>
   <main class="school-shell">
-    <p v-if="loading" class="shell-state" role="status">Loading School workspace…</p>
+    <p v-if="loading" class="shell-state" role="status">
+      Loading {{ terminology.kindLabel }} workspace…
+    </p>
     <section v-else-if="error" class="shell-state error" role="alert">
-      <h1>School workspace unavailable</h1>
+      <h1>{{ terminology.kindLabel }} workspace unavailable</h1>
       <p>{{ error }}</p>
-      <RouterLink to="/schools">Back to your schools</RouterLink>
+      <RouterLink :to="organizationBasePath"
+        >Back to your {{ terminology.kindLabelPluralLower }}</RouterLink
+      >
     </section>
     <template v-else-if="organization && membership && entitlement">
       <header class="school-header">
         <div>
-          <RouterLink to="/schools" class="back-link">← Your schools</RouterLink>
-          <p class="eyebrow">School Administration</p>
+          <RouterLink :to="organizationBasePath" class="back-link"
+            >← {{ terminology.directoryLabel }}</RouterLink
+          >
+          <p class="eyebrow">{{ terminology.kindLabel }} Administration</p>
           <h1>{{ organization.name }}</h1>
           <p class="context-line">
             <span>Status: {{ organization.status }}</span>
@@ -127,23 +158,31 @@ watch(organizationId, loadContext, { immediate: true });
           </p>
         </div>
       </header>
-      <nav class="school-nav" aria-label="School administration">
-        <RouterLink :to="`/schools/${organizationId}`">Overview</RouterLink>
-        <RouterLink :to="`/schools/${organizationId}/teams`">Teams</RouterLink>
-        <RouterLink :to="`/schools/${organizationId}/players`">Players</RouterLink>
-        <RouterLink v-if="canImport" :to="`/schools/${organizationId}/imports`">Import</RouterLink>
-        <RouterLink v-if="canCreateSchoolMatch" :to="`/schools/${organizationId}/matches/new`"
+      <nav class="school-nav" :aria-label="`${terminology.kindLabel} administration`">
+        <RouterLink :to="`${organizationBasePath}/${organizationId}`">Overview</RouterLink>
+        <RouterLink :to="`${organizationBasePath}/${organizationId}/teams`">Teams</RouterLink>
+        <RouterLink :to="`${organizationBasePath}/${organizationId}/players`">Players</RouterLink>
+        <RouterLink v-if="canImport" :to="`${organizationBasePath}/${organizationId}/imports`"
+          >Import</RouterLink
+        >
+        <RouterLink
+          v-if="canCreateSchoolMatch"
+          :to="`${organizationBasePath}/${organizationId}/matches/new`"
           >Create match</RouterLink
         >
-        <RouterLink v-if="canViewStatistics" :to="`/schools/${organizationId}/statistics`"
+        <RouterLink
+          v-if="canViewStatistics"
+          :to="`${organizationBasePath}/${organizationId}/statistics`"
           >Statistics</RouterLink
         >
         <RouterLink
           v-if="canViewFixturesResults"
-          :to="`/schools/${organizationId}/fixtures-results`"
+          :to="`${organizationBasePath}/${organizationId}/fixtures-results`"
           >Fixtures / Results</RouterLink
         >
-        <RouterLink v-if="canViewCompetitions" :to="`/schools/${organizationId}/competitions`"
+        <RouterLink
+          v-if="canViewCompetitions"
+          :to="`${organizationBasePath}/${organizationId}/competitions`"
           >Competitions</RouterLink
         >
       </nav>

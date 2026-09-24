@@ -7,12 +7,12 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-OrganizationType = Literal["school"]
+OrganizationType = Literal["school", "club"]
 OrganizationStatus = Literal["active", "suspended", "archived"]
 MembershipRole = Literal["owner", "admin", "coach", "scorer", "viewer"]
 AssignableMembershipRole = Literal["admin", "coach", "scorer", "viewer"]
 MembershipStatus = Literal["active", "disabled"]
-OrganizationEntitlementPlanKey = Literal["school_free"]
+OrganizationEntitlementPlanKey = Literal["school_free", "club_free"]
 OrganizationEntitlementSource = Literal["system", "admin", "billing"]
 
 
