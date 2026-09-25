@@ -79,6 +79,8 @@ function context(
     canDeleteCompetitions: writes,
     canLinkFixtures: writes,
     canPublishScorecards: writes,
+    canViewEvents: computed(() => true),
+    canManageEvents: writes,
   };
 }
 

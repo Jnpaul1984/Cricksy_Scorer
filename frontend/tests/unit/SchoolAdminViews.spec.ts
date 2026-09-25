@@ -54,6 +54,7 @@ const entitlement = {
     'school_fixtures_results',
     'school_live_scorecards',
     'school_competitions',
+    'organization_events',
   ],
   excluded_capabilities: ['advanced_ai'],
   created_at: '',
@@ -92,6 +93,8 @@ function context(role: SchoolMembershipRole, organizationId = ref('school-a')): 
     canDeleteCompetitions: computed(() => ['owner', 'admin'].includes(role)),
     canLinkFixtures: computed(() => ['owner', 'admin', 'coach', 'scorer'].includes(role)),
     canPublishScorecards: computed(() => ['owner', 'admin', 'coach', 'scorer'].includes(role)),
+    canViewEvents: computed(() => true),
+    canManageEvents: writes,
   };
 }
 
@@ -184,6 +187,7 @@ describe('Phase 7H School administration views', () => {
     expect(wrapper.text()).toContain('Statistics');
     expect(wrapper.text()).toContain('Fixtures / Results');
     expect(wrapper.text()).toContain('Competitions');
+    expect(wrapper.text()).toContain('Calendar');
   });
 
   it('denies a nonmember or cross-tenant School route without metadata leakage', async () => {

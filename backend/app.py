@@ -48,6 +48,7 @@ from backend.routes.beta_access import router as beta_access_router
 from backend.routes.billing import router as billing_router
 from backend.routes.coach_notes import router as coach_notes_router
 from backend.routes.moment_markers import router as moment_markers_router
+from backend.routes.organization_events import router as organization_events_router
 from backend.routes.organizations import router as organizations_router
 from backend.routes.school_competitions import router as school_competitions_router
 from backend.routes.school_statistics import router as school_statistics_router
@@ -501,6 +502,7 @@ def create_app(
     fastapi_app.include_router(coach_notes_router)
     fastapi_app.include_router(moment_markers_router)
     fastapi_app.include_router(organizations_router)
+    fastapi_app.include_router(organization_events_router)
     fastapi_app.include_router(school_matches_router)
     fastapi_app.include_router(school_competitions_router)
     fastapi_app.include_router(school_statistics_router)

@@ -243,6 +243,72 @@ export interface SchoolFixtureSummary {
   public_scorecard_available: boolean;
 }
 
+export type OrganizationEventType = 'training' | 'other';
+export type OrganizationEventStatus = 'scheduled' | 'cancelled';
+export type OrganizationEventParticipantScope = 'organization' | 'teams' | 'selected_players';
+
+export interface OrganizationEvent {
+  id: string;
+  organization_id: string;
+  event_type: OrganizationEventType;
+  title: string;
+  description: string | null;
+  start_at: string;
+  end_at: string | null;
+  location: string;
+  participant_scope: OrganizationEventParticipantScope;
+  team_ids: string[];
+  roster_membership_ids: string[];
+  status: OrganizationEventStatus;
+  created_by_user_id: string | null;
+  updated_by_user_id: string | null;
+  cancelled_by_user_id: string | null;
+  cancelled_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface OrganizationEventInput {
+  event_type: OrganizationEventType;
+  title: string;
+  description?: string | null;
+  start_at: string;
+  end_at?: string | null;
+  location: string;
+  participant_scope: OrganizationEventParticipantScope;
+  team_ids: string[];
+  roster_membership_ids: string[];
+}
+
+export interface OrganizationEventList {
+  items: OrganizationEvent[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface OrganizationCalendarItem {
+  source_type: 'organization_event' | 'fixture';
+  source_id: string;
+  title: string;
+  start_at: string;
+  end_at: string | null;
+  location: string | null;
+  status: string;
+  event_type: OrganizationEventType | null;
+  participant_scope: OrganizationEventParticipantScope | null;
+  team_ids: string[];
+  game_id: string | null;
+  competition_id: string | null;
+}
+
+export interface OrganizationCalendar {
+  items: OrganizationCalendarItem[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
 export interface SchoolStandingEntry {
   team_id: string;
   team_name: string;

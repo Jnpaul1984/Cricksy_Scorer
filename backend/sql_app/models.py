@@ -15,6 +15,7 @@ from sqlalchemy import (
     DateTime,
     Float,
     ForeignKey,
+    ForeignKeyConstraint,
     Index,
     Integer,
     String,
@@ -1001,6 +1002,11 @@ class SchoolPlayerMembership(Base):
             "organization_id",
             "player_profile_id",
             name="uq_school_player_memberships_organization_player",
+        ),
+        UniqueConstraint(
+            "id",
+            "organization_id",
+            name="uq_school_player_memberships_id_organization",
         ),
         CheckConstraint(
             "status IN ('active', 'inactive')",
@@ -2290,6 +2296,11 @@ class Team(Base):
     )
 
     __table_args__ = (
+        UniqueConstraint(
+            "id",
+            "organization_id",
+            name="uq_teams_id_organization",
+        ),
         CheckConstraint(
             "status IN ('active', 'archived')",
             name="ck_teams_status",
@@ -2298,6 +2309,152 @@ class Team(Base):
         Index("ix_teams_owner", "owner_user_id"),
         Index("ix_teams_organization_status", "organization_id", "status"),
     )
+
+
+class OrganizationEvent(Base):
+    """Organization-owned calendar event distinct from authoritative cricket fixtures."""
+
+    __tablename__ = "organization_events"
+    __table_args__ = (
+        UniqueConstraint(
+            "id",
+            "organization_id",
+            name="uq_organization_events_id_organization",
+        ),
+        CheckConstraint(
+            "participant_scope IN ('organization', 'teams', 'selected_players')",
+            name="ck_organization_events_participant_scope",
+        ),
+        CheckConstraint(
+            "status IN ('scheduled', 'cancelled')",
+            name="ck_organization_events_status",
+        ),
+        CheckConstraint(
+            "end_at IS NULL OR end_at > start_at",
+            name="ck_organization_events_time_range",
+        ),
+        CheckConstraint(
+            "(status = 'scheduled' AND cancelled_at IS NULL) OR "
+            "(status = 'cancelled' AND cancelled_at IS NOT NULL)",
+            name="ck_organization_events_cancellation_state",
+        ),
+        Index(
+            "ix_organization_events_organization_start",
+            "organization_id",
+            "start_at",
+            "id",
+        ),
+        Index(
+            "ix_organization_events_organization_status_start",
+            "organization_id",
+            "status",
+            "start_at",
+            "id",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(
+        String, primary_key=True, default=lambda: str(uuid.uuid4()), nullable=False
+    )
+    organization_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    event_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    start_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    end_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    location: Mapped[str] = mapped_column(String(255), nullable=False)
+    participant_scope: Mapped[str] = mapped_column(String(32), nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(16), default="scheduled", server_default="scheduled", nullable=False
+    )
+    created_by_user_id: Mapped[str | None] = mapped_column(
+        String,
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    updated_by_user_id: Mapped[str | None] = mapped_column(
+        String,
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    cancelled_by_user_id: Mapped[str | None] = mapped_column(
+        String,
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    cancelled_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+
+class OrganizationEventTeam(Base):
+    """Tenant-enforced Team audience for an organization event."""
+
+    __tablename__ = "organization_event_teams"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["event_id", "organization_id"],
+            ["organization_events.id", "organization_events.organization_id"],
+            name="fk_organization_event_teams_event_organization",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["team_id", "organization_id"],
+            ["teams.id", "teams.organization_id"],
+            name="fk_organization_event_teams_team_organization",
+            ondelete="CASCADE",
+        ),
+        Index(
+            "ix_organization_event_teams_organization_team",
+            "organization_id",
+            "team_id",
+        ),
+    )
+
+    event_id: Mapped[str] = mapped_column(String, primary_key=True)
+    team_id: Mapped[str] = mapped_column(String, primary_key=True)
+    organization_id: Mapped[str] = mapped_column(String, nullable=False)
+
+
+class OrganizationEventRosterPlayer(Base):
+    """Tenant-enforced roster-player audience without requiring a User account."""
+
+    __tablename__ = "organization_event_roster_players"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["event_id", "organization_id"],
+            ["organization_events.id", "organization_events.organization_id"],
+            name="fk_organization_event_players_event_organization",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["school_player_membership_id", "organization_id"],
+            ["school_player_memberships.id", "school_player_memberships.organization_id"],
+            name="fk_organization_event_players_roster_organization",
+            ondelete="RESTRICT",
+        ),
+        Index(
+            "ix_organization_event_players_organization_player",
+            "organization_id",
+            "school_player_membership_id",
+        ),
+    )
+
+    event_id: Mapped[str] = mapped_column(String, primary_key=True)
+    school_player_membership_id: Mapped[str] = mapped_column(String, primary_key=True)
+    organization_id: Mapped[str] = mapped_column(String, nullable=False)
 
 
 class AiUsageLog(Base):

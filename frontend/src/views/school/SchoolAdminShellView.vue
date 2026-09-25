@@ -66,6 +66,10 @@ const canPublishScorecards = computed(
     capabilities.value.has('school_live_scorecards') &&
     ['owner', 'admin', 'coach', 'scorer'].includes(role.value || ''),
 );
+const canViewEvents = computed(() => capabilities.value.has('organization_events'));
+const canManageEvents = computed(
+  () => canViewEvents.value && ['owner', 'admin', 'coach'].includes(role.value || ''),
+);
 
 provide(schoolContextKey, {
   organizationId,
@@ -88,6 +92,8 @@ provide(schoolContextKey, {
   canDeleteCompetitions,
   canLinkFixtures,
   canPublishScorecards,
+  canViewEvents,
+  canManageEvents,
 });
 
 let loadGeneration = 0;
@@ -184,6 +190,9 @@ watch([organizationId, organizationType], loadContext, { immediate: true });
           v-if="canViewCompetitions"
           :to="`${organizationBasePath}/${organizationId}/competitions`"
           >Competitions</RouterLink
+        >
+        <RouterLink v-if="canViewEvents" :to="`${organizationBasePath}/${organizationId}/events`"
+          >Calendar</RouterLink
         >
       </nav>
       <RouterView :key="routeViewKey" />

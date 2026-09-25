@@ -40,6 +40,8 @@ function context(role: SchoolMembershipRole, organizationId = ref('school-a')): 
     canDeleteCompetitions: computed(() => ['owner', 'admin'].includes(role)),
     canLinkFixtures: broad,
     canPublishScorecards: broad,
+    canViewEvents: computed(() => true),
+    canManageEvents: edit,
   };
 }
 

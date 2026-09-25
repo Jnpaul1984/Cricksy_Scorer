@@ -30,6 +30,8 @@ export interface SchoolContext {
   canDeleteCompetitions: ComputedRef<boolean>;
   canLinkFixtures: ComputedRef<boolean>;
   canPublishScorecards: ComputedRef<boolean>;
+  canViewEvents: ComputedRef<boolean>;
+  canManageEvents: ComputedRef<boolean>;
 }
 
 export const schoolContextKey: InjectionKey<SchoolContext> = Symbol('school-context');
