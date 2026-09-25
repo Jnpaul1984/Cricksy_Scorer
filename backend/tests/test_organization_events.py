@@ -392,6 +392,75 @@ async def test_calendar_projects_fixture_without_copying_match_truth(
         assert int(await session.scalar(select(func.count(OrganizationEvent.id))) or 0) == 0
 
 
+@pytest.mark.parametrize(
+    "field",
+    [
+        "event_type",
+        "title",
+        "start_at",
+        "location",
+        "participant_scope",
+        "team_ids",
+        "roster_membership_ids",
+    ],
+)
+async def test_event_patch_rejects_explicit_null_without_mutation(
+    school_client: TestClient,
+    field: str,
+) -> None:
+    owner = register_user(school_client, f"event-null-{field}@example.com")
+    organization = create_school(school_client, owner, f"Null {field} School")
+    event = _create_event(school_client, owner, organization["id"])
+
+    rejected = school_client.patch(
+        f"/api/organizations/{organization['id']}/events/{event['id']}",
+        json={field: None},
+        headers=owner.headers,
+    )
+    assert rejected.status_code == 422, rejected.text
+    assert "Internal Server Error" not in rejected.text
+
+    unchanged = school_client.get(
+        f"/api/organizations/{organization['id']}/events/{event['id']}",
+        headers=owner.headers,
+    )
+    assert unchanged.status_code == 200, unchanged.text
+    assert unchanged.json() == event
+
+    usable = school_client.patch(
+        f"/api/organizations/{organization['id']}/events/{event['id']}",
+        json={"title": "Session Still Usable"},
+        headers=owner.headers,
+    )
+    assert usable.status_code == 200, usable.text
+    assert usable.json()["title"] == "Session Still Usable"
+
+    session_maker = school_client.session_maker  # type: ignore[attr-defined]
+    async with session_maker() as session:
+        persisted = await session.get(OrganizationEvent, event["id"])
+        assert persisted is not None
+        assert persisted.title == "Session Still Usable"
+
+
+def test_event_patch_allows_clearing_optional_fields(
+    school_client: TestClient,
+) -> None:
+    owner = register_user(school_client, "event-clear-optional@example.com")
+    organization = create_school(school_client, owner, "Clear Optional School")
+    event = _create_event(school_client, owner, organization["id"])
+
+    response = school_client.patch(
+        f"/api/organizations/{organization['id']}/events/{event['id']}",
+        json={"description": None, "end_at": None},
+        headers=owner.headers,
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["description"] is None
+    assert response.json()["end_at"] is None
+    assert response.json()["title"] == event["title"]
+
+
 def test_event_schema_rejects_invalid_end_and_unsupported_recurrence(
     school_client: TestClient,
 ) -> None:

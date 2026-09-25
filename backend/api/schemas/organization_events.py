@@ -103,6 +103,30 @@ class OrganizationEventUpdate(BaseModel):
 
     model_config = {"extra": "forbid"}
 
+    @model_validator(mode="before")
+    @classmethod
+    def reject_null_required_fields(cls, value: object) -> object:
+        if not isinstance(value, dict):
+            return value
+
+        required_fields = (
+            "event_type",
+            "title",
+            "start_at",
+            "location",
+            "participant_scope",
+            "team_ids",
+            "roster_membership_ids",
+        )
+        null_fields = [field for field in required_fields if value.get(field, ...) is None]
+        if null_fields:
+            field_list = ", ".join(null_fields)
+            raise PydanticCustomError(
+                "null_event_update_field",
+                f"These event fields may not be null: {field_list}",
+            )
+        return value
+
     @field_validator("title", "location")
     @classmethod
     def normalize_required_text(cls, value: str | None) -> str | None:
