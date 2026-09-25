@@ -48,6 +48,7 @@ Checklist cells cite these exact current-code anchors. A citation is evidence of
 - **E-STATS:** `backend/services/school_statistics_service.py::{player_statistics,team_statistics,match_results,fixture_summaries}`; `SchoolStatisticsView.vue`, `SchoolFixturesResultsView.vue`; `backend/tests/test_school_statistics.py`.
 - **E-COMP:** `backend/services/school_competition_service.py::{create_competition,create_fixture,link_fixture_game,standings,publication,public_scorecard}`; corresponding routes/views; tests `test_school_competition_publication.py`, `test_club_free.py`.
 - **E-EVENT:** `backend/sql_app/models.py::{OrganizationEvent,OrganizationEventTeam,OrganizationEventRosterPlayer}`; `backend/services/organization_event_service.py::{create_event,list_events,update_event,cancel_event,calendar}`; `backend/routes/organization_events.py`; `frontend/src/views/school/OrganizationEventsView.vue`; tests `backend/tests/test_organization_events.py`, `frontend/tests/unit/OrganizationEventsView.spec.ts`.
+- **E-AVL:** `backend/sql_app/models.py::{OrganizationAvailabilityTarget,OrganizationPlayerAvailability,OrganizationPlayerAvailabilityHistory}`; `backend/services/organization_availability_service.py::{availability_summary,update_target_deadline,record_player_availability,player_availability_history}`; `backend/routes/organization_availability.py`; `frontend/src/views/school/OrganizationAvailabilityView.vue`; tests `backend/tests/test_organization_availability.py`, `frontend/tests/unit/OrganizationAvailabilityView.spec.ts`.
 - **E-TERMS:** `frontend/src/router/index.ts::organizationChildren`; `frontend/src/composables/{useSchoolContext,useOrganizationTerminology}.ts`; `frontend/tests/unit/ClubFreeViews.spec.ts`.
 - **E-PLAYER:** `backend/sql_app/models.py::{PlayerProfile,PlayerAchievement,PlayerForm}`; `backend/routes/player_analytics.py::{get_player_career_summary_endpoint,get_player_yearly_stats,get_player_dismissals,get_player_form_analysis,get_player_consistency_score,get_batting_leaderboard}`; `PlayerProfileView.vue`; tests `test_player_profiles.py`, `test_player_pro_features.py`, `PlayerProfileView.spec.ts`.
 - **E-FAN:** `backend/sql_app/models.py::FanFavorite`; `backend/routes/fan_mode.py::{create_favorite,list_favorites,delete_favorite}`; `frontend/src/views/PlayerProfileView.vue::{loadFavorites,toggleFavorite}`; `frontend/src/services/api.ts::{getFanFavorites,createFanFavorite,deleteFanFavorite}`.
@@ -62,7 +63,7 @@ Checklist cells cite these exact current-code anchors. A citation is evidence of
 - **E-VIDEO:** `backend/sql_app/models.py::{VideoSession,VideoAnalysisJob,VideoAnalysisChunk,VideoMomentMarker,TargetZone}`; `backend/routes/coach_pro_plus.py`; `CoachProPlusVideoSessionsView.vue`; upload/stream/quota/history/PDF tests. Ownership is personal/global-role or legacy `User.org_id`, not current membership tenancy.
 - **E-VIDEO-JOB:** `backend/services/{s3_service,sqs_service,video_job_recovery,video_quota_service,video_chunking}.py`; `backend/scripts/run_video_analysis_worker.py`; tests `test_video_job_recovery.py`, `test_video_quota.py`, `test_video_upload_s3_key_persistence.py`, `test_video_stream_url_presign.py`.
 - **E-VIDEO-RESULT:** `backend/services/{coach_plus_analysis,coach_report_v2,coach_report_presentation,coach_strength_consistency}.py`; analysis/repetition/phase/report/longitudinal endpoints in `coach_pro_plus.py`; report/V2/integration tests.
-- **E-ABSENT:** repository-wide model/route/service/view/test filename and symbol searches found no organization availability, attendance, announcement, chat, guardian, organization-payment, donation, or fundraising runtime surface. `backend/core/live_bus.py` and Socket.IO carry scoring state, not private/team messaging.
+- **E-ABSENT:** repository-wide model/route/service/view/test filename and symbol searches found no organization attendance, announcement, chat, guardian, organization-payment, donation, or fundraising runtime surface. `backend/core/live_bus.py` and Socket.IO carry scoring state, not private/team messaging.
 
 ## 3. Current shared Free baseline — protected
 
@@ -97,17 +98,17 @@ Checklist cells cite these exact current-code anchors. A citation is evidence of
 
 | ID | Capability | Product | Status | Cost | Existing evidence | Required work | Dependencies | Owner decision? | Controls |
 |---|---|---|---|---|---|---|---|---|---|
-| FREE-AVL-001 | Available / Unavailable / Maybe response | Free | NEW | LOW | E-ABSENT | Add tenant-scoped response model/API/UI. | Events, player subject | No | C-DB |
-| FREE-AVL-002 | Fixture-linked availability | Free | NEW | LOW | Fixtures exist (E-COMP); no response link (E-ABSENT). | Link response to fixture/event. | FREE-AVL-001 | No | C-DB |
-| FREE-AVL-003 | Training/event-linked availability | Free | NEW | LOW | E-ABSENT | Link response to event. | Event foundation | No | C-DB |
+| FREE-AVL-001 | Available / Unavailable / Maybe response | Free | BUILT | LOW | E-AVL; bounded schema/API/shared UI and state-validation tests. | Preserve canonical roster identity, staff attribution and current-state uniqueness. | Events, player subject | No | C-DB |
+| FREE-AVL-002 | Fixture-linked availability | Free | BUILT | LOW | E-AVL `AvailabilitySource`; fixture tests use normalized active Team rosters and reject unsafe/non-Team identity. | Preserve Fixture as reference-only cricket truth. | FREE-AVL-001 | No | C-DB |
+| FREE-AVL-003 | Training/event-linked availability | Free | BUILT | LOW | E-AVL; School/Club training and generic-event tests. | Preserve Block 1A participant-scope eligibility. | Event foundation | No | C-DB |
 | FREE-AVL-004 | Player/guardian response path | Free | OWNER DECISION | UNKNOWN | No guardian relationship (E-ABSENT). | Lock minor identity, consent and proxy rules. | Guardian policy | Yes — respondent authority | C-DB |
-| FREE-AVL-005 | Coach/team-manager overview | Free | NEW | LOW | E-ABSENT | Add role-scoped Team summary. | FREE-AVL-001 | No | C-DB |
-| FREE-AVL-006 | Response deadline | Free | NEW | LOW | E-ABSENT | Add deadline/time-zone semantics. | Events | No | C-DB |
-| FREE-AVL-007 | Response/change history | Free | NEW | LOW | E-ABSENT | Add immutable actor/time audit. | FREE-AVL-001 | No | C-DB |
+| FREE-AVL-005 | Coach/team-manager overview | Free | BUILT | LOW | E-AVL `availability_summary`; Team filter/count/unanswered and role-matrix tests. | Preserve bounded deterministic reads. | FREE-AVL-001 | No | C-DB |
+| FREE-AVL-006 | Response deadline | Free | BUILT | LOW | E-AVL target metadata; timezone/late-correction tests and shared UI. | Deadline remains operational information, not an authorization barrier. | Events | No | C-DB |
+| FREE-AVL-007 | Response/change history | Free | BUILT | LOW | E-AVL append-only history model/service; actor/time and repeated/concurrent-update tests. | Preserve prior rows and staff attribution. | FREE-AVL-001 | No | C-DB |
 | FREE-AVL-008 | Optional reason/comment privacy | Free | OWNER DECISION | UNKNOWN | E-ABSENT | Lock audiences, sensitive-data and retention rules. | Privacy policy | Yes — visibility | C-DB |
-| FREE-AVL-009 | Filter by availability | Free | NEW | LOW | E-ABSENT | Add scoped filters/indexes/UI. | FREE-AVL-001 | No | C-DB |
-| FREE-AVL-010 | Availability visible in selection | Free | NEW | LOW | XI exists (E-MATCH); no availability. | Read-only signal in selection; no auto-choice. | FREE-AVL-001, selection workspace | No | C-DB |
-| FREE-AVL-011 | Low-cost reminder path | Free | NEW | USAGE-SENSITIVE | No notification service (E-ABSENT). | Start in-app; meter external delivery. | Notifications, deadlines | No | C-MSG |
+| FREE-AVL-009 | Filter by availability | Free | BUILT | LOW | E-AVL summary API/UI supports state, Team and unanswered filtering with deterministic ordering. | Preserve tenant predicates and bounded limits. | FREE-AVL-001 | No | C-DB |
+| FREE-AVL-010 | Availability visible in selection | Free | NEW | LOW | E-AVL exposes a tenant-safe read-only advisory surface; E-MATCH is deliberately unchanged. | Integrate the signal in a separately governed selection workspace; no auto-choice. | FREE-AVL-001, selection workspace | No | C-DB |
+| FREE-AVL-011 | Low-cost reminder path | Free | NEW | USAGE-SENSITIVE | E-AVL stores target, deadline and unanswered state; no notification service (E-ABSENT). | Add separately governed in-app delivery first; meter external delivery. | Notifications, deadlines | No | C-MSG |
 
 ### 4.2 Events and calendar
 
@@ -617,9 +618,9 @@ Counts are mechanically derived from the 340 capability rows above. Header, evid
 
 | Status | Count |
 |---|---:|
-| BUILT | 57 |
+| BUILT | 64 |
 | ADAPT | 114 |
-| NEW | 113 |
+| NEW | 106 |
 | DEFER | 3 |
 | OWNER DECISION | 53 |
 | **Total** | **340** |
@@ -646,7 +647,7 @@ Counts are mechanically derived from the 340 capability rows above. Header, evid
 
 ## 12. Already-built summary
 
-The 57 BUILT rows are concentrated in the protected shared Free foundation: organization creation/membership/roles; one School/Club capability source; canonical roster and reusable Teams; import; saved/external match setup; XI/captain/keeper; organization scoring; fixtures/results/competitions/basic statistics; controlled public scorecards; contextual terminology and tenant isolation; and the shared organization/Team calendar, training/other events, scoped participants, fixture projection, timezone contract and upcoming view. Canonical career/batting/bowling/achievement truth and the structural separation of personal versus organization entitlements also exist. Private video is not organization-ready, but four negative public-exposure guardrails are true today: no public signup, no unrestricted unauthenticated upload, no public organization Elite promise and no organization-wide video self-service entitlement.
+The 64 BUILT rows are concentrated in the protected shared Free foundation: organization creation/membership/roles; one School/Club capability source; canonical roster and reusable Teams; import; saved/external match setup; XI/captain/keeper; organization scoring; fixtures/results/competitions/basic statistics; controlled public scorecards; contextual terminology and tenant isolation; the shared organization/Team calendar, training/other events, scoped participants, fixture projection, timezone contract and upcoming view; and structured event/fixture availability with deadlines, immutable staff history, Team summaries and filtering. Canonical career/batting/bowling/achievement truth and the structural separation of personal versus organization entitlements also exist. Private video is not organization-ready, but four negative public-exposure guardrails are true today: no public signup, no unrestricted unauthenticated upload, no public organization Elite promise and no organization-wide video self-service entitlement.
 
 ## 13. Adaptation summary
 
@@ -662,7 +663,7 @@ The 114 ADAPT rows are existing technology, not organization-ready product promi
 
 ## 14. Genuinely-new summary
 
-The 113 NEW rows are led by availability, recurrence/RSVP/notification delivery, attendance, draft selection/order planning, communication/notification, participation history, organization public homepage, organization transaction processing, organization-safe benchmark products, Performance selection workspace/automation, export audit/admission, operator-service workflow, and reliable per-job economics. Existing playing XI does not prove availability, reserves, draft publication, batting/bowling planning or selection intelligence. Mock subscription billing does not prove transaction/payment processing.
+The 106 NEW rows are led by selection integration of availability, recurrence/RSVP/notification delivery, attendance, draft selection/order planning, communication/notification, participation history, organization public homepage, organization transaction processing, organization-safe benchmark products, Performance selection workspace/automation, export audit/admission, operator-service workflow, and reliable per-job economics. Existing playing XI does not prove reserves, draft publication, batting/bowling planning or selection intelligence. Mock subscription billing does not prove transaction/payment processing.
 
 ## 15. Owner decisions
 

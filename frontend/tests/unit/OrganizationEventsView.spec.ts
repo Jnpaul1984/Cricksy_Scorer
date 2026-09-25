@@ -46,9 +46,26 @@ function context(
 }
 
 function mountView(organizationType: FreeOrganizationType, role: SchoolMembershipRole) {
+  const providedContext = context(organizationType, role);
+  providedContext.entitlement.value = {
+    id: 'entitlement-a',
+    organization_id: `${organizationType}-a`,
+    plan_key: organizationType === 'club' ? 'club_free' : 'school_free',
+    status: 'active',
+    source: 'system',
+    effective_from: '',
+    effective_until: null,
+    capabilities: ['organization_events', 'organization_availability'],
+    excluded_capabilities: [],
+    created_at: '',
+    updated_at: '',
+  };
   return mount(OrganizationEventsView, {
     global: {
-      provide: { [schoolContextKey as symbol]: context(organizationType, role) },
+      provide: { [schoolContextKey as symbol]: providedContext },
+      stubs: {
+        RouterLink: { props: ['to'], template: '<a :href="String(to)"><slot /></a>' },
+      },
     },
   });
 }
@@ -95,6 +112,9 @@ describe('shared organization events view', () => {
     expect(wrapper.text()).toContain('Shared Club calendar');
     expect(wrapper.text()).toContain('First XI vs Second XI');
     expect(wrapper.text()).toContain('Cricket fixture');
+    expect(wrapper.get('a').attributes('href')).toBe(
+      '/clubs/club-a/availability/fixture/fixture-a',
+    );
     expect(wrapper.findAll('button').map((button) => button.text())).not.toContain('Edit');
 
     await wrapper.get('[data-test="event-title"]').setValue('Club training');

@@ -2104,6 +2104,11 @@ class Tournament(Base):
     )
 
     __table_args__ = (
+        UniqueConstraint(
+            "id",
+            "organization_id",
+            name="uq_tournaments_id_organization",
+        ),
         Index("ix_tournaments_status", "status"),
         Index("ix_tournaments_organization_status", "organization_id", "status"),
     )
@@ -2201,6 +2206,11 @@ class Fixture(Base):
     tournament: Mapped[Tournament] = relationship(back_populates="fixtures")
 
     __table_args__ = (
+        UniqueConstraint(
+            "id",
+            "tournament_id",
+            name="uq_fixtures_id_tournament",
+        ),
         Index("ix_fixtures_status", "status"),
         Index("ix_fixtures_scheduled_date", "scheduled_date"),
         Index(
@@ -2455,6 +2465,193 @@ class OrganizationEventRosterPlayer(Base):
     event_id: Mapped[str] = mapped_column(String, primary_key=True)
     school_player_membership_id: Mapped[str] = mapped_column(String, primary_key=True)
     organization_id: Mapped[str] = mapped_column(String, nullable=False)
+
+
+class OrganizationAvailabilityTarget(Base):
+    """Availability metadata for one authoritative event or fixture target."""
+
+    __tablename__ = "organization_availability_targets"
+    __table_args__ = (
+        UniqueConstraint(
+            "id",
+            "organization_id",
+            name="uq_organization_availability_targets_id_organization",
+        ),
+        UniqueConstraint(
+            "organization_event_id",
+            name="uq_organization_availability_targets_event",
+        ),
+        UniqueConstraint(
+            "fixture_id",
+            name="uq_organization_availability_targets_fixture",
+        ),
+        CheckConstraint(
+            "target_type IN ('event', 'fixture')",
+            name="ck_organization_availability_targets_type",
+        ),
+        CheckConstraint(
+            "(target_type = 'event' AND organization_event_id IS NOT NULL "
+            "AND fixture_id IS NULL AND fixture_tournament_id IS NULL) OR "
+            "(target_type = 'fixture' AND organization_event_id IS NULL "
+            "AND fixture_id IS NOT NULL AND fixture_tournament_id IS NOT NULL)",
+            name="ck_organization_availability_targets_reference",
+        ),
+        ForeignKeyConstraint(
+            ["organization_event_id", "organization_id"],
+            ["organization_events.id", "organization_events.organization_id"],
+            name="fk_organization_availability_targets_event_organization",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["fixture_id", "fixture_tournament_id"],
+            ["fixtures.id", "fixtures.tournament_id"],
+            name="fk_organization_availability_targets_fixture_tournament",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["fixture_tournament_id", "organization_id"],
+            ["tournaments.id", "tournaments.organization_id"],
+            name="fk_organization_availability_targets_tournament_organization",
+            ondelete="RESTRICT",
+        ),
+        Index(
+            "ix_organization_availability_targets_organization_type",
+            "organization_id",
+            "target_type",
+        ),
+        Index(
+            "ix_organization_availability_targets_deadline",
+            "organization_id",
+            "response_deadline",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(
+        String, primary_key=True, default=lambda: str(uuid.uuid4()), nullable=False
+    )
+    organization_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    target_type: Mapped[str] = mapped_column(String(16), nullable=False)
+    organization_event_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    fixture_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    fixture_tournament_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    response_deadline: Mapped[dt.datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    created_by_user_id: Mapped[str] = mapped_column(String, nullable=False)
+    updated_by_user_id: Mapped[str] = mapped_column(String, nullable=False)
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+
+class OrganizationPlayerAvailability(Base):
+    """One deterministic current availability state per player and target."""
+
+    __tablename__ = "organization_player_availability"
+    __table_args__ = (
+        UniqueConstraint(
+            "target_id",
+            "school_player_membership_id",
+            name="uq_organization_player_availability_target_player",
+        ),
+        CheckConstraint(
+            "state IN ('available', 'unavailable', 'maybe')",
+            name="ck_organization_player_availability_state",
+        ),
+        ForeignKeyConstraint(
+            ["target_id", "organization_id"],
+            [
+                "organization_availability_targets.id",
+                "organization_availability_targets.organization_id",
+            ],
+            name="fk_organization_player_availability_target_organization",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["school_player_membership_id", "organization_id"],
+            ["school_player_memberships.id", "school_player_memberships.organization_id"],
+            name="fk_organization_player_availability_roster_organization",
+            ondelete="RESTRICT",
+        ),
+        Index(
+            "ix_organization_player_availability_target_state",
+            "organization_id",
+            "target_id",
+            "state",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(
+        String, primary_key=True, default=lambda: str(uuid.uuid4()), nullable=False
+    )
+    organization_id: Mapped[str] = mapped_column(String, nullable=False)
+    target_id: Mapped[str] = mapped_column(String, nullable=False)
+    school_player_membership_id: Mapped[str] = mapped_column(String, nullable=False)
+    state: Mapped[str] = mapped_column(String(16), nullable=False)
+    recorded_by_user_id: Mapped[str] = mapped_column(String, nullable=False)
+    recorded_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    recorded_after_deadline: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="false", nullable=False
+    )
+
+
+class OrganizationPlayerAvailabilityHistory(Base):
+    """Append-only audit history for staff-recorded availability changes."""
+
+    __tablename__ = "organization_player_availability_history"
+    __table_args__ = (
+        CheckConstraint(
+            "state IN ('available', 'unavailable', 'maybe')",
+            name="ck_organization_player_availability_history_state",
+        ),
+        ForeignKeyConstraint(
+            ["target_id", "organization_id"],
+            [
+                "organization_availability_targets.id",
+                "organization_availability_targets.organization_id",
+            ],
+            name="fk_organization_player_availability_history_target_organization",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["school_player_membership_id", "organization_id"],
+            ["school_player_memberships.id", "school_player_memberships.organization_id"],
+            name="fk_organization_player_availability_history_roster_organization",
+            ondelete="RESTRICT",
+        ),
+        Index(
+            "ix_organization_player_availability_history_target_player_time",
+            "organization_id",
+            "target_id",
+            "school_player_membership_id",
+            "recorded_at",
+            "id",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(
+        String, primary_key=True, default=lambda: str(uuid.uuid4()), nullable=False
+    )
+    organization_id: Mapped[str] = mapped_column(String, nullable=False)
+    target_id: Mapped[str] = mapped_column(String, nullable=False)
+    school_player_membership_id: Mapped[str] = mapped_column(String, nullable=False)
+    state: Mapped[str] = mapped_column(String(16), nullable=False)
+    recorded_by_user_id: Mapped[str] = mapped_column(String, nullable=False)
+    recorded_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    recorded_after_deadline: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="false", nullable=False
+    )
 
 
 class AiUsageLog(Base):

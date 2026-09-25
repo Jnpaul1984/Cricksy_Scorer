@@ -55,6 +55,7 @@ const entitlement = {
     'school_live_scorecards',
     'school_competitions',
     'organization_events',
+    'organization_availability',
   ],
   excluded_capabilities: ['advanced_ai'],
   created_at: '',

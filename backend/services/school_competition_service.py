@@ -86,14 +86,19 @@ async def _authorize(
 
 
 async def _competition(
-    db: AsyncSession, *, organization_id: str, competition_id: str
+    db: AsyncSession,
+    *,
+    organization_id: str,
+    competition_id: str,
+    lock: bool = False,
 ) -> models.Tournament:
-    competition = await db.scalar(
-        select(models.Tournament).where(
-            models.Tournament.id == competition_id,
-            models.Tournament.organization_id == organization_id,
-        )
+    statement = select(models.Tournament).where(
+        models.Tournament.id == competition_id,
+        models.Tournament.organization_id == organization_id,
     )
+    if lock:
+        statement = statement.with_for_update()
+    competition = await db.scalar(statement)
     if competition is None:
         raise _not_found("Competition")
     return competition
@@ -187,7 +192,26 @@ async def delete_competition(
         allowed_roles=DELETE_ROLES,
     )
     competition = await _competition(
-        db, organization_id=organization_id, competition_id=competition_id
+        db,
+        organization_id=organization_id,
+        competition_id=competition_id,
+        lock=True,
+    )
+    fixtures = list(
+        (
+            await db.scalars(
+                select(models.Fixture)
+                .where(models.Fixture.tournament_id == competition_id)
+                .order_by(models.Fixture.id)
+                .with_for_update()
+            )
+        ).all()
+    )
+    await _remove_history_free_availability_targets(
+        db,
+        organization_id=organization_id,
+        fixture_ids=[fixture.id for fixture in fixtures],
+        conflict_detail="Competition cannot be deleted while availability history is retained",
     )
     await db.delete(competition)
     await db.commit()
@@ -290,20 +314,67 @@ async def remove_team(
 
 
 async def _fixture(
-    db: AsyncSession, *, organization_id: str, competition_id: str, fixture_id: str
+    db: AsyncSession,
+    *,
+    organization_id: str,
+    competition_id: str,
+    fixture_id: str,
+    lock: bool = False,
 ) -> models.Fixture:
     await _competition(db, organization_id=organization_id, competition_id=competition_id)
-    fixture = await db.scalar(
-        select(models.Fixture).where(
-            models.Fixture.id == fixture_id,
-            models.Fixture.tournament_id == competition_id,
-            models.Fixture.team_a_id.is_not(None),
-            models.Fixture.team_b_id.is_not(None),
-        )
+    statement = select(models.Fixture).where(
+        models.Fixture.id == fixture_id,
+        models.Fixture.tournament_id == competition_id,
+        models.Fixture.team_a_id.is_not(None),
+        models.Fixture.team_b_id.is_not(None),
     )
+    if lock:
+        statement = statement.with_for_update()
+    fixture = await db.scalar(statement)
     if fixture is None:
         raise _not_found("Fixture")
     return fixture
+
+
+async def _remove_history_free_availability_targets(
+    db: AsyncSession,
+    *,
+    organization_id: str,
+    fixture_ids: list[str],
+    conflict_detail: str,
+) -> None:
+    if not fixture_ids:
+        return
+    targets = list(
+        (
+            await db.scalars(
+                select(models.OrganizationAvailabilityTarget)
+                .where(
+                    models.OrganizationAvailabilityTarget.organization_id == organization_id,
+                    models.OrganizationAvailabilityTarget.target_type == "fixture",
+                    models.OrganizationAvailabilityTarget.fixture_id.in_(fixture_ids),
+                )
+                .order_by(models.OrganizationAvailabilityTarget.id)
+                .with_for_update()
+            )
+        ).all()
+    )
+    if not targets:
+        return
+    target_ids = [target.id for target in targets]
+    retained_history = await db.scalar(
+        select(models.OrganizationPlayerAvailabilityHistory.id)
+        .where(
+            models.OrganizationPlayerAvailabilityHistory.organization_id == organization_id,
+            models.OrganizationPlayerAvailabilityHistory.target_id.in_(target_ids),
+        )
+        .limit(1)
+    )
+    if retained_history is not None:
+        raise SchoolCompetitionServiceError(409, conflict_detail)
+    for target in targets:
+        await db.delete(target)
+    await db.flush()
 
 
 async def create_fixture(
@@ -474,7 +545,17 @@ async def delete_fixture(
         capability="school_competitions",
     )
     fixture = await _fixture(
-        db, organization_id=organization_id, competition_id=competition_id, fixture_id=fixture_id
+        db,
+        organization_id=organization_id,
+        competition_id=competition_id,
+        fixture_id=fixture_id,
+        lock=True,
+    )
+    await _remove_history_free_availability_targets(
+        db,
+        organization_id=organization_id,
+        fixture_ids=[fixture.id],
+        conflict_detail="Fixture cannot be deleted while availability history is retained",
     )
     await db.delete(fixture)
     await db.commit()
