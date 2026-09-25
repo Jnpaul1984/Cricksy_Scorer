@@ -1,6 +1,11 @@
 import { apiRequest } from '@/services/api';
 import type {
   OrganizationCalendar,
+  OrganizationAvailabilityFilter,
+  OrganizationAvailabilityState,
+  OrganizationAvailabilitySummary,
+  OrganizationAvailabilityTarget,
+  OrganizationAvailabilityTargetType,
   OrganizationEvent,
   OrganizationEventInput,
   PlayerImportPreview,
@@ -27,6 +32,7 @@ import type {
   SchoolTeamStatistics,
   PublicSchoolScorecard,
   FreeOrganizationType,
+  OrganizationPlayerAvailability,
 } from '@/types/schoolAdmin';
 
 const orgPath = (organizationId: string, suffix = '') =>
@@ -114,6 +120,60 @@ export const getOrganizationCalendar = (
     orgPath(organizationId, `/calendar${query ? `?${query}` : ''}`),
   );
 };
+
+export const getOrganizationAvailability = (
+  organizationId: string,
+  targetType: OrganizationAvailabilityTargetType,
+  targetId: string,
+  options: {
+    state?: OrganizationAvailabilityFilter;
+    teamId?: string;
+    limit?: number;
+    offset?: number;
+  } = {},
+) => {
+  const params = new URLSearchParams();
+  if (options.state) params.set('state', options.state);
+  if (options.teamId) params.set('team_id', options.teamId);
+  if (options.limit !== undefined) params.set('limit', String(options.limit));
+  if (options.offset !== undefined) params.set('offset', String(options.offset));
+  const query = params.toString();
+  return apiRequest<OrganizationAvailabilitySummary>(
+    orgPath(
+      organizationId,
+      `/availability/${targetType}/${encodeURIComponent(targetId)}${query ? `?${query}` : ''}`,
+    ),
+  );
+};
+
+export const updateOrganizationAvailabilityDeadline = (
+  organizationId: string,
+  targetType: OrganizationAvailabilityTargetType,
+  targetId: string,
+  responseDeadline: string | null,
+) =>
+  apiRequest<OrganizationAvailabilityTarget>(
+    orgPath(organizationId, `/availability/${targetType}/${encodeURIComponent(targetId)}`),
+    {
+      method: 'PATCH',
+      body: JSON.stringify({ response_deadline: responseDeadline }),
+    },
+  );
+
+export const recordOrganizationPlayerAvailability = (
+  organizationId: string,
+  targetType: OrganizationAvailabilityTargetType,
+  targetId: string,
+  rosterMembershipId: string,
+  state: OrganizationAvailabilityState,
+) =>
+  apiRequest<OrganizationPlayerAvailability>(
+    orgPath(
+      organizationId,
+      `/availability/${targetType}/${encodeURIComponent(targetId)}/players/${encodeURIComponent(rosterMembershipId)}`,
+    ),
+    { method: 'PUT', body: JSON.stringify({ state }) },
+  );
 
 export const listSchoolTeams = (organizationId: string) =>
   apiRequest<SchoolTeam[]>(orgPath(organizationId, '/teams'));

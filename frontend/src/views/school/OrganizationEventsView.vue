@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue';
+import { RouterLink } from 'vue-router';
 
 import { useSchoolContext } from '@/composables/useSchoolContext';
 import { getErrorMessage } from '@/services/api';
@@ -22,7 +23,14 @@ import type {
   SchoolTeam,
 } from '@/types/schoolAdmin';
 
-const { organizationId, terminology, canViewEvents, canManageEvents } = useSchoolContext();
+const {
+  organizationId,
+  organizationBasePath,
+  terminology,
+  entitlement,
+  canViewEvents,
+  canManageEvents,
+} = useSchoolContext();
 const events = ref<OrganizationEvent[]>([]);
 const calendarItems = ref<OrganizationCalendarItem[]>([]);
 const teams = ref<SchoolTeam[]>([]);
@@ -45,6 +53,9 @@ const form = reactive({
 });
 
 const formTitle = computed(() => (editingId.value ? 'Edit event' : 'Create event'));
+const canViewAvailability = computed(() =>
+  (entitlement.value?.capabilities || []).includes('organization_availability'),
+);
 
 function localDateTime(value: string): string {
   const date = new Date(value);
@@ -255,9 +266,20 @@ onMounted(load);
           </p>
           <p>Status: {{ item.status }}</p>
         </div>
-        <div v-if="canManageEvents && eventFor(item)?.status === 'scheduled'" class="actions">
-          <button type="button" class="secondary" @click="beginEdit(eventFor(item)!)">Edit</button>
-          <button type="button" class="danger" @click="cancel(eventFor(item)!)">Cancel</button>
+        <div class="actions">
+          <RouterLink
+            v-if="canViewAvailability"
+            class="availability-link"
+            :to="`${organizationBasePath}/${organizationId}/availability/${
+              item.source_type === 'organization_event' ? 'event' : 'fixture'
+            }/${item.source_id}`"
+          >
+            Availability
+          </RouterLink>
+          <template v-if="canManageEvents && eventFor(item)?.status === 'scheduled'">
+            <button type="button" class="secondary" @click="beginEdit(eventFor(item)!)">Edit</button>
+            <button type="button" class="danger" @click="cancel(eventFor(item)!)">Cancel</button>
+          </template>
         </div>
       </article>
     </section>
@@ -323,6 +345,15 @@ label {
 }
 .secondary {
   background: #33415f;
+}
+.availability-link {
+  align-content: center;
+  padding: 0.55rem 0.8rem;
+  border-radius: 7px;
+  color: #10231d;
+  background: #70d7b0;
+  font-weight: 700;
+  text-decoration: none;
 }
 .danger {
   background: #9f3a4a;

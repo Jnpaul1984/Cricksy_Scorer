@@ -309,6 +309,59 @@ export interface OrganizationCalendar {
   offset: number;
 }
 
+export type OrganizationAvailabilityTargetType = 'event' | 'fixture';
+export type OrganizationAvailabilityState = 'available' | 'unavailable' | 'maybe';
+export type OrganizationAvailabilityFilter = OrganizationAvailabilityState | 'no_response';
+
+export interface OrganizationAvailabilityTarget {
+  target_type: OrganizationAvailabilityTargetType;
+  target_id: string;
+  title: string;
+  starts_at: string | null;
+  response_deadline: string | null;
+  deadline_passed: boolean;
+}
+
+export interface OrganizationAvailabilityCounts {
+  available: number;
+  unavailable: number;
+  maybe: number;
+  no_response: number;
+  total: number;
+}
+
+export interface OrganizationAvailabilityPlayer {
+  roster_membership_id: string;
+  player_profile_id: string;
+  player_name: string;
+  team_ids: string[];
+  state: OrganizationAvailabilityState | null;
+  recorded_by_user_id: string | null;
+  recorded_at: string | null;
+  recorded_after_deadline: boolean;
+}
+
+export interface OrganizationAvailabilitySummary {
+  target: OrganizationAvailabilityTarget;
+  counts: OrganizationAvailabilityCounts;
+  players: OrganizationAvailabilityPlayer[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface OrganizationPlayerAvailability {
+  organization_id: string;
+  target_type: OrganizationAvailabilityTargetType;
+  target_id: string;
+  roster_membership_id: string;
+  player_profile_id: string;
+  state: OrganizationAvailabilityState;
+  recorded_by_user_id: string;
+  recorded_at: string;
+  recorded_after_deadline: boolean;
+}
+
 export interface SchoolStandingEntry {
   team_id: string;
   team_name: string;
