@@ -2506,13 +2506,13 @@ class OrganizationAvailabilityTarget(Base):
             ["fixture_id", "fixture_tournament_id"],
             ["fixtures.id", "fixtures.tournament_id"],
             name="fk_organization_availability_targets_fixture_tournament",
-            ondelete="CASCADE",
+            ondelete="RESTRICT",
         ),
         ForeignKeyConstraint(
             ["fixture_tournament_id", "organization_id"],
             ["tournaments.id", "tournaments.organization_id"],
             name="fk_organization_availability_targets_tournament_organization",
-            ondelete="CASCADE",
+            ondelete="RESTRICT",
         ),
         Index(
             "ix_organization_availability_targets_organization_type",

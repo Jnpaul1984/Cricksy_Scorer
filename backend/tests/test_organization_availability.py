@@ -639,6 +639,151 @@ async def test_fixture_availability_uses_only_normalized_active_team_rosters(
 
 @pytest.mark.skipif(
     os.getenv("PHASE7B_POSTGRES_MIGRATED_TESTS") != "1",
+    reason="Availability retention deletion guards require real PostgreSQL",
+)
+async def test_postgres_fixture_and_competition_deletion_retain_availability_history(
+    school_client: TestClient,
+) -> None:
+    owner = register_user(school_client, "availability-retention@example.com")
+    organization = create_school(school_client, owner, "Retention School")
+    first_team = _team(school_client, owner, organization["id"], "Retention First XI")
+    second_team = _team(school_client, owner, organization["id"], "Retention Second XI")
+    player = _player(school_client, owner, organization["id"], "Retained Player")
+    _assign(school_client, owner, organization["id"], first_team["id"], player["id"])
+    fixture = _fixture(
+        school_client,
+        owner,
+        organization["id"],
+        first_team["id"],
+        second_team["id"],
+    )
+    availability_url = _availability_url(organization["id"], "fixture", fixture["id"])
+    history_url = f"{availability_url}/players/{player['id']}/history"
+    fixture_url = (
+        f"/api/organizations/{organization['id']}/competitions/{fixture['tournament_id']}"
+        f"/fixtures/{fixture['id']}"
+    )
+    competition_url = (
+        f"/api/organizations/{organization['id']}/competitions/{fixture['tournament_id']}"
+    )
+
+    recorded = _record(
+        school_client,
+        owner,
+        organization["id"],
+        "fixture",
+        fixture["id"],
+        player["id"],
+        "available",
+    )
+    assert recorded.status_code == 200, recorded.text
+    before = school_client.get(history_url, headers=owner.headers)
+    assert before.status_code == 200, before.text
+    assert [item["state"] for item in before.json()["items"]] == ["available"]
+
+    fixture_delete = school_client.delete(fixture_url, headers=owner.headers)
+    assert fixture_delete.status_code == 409, fixture_delete.text
+    assert fixture_delete.json() == {
+        "detail": "Fixture cannot be deleted while availability history is retained"
+    }
+    assert "Internal Server Error" not in fixture_delete.text
+    after_fixture_rejection = school_client.get(history_url, headers=owner.headers)
+    assert after_fixture_rejection.status_code == 200, after_fixture_rejection.text
+    assert after_fixture_rejection.json()["items"] == before.json()["items"]
+
+    competition_delete = school_client.delete(competition_url, headers=owner.headers)
+    assert competition_delete.status_code == 409, competition_delete.text
+    assert competition_delete.json() == {
+        "detail": "Competition cannot be deleted while availability history is retained"
+    }
+    assert "Internal Server Error" not in competition_delete.text
+    after_competition_rejection = school_client.get(history_url, headers=owner.headers)
+    assert after_competition_rejection.status_code == 200, after_competition_rejection.text
+    assert after_competition_rejection.json()["items"] == before.json()["items"]
+
+    assert school_client.get(fixture_url, headers=owner.headers).status_code == 200
+    session_maker = get_session_local()
+    async with session_maker() as session:
+        assert await session.scalar(select(func.count(Fixture.id))) == 1
+        assert await session.scalar(select(func.count(Tournament.id))) == 1
+        assert (
+            await session.scalar(select(func.count(OrganizationPlayerAvailabilityHistory.id))) == 1
+        )
+        assert await session.scalar(select(func.count(OrganizationPlayerAvailability.id))) == 1
+        assert await session.scalar(select(func.count(User.id))) == 1
+
+
+@pytest.mark.skipif(
+    os.getenv("PHASE7B_POSTGRES_MIGRATED_TESTS") != "1",
+    reason="Availability retention deletion guards require real PostgreSQL",
+)
+async def test_postgres_history_free_targets_do_not_block_fixture_or_competition_deletion(
+    school_client: TestClient,
+) -> None:
+    owner = register_user(school_client, "availability-empty-target@example.com")
+    organization = create_club(school_client, owner, "Empty Target Club")
+    first_team = _team(school_client, owner, organization["id"], "Empty First XI")
+    second_team = _team(school_client, owner, organization["id"], "Empty Second XI")
+
+    fixture = _fixture(
+        school_client,
+        owner,
+        organization["id"],
+        first_team["id"],
+        second_team["id"],
+    )
+    fixture_availability_url = _availability_url(organization["id"], "fixture", fixture["id"])
+    deadline = school_client.patch(
+        fixture_availability_url,
+        json={"response_deadline": "2099-01-31T12:00:00+00:00"},
+        headers=owner.headers,
+    )
+    assert deadline.status_code == 200, deadline.text
+    fixture_url = (
+        f"/api/organizations/{organization['id']}/competitions/{fixture['tournament_id']}"
+        f"/fixtures/{fixture['id']}"
+    )
+    assert school_client.delete(fixture_url, headers=owner.headers).status_code == 204
+    competition_url = (
+        f"/api/organizations/{organization['id']}/competitions/{fixture['tournament_id']}"
+    )
+    assert school_client.delete(competition_url, headers=owner.headers).status_code == 204
+
+    competition_fixture = _fixture(
+        school_client,
+        owner,
+        organization["id"],
+        first_team["id"],
+        second_team["id"],
+    )
+    competition_availability_url = _availability_url(
+        organization["id"], "fixture", competition_fixture["id"]
+    )
+    deadline = school_client.patch(
+        competition_availability_url,
+        json={"response_deadline": "2099-02-01T12:00:00+00:00"},
+        headers=owner.headers,
+    )
+    assert deadline.status_code == 200, deadline.text
+    competition_url = (
+        f"/api/organizations/{organization['id']}/competitions/"
+        f"{competition_fixture['tournament_id']}"
+    )
+    assert school_client.delete(competition_url, headers=owner.headers).status_code == 204
+
+    session_maker = get_session_local()
+    async with session_maker() as session:
+        assert await session.scalar(select(func.count(Fixture.id))) == 0
+        assert await session.scalar(select(func.count(Tournament.id))) == 0
+        assert await session.scalar(select(func.count(OrganizationAvailabilityTarget.id))) == 0
+        assert (
+            await session.scalar(select(func.count(OrganizationPlayerAvailabilityHistory.id))) == 0
+        )
+        assert await session.scalar(select(func.count(User.id))) == 1
+
+
+@pytest.mark.skipif(
+    os.getenv("PHASE7B_POSTGRES_MIGRATED_TESTS") != "1",
     reason="Availability serialization requires real PostgreSQL",
 )
 async def test_postgres_concurrent_updates_leave_one_current_state_and_immutable_history(
