@@ -1,5 +1,8 @@
 import { apiRequest } from '@/services/api';
 import type {
+  OrganizationCalendar,
+  OrganizationEvent,
+  OrganizationEventInput,
   PlayerImportPreview,
   PlayerImportResolution,
   PlayerImportResult,
@@ -52,6 +55,65 @@ export const getMySchoolMembership = (organizationId: string) =>
   apiRequest<SchoolMembership>(orgPath(organizationId, '/me'));
 export const getSchoolEntitlement = (organizationId: string) =>
   apiRequest<SchoolEntitlement>(orgPath(organizationId, '/entitlements'));
+
+export const listOrganizationEvents = (
+  organizationId: string,
+  options: {
+    upcoming?: boolean;
+    includeCancelled?: boolean;
+    teamId?: string;
+    limit?: number;
+    offset?: number;
+  } = {},
+) => {
+  const params = new URLSearchParams();
+  if (options.upcoming !== undefined) params.set('upcoming', String(options.upcoming));
+  if (options.includeCancelled !== undefined) {
+    params.set('include_cancelled', String(options.includeCancelled));
+  }
+  if (options.teamId) params.set('team_id', options.teamId);
+  if (options.limit !== undefined) params.set('limit', String(options.limit));
+  if (options.offset !== undefined) params.set('offset', String(options.offset));
+  const query = params.toString();
+  return apiRequest<{ items: OrganizationEvent[]; total: number; limit: number; offset: number }>(
+    orgPath(organizationId, `/events${query ? `?${query}` : ''}`),
+  );
+};
+export const createOrganizationEvent = (organizationId: string, payload: OrganizationEventInput) =>
+  apiRequest<OrganizationEvent>(orgPath(organizationId, '/events'), {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+export const updateOrganizationEvent = (
+  organizationId: string,
+  eventId: string,
+  payload: Partial<OrganizationEventInput>,
+) =>
+  apiRequest<OrganizationEvent>(orgPath(organizationId, `/events/${encodeURIComponent(eventId)}`), {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+export const cancelOrganizationEvent = (organizationId: string, eventId: string) =>
+  apiRequest<OrganizationEvent>(
+    orgPath(organizationId, `/events/${encodeURIComponent(eventId)}/cancel`),
+    { method: 'POST' },
+  );
+export const getOrganizationCalendar = (
+  organizationId: string,
+  options: { upcoming?: boolean; includeCancelled?: boolean; teamId?: string; limit?: number } = {},
+) => {
+  const params = new URLSearchParams();
+  if (options.upcoming !== undefined) params.set('upcoming', String(options.upcoming));
+  if (options.includeCancelled !== undefined) {
+    params.set('include_cancelled', String(options.includeCancelled));
+  }
+  if (options.teamId) params.set('team_id', options.teamId);
+  if (options.limit !== undefined) params.set('limit', String(options.limit));
+  const query = params.toString();
+  return apiRequest<OrganizationCalendar>(
+    orgPath(organizationId, `/calendar${query ? `?${query}` : ''}`),
+  );
+};
 
 export const listSchoolTeams = (organizationId: string) =>
   apiRequest<SchoolTeam[]>(orgPath(organizationId, '/teams'));

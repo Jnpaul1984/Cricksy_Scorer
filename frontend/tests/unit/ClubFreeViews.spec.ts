@@ -81,6 +81,7 @@ const entitlement = {
     'school_fixtures_results',
     'school_live_scorecards',
     'school_competitions',
+    'organization_events',
   ],
   excluded_capabilities: ['advanced_ai'],
   created_at: '',
@@ -110,6 +111,8 @@ function clubContext(): SchoolContext {
     canDeleteCompetitions: allowed,
     canLinkFixtures: allowed,
     canPublishScorecards: allowed,
+    canViewEvents: allowed,
+    canManageEvents: allowed,
   };
 }
 
@@ -184,6 +187,8 @@ describe('Club Free shared organization views', () => {
     expect(wrapper.text()).toContain('Club Administration');
     expect(wrapper.get('nav').attributes('aria-label')).toBe('Club administration');
     expect(wrapper.html()).toContain('/clubs/club-a/matches/new');
+    expect(wrapper.html()).toContain('/clubs/club-a/events');
+    expect(wrapper.text()).toContain('Calendar');
     expect(wrapper.text()).not.toContain('School Administration');
   });
 

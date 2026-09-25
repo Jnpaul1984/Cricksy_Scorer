@@ -39,7 +39,9 @@ async def reset_db(_setup_db):
         if use_migrated_postgres:
             await connection.execute(
                 text(
-                    "TRUNCATE TABLE fixtures, tournament_teams, tournaments, games, "
+                    "TRUNCATE TABLE organization_event_roster_players, "
+                    "organization_event_teams, organization_events, "
+                    "fixtures, tournament_teams, tournaments, games, "
                     "school_player_imports, "
                     "school_team_player_memberships, "
                     "school_player_memberships, teams, "

@@ -47,6 +47,7 @@ Checklist cells cite these exact current-code anchors. A citation is evidence of
 - **E-MATCH:** `backend/services/school_match_service.py::{_eligible_side,_team_snapshot,_external_snapshot,create_school_match}`; `backend/api/schemas/school_matches.py`; `SchoolMatchSetupView.vue`; `backend/tests/test_school_match_setup.py`.
 - **E-STATS:** `backend/services/school_statistics_service.py::{player_statistics,team_statistics,match_results,fixture_summaries}`; `SchoolStatisticsView.vue`, `SchoolFixturesResultsView.vue`; `backend/tests/test_school_statistics.py`.
 - **E-COMP:** `backend/services/school_competition_service.py::{create_competition,create_fixture,link_fixture_game,standings,publication,public_scorecard}`; corresponding routes/views; tests `test_school_competition_publication.py`, `test_club_free.py`.
+- **E-EVENT:** `backend/sql_app/models.py::{OrganizationEvent,OrganizationEventTeam,OrganizationEventRosterPlayer}`; `backend/services/organization_event_service.py::{create_event,list_events,update_event,cancel_event,calendar}`; `backend/routes/organization_events.py`; `frontend/src/views/school/OrganizationEventsView.vue`; tests `backend/tests/test_organization_events.py`, `frontend/tests/unit/OrganizationEventsView.spec.ts`.
 - **E-TERMS:** `frontend/src/router/index.ts::organizationChildren`; `frontend/src/composables/{useSchoolContext,useOrganizationTerminology}.ts`; `frontend/tests/unit/ClubFreeViews.spec.ts`.
 - **E-PLAYER:** `backend/sql_app/models.py::{PlayerProfile,PlayerAchievement,PlayerForm}`; `backend/routes/player_analytics.py::{get_player_career_summary_endpoint,get_player_yearly_stats,get_player_dismissals,get_player_form_analysis,get_player_consistency_score,get_batting_leaderboard}`; `PlayerProfileView.vue`; tests `test_player_profiles.py`, `test_player_pro_features.py`, `PlayerProfileView.spec.ts`.
 - **E-FAN:** `backend/sql_app/models.py::FanFavorite`; `backend/routes/fan_mode.py::{create_favorite,list_favorites,delete_favorite}`; `frontend/src/views/PlayerProfileView.vue::{loadFavorites,toggleFavorite}`; `frontend/src/services/api.ts::{getFanFavorites,createFanFavorite,deleteFanFavorite}`.
@@ -61,7 +62,7 @@ Checklist cells cite these exact current-code anchors. A citation is evidence of
 - **E-VIDEO:** `backend/sql_app/models.py::{VideoSession,VideoAnalysisJob,VideoAnalysisChunk,VideoMomentMarker,TargetZone}`; `backend/routes/coach_pro_plus.py`; `CoachProPlusVideoSessionsView.vue`; upload/stream/quota/history/PDF tests. Ownership is personal/global-role or legacy `User.org_id`, not current membership tenancy.
 - **E-VIDEO-JOB:** `backend/services/{s3_service,sqs_service,video_job_recovery,video_quota_service,video_chunking}.py`; `backend/scripts/run_video_analysis_worker.py`; tests `test_video_job_recovery.py`, `test_video_quota.py`, `test_video_upload_s3_key_persistence.py`, `test_video_stream_url_presign.py`.
 - **E-VIDEO-RESULT:** `backend/services/{coach_plus_analysis,coach_report_v2,coach_report_presentation,coach_strength_consistency}.py`; analysis/repetition/phase/report/longitudinal endpoints in `coach_pro_plus.py`; report/V2/integration tests.
-- **E-ABSENT:** repository-wide model/route/service/view/test filename and symbol searches found no organization availability, attendance, calendar, announcement, chat, guardian, organization-payment, donation, or fundraising runtime surface. `backend/core/live_bus.py` and Socket.IO carry scoring state, not private/team messaging.
+- **E-ABSENT:** repository-wide model/route/service/view/test filename and symbol searches found no organization availability, attendance, announcement, chat, guardian, organization-payment, donation, or fundraising runtime surface. `backend/core/live_bus.py` and Socket.IO carry scoring state, not private/team messaging.
 
 ## 3. Current shared Free baseline — protected
 
@@ -112,18 +113,18 @@ Checklist cells cite these exact current-code anchors. A citation is evidence of
 
 | ID | Capability | Product | Status | Cost | Existing evidence | Required work | Dependencies | Owner decision? | Controls |
 |---|---|---|---|---|---|---|---|---|---|
-| FREE-EVT-001 | Organization calendar | Free | NEW | LOW | E-ABSENT | Add organization event/calendar model/API/UI. | Organization | No | C-DB |
-| FREE-EVT-002 | Team calendar | Free | NEW | LOW | Teams exist (E-TEAM); no calendar. | Team-scoped event query. | FREE-EVT-001 | No | C-DB |
-| FREE-EVT-003 | Training sessions | Free | NEW | LOW | `training_drills.py` generates drills, not scheduled training events. | Add training event type. | FREE-EVT-001 | No | C-DB |
-| FREE-EVT-004 | Matches represented as events | Free | ADAPT | LOW | E-COMP/E-STATS provide Fixture and Game dates. | Define projection/link; avoid duplicate truth. | FREE-EVT-001 | No | C-DB |
-| FREE-EVT-005 | Other events | Free | NEW | LOW | E-ABSENT | Add bounded custom event type. | FREE-EVT-001 | No | C-DB |
-| FREE-EVT-006 | Date/time/location | Free | NEW | LOW | Fixture has scheduling fields (E-COMP), not generic events. | Reuse types; define timezone. | FREE-EVT-001 | No | C-DB |
-| FREE-EVT-007 | Recurring sessions | Free | NEW | LOW | E-ABSENT | Add recurrence rule and exception semantics. | FREE-EVT-001 | No | C-DB |
-| FREE-EVT-008 | Participant scope | Free | NEW | LOW | E-ABSENT | Scope to org/Teams/selected members. | Membership, Team | No | C-DB |
+| FREE-EVT-001 | Organization calendar | Free | BUILT | LOW | E-EVENT. | Preserve tenant-scoped CRUD, cancellation history and bounded calendar queries. | Organization | No | C-DB |
+| FREE-EVT-002 | Team calendar | Free | BUILT | LOW | E-EVENT `calendar(..., team_id=...)`; Team-scoped backend tests and shared Team-audience selector. | Preserve whole-organization visibility plus exact Team audience/fixture filtering. | FREE-EVT-001 | No | C-DB |
+| FREE-EVT-003 | Training sessions | Free | BUILT | LOW | E-EVENT `OrganizationEventCreate.event_type`; training CRUD tests. | Preserve training as a scheduled event, separate from drill generation. | FREE-EVT-001 | No | C-DB |
+| FREE-EVT-004 | Matches represented as events | Free | BUILT | LOW | E-EVENT `calendar` projects authoritative `Fixture` rows; fixture projection regression. | Preserve reference/projection only; never copy or mutate scoring truth. | FREE-EVT-001 | No | C-DB |
+| FREE-EVT-005 | Other events | Free | BUILT | LOW | E-EVENT supports the bounded `other` type. | Extend API validation for future types without a database enum/schema rewrite. | FREE-EVT-001 | No | C-DB |
+| FREE-EVT-006 | Date/time/location | Free | BUILT | LOW | E-EVENT requires timezone-aware inputs, stores timezone-aware timestamps and returns UTC; timezone tests. | Preserve explicit offsets and UTC response semantics. | FREE-EVT-001 | No | C-DB |
+| FREE-EVT-007 | Recurring sessions | Free | NEW | LOW | E-EVENT intentionally persists single occurrences only. | Deferred from 1A: specify a separate series/template plus materialized-occurrence/exception contract, idempotent generation window and series-edit semantics before adding recurrence; reject unsupported recurrence fields meanwhile. | FREE-EVT-001 | No | C-DB |
+| FREE-EVT-008 | Participant scope | Free | BUILT | LOW | E-EVENT uses DB-enforced organization-matching Team/roster references; tenant/no-login tests. | Preserve mutually exclusive organization, Teams and selected-roster-player scopes. | Membership, Team | No | C-DB |
 | FREE-EVT-009 | RSVP | Free | NEW | LOW | E-ABSENT | Add event response distinct from attendance. | FREE-EVT-001 | No | C-DB |
-| FREE-EVT-010 | Upcoming-events dashboard | Free | NEW | LOW | E-ABSENT | Add sorted tenant-scoped view. | FREE-EVT-001 | No | C-DB |
+| FREE-EVT-010 | Upcoming-events dashboard | Free | BUILT | LOW | E-EVENT provides upcoming filtering, deterministic ordering and bounded limits; shared calendar UI. | Preserve start-time/ID ordering and bounded pagination. | FREE-EVT-001 | No | C-DB |
 | FREE-EVT-011 | Cancellation/update notifications | Free | NEW | USAGE-SENSITIVE | E-ABSENT | Persist changes; in-app first; bounded delivery. | Events, notifications | No | C-MSG |
-| FREE-EVT-012 | School/Club terminology | Free | ADAPT | LOW | E-TERMS | Extend terminology keys without service forks. | Event UI | No | C-DB |
+| FREE-EVT-012 | School/Club terminology | Free | BUILT | LOW | E-EVENT reuses E-TERMS in one shared view/route factory. | Preserve presentation-only terminology over the shared backend domain. | Event UI | No | C-DB |
 
 ### 4.3 Attendance
 
@@ -616,9 +617,9 @@ Counts are mechanically derived from the 340 capability rows above. Header, evid
 
 | Status | Count |
 |---|---:|
-| BUILT | 48 |
-| ADAPT | 116 |
-| NEW | 120 |
+| BUILT | 57 |
+| ADAPT | 114 |
+| NEW | 113 |
 | DEFER | 3 |
 | OWNER DECISION | 53 |
 | **Total** | **340** |
@@ -645,11 +646,11 @@ Counts are mechanically derived from the 340 capability rows above. Header, evid
 
 ## 12. Already-built summary
 
-The 48 BUILT rows are concentrated in the protected shared Free foundation: organization creation/membership/roles; one School/Club capability source; canonical roster and reusable Teams; import; saved/external match setup; XI/captain/keeper; organization scoring; fixtures/results/competitions/basic statistics; controlled public scorecards; contextual terminology and tenant isolation. Canonical career/batting/bowling/achievement truth and the structural separation of personal versus organization entitlements also exist. Private video is not organization-ready, but four negative public-exposure guardrails are true today: no public signup, no unrestricted unauthenticated upload, no public organization Elite promise and no organization-wide video self-service entitlement.
+The 57 BUILT rows are concentrated in the protected shared Free foundation: organization creation/membership/roles; one School/Club capability source; canonical roster and reusable Teams; import; saved/external match setup; XI/captain/keeper; organization scoring; fixtures/results/competitions/basic statistics; controlled public scorecards; contextual terminology and tenant isolation; and the shared organization/Team calendar, training/other events, scoped participants, fixture projection, timezone contract and upcoming view. Canonical career/batting/bowling/achievement truth and the structural separation of personal versus organization entitlements also exist. Private video is not organization-ready, but four negative public-exposure guardrails are true today: no public signup, no unrestricted unauthenticated upload, no public organization Elite promise and no organization-wide video self-service entitlement.
 
 ## 13. Adaptation summary
 
-The 116 ADAPT rows are existing technology, not organization-ready product promises. Major reuse pools are:
+The 114 ADAPT rows are existing technology, not organization-ready product promises. Major reuse pools are:
 
 - Player/Analyst deterministic analytics, filters, comparisons, exports and match-context packages.
 - Coach assignments, sessions, notes, development plans/checkpoints/dashboards/reports and longitudinal progress.
@@ -661,7 +662,7 @@ The 116 ADAPT rows are existing technology, not organization-ready product promi
 
 ## 14. Genuinely-new summary
 
-The 120 NEW rows are led by availability, event/calendar, attendance, draft selection/order planning, communication/notification, participation history, organization public homepage, organization transaction processing, organization-safe benchmark products, Performance selection workspace/automation, export audit/admission, operator-service workflow, and reliable per-job economics. Existing playing XI does not prove availability, reserves, draft publication, batting/bowling planning or selection intelligence. Mock subscription billing does not prove transaction/payment processing.
+The 113 NEW rows are led by availability, recurrence/RSVP/notification delivery, attendance, draft selection/order planning, communication/notification, participation history, organization public homepage, organization transaction processing, organization-safe benchmark products, Performance selection workspace/automation, export audit/admission, operator-service workflow, and reliable per-job economics. Existing playing XI does not prove availability, reserves, draft publication, batting/bowling planning or selection intelligence. Mock subscription billing does not prove transaction/payment processing.
 
 ## 15. Owner decisions
 
