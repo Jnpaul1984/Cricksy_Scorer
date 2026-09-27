@@ -579,7 +579,10 @@ async def attendance_summary(
         if roster_player is None:
             raise _not_found("Roster player")
 
-    filters: list[object] = [OrganizationEvent.organization_id == organization_id]
+    filters: list[object] = [
+        OrganizationEvent.organization_id == organization_id,
+        OrganizationEvent.start_at <= dt.datetime.now(dt.UTC),
+    ]
     if from_at is not None:
         filters.append(OrganizationEvent.start_at >= from_at)
     if to_at is not None:
@@ -620,6 +623,8 @@ async def attendance_summary(
                 and roster_membership_id not in current_by_id
             ):
                 continue
+            if event.status == "cancelled" and roster_membership_id not in current_by_id:
+                continue
             states.append(
                 current_by_id[roster_membership_id].state
                 if roster_membership_id in current_by_id
@@ -627,6 +632,8 @@ async def attendance_summary(
             )
         else:
             included_ids = eligible_ids | (set(current_by_id) if team_id is None else set())
+            if event.status == "cancelled" and not set(current_by_id).intersection(included_ids):
+                continue
             states.extend(
                 current_by_id[membership_id].state if membership_id in current_by_id else None
                 for membership_id in included_ids

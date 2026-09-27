@@ -213,6 +213,168 @@ async def test_register_unmarked_filters_counts_and_percentage_denominator(
     assert excused_summary.json()["counts"]["attendance_percentage"] is None
 
 
+async def test_summary_includes_only_started_attendance_relevant_events(
+    school_client: TestClient,
+) -> None:
+    owner = register_user(school_client, "attendance-summary-inclusion@example.com")
+    organization = create_school(school_client, owner, "Summary Inclusion School")
+    team = _team(school_client, owner, organization["id"], "Summary XI")
+    players = [
+        _player(school_client, owner, organization["id"], name)
+        for name in ("Present Player", "Absent Player", "Excused Player")
+    ]
+    for player in players:
+        _assign(school_client, owner, organization["id"], team["id"], player["id"])
+
+    outside_range = _event(
+        school_client,
+        owner,
+        organization["id"],
+        start_at="2018-01-10T09:00:00-04:00",
+        participant_scope="teams",
+        team_ids=[team["id"]],
+    )
+    assert (
+        _record(
+            school_client,
+            owner,
+            organization["id"],
+            outside_range["id"],
+            players[0]["id"],
+            "present",
+        ).status_code
+        == 200
+    )
+
+    started = _event(
+        school_client,
+        owner,
+        organization["id"],
+        start_at="2020-01-10T09:00:00-04:00",
+        participant_scope="teams",
+        team_ids=[team["id"]],
+    )
+    for player, state in zip(players, ("present", "absent", "excused"), strict=True):
+        assert (
+            _record(
+                school_client,
+                owner,
+                organization["id"],
+                started["id"],
+                player["id"],
+                state,
+            ).status_code
+            == 200
+        )
+
+    cancelled_with_attendance = _event(
+        school_client,
+        owner,
+        organization["id"],
+        start_at="2020-02-10T09:00:00-04:00",
+        participant_scope="teams",
+        team_ids=[team["id"]],
+    )
+    assert (
+        _record(
+            school_client,
+            owner,
+            organization["id"],
+            cancelled_with_attendance["id"],
+            players[0]["id"],
+            "excused",
+        ).status_code
+        == 200
+    )
+    assert (
+        school_client.post(
+            f"/api/organizations/{organization['id']}/events/"
+            f"{cancelled_with_attendance['id']}/cancel",
+            headers=owner.headers,
+        ).status_code
+        == 200
+    )
+
+    cancelled_without_attendance = _event(
+        school_client,
+        owner,
+        organization["id"],
+        start_at="2020-03-10T09:00:00-04:00",
+        participant_scope="teams",
+        team_ids=[team["id"]],
+    )
+    assert (
+        school_client.post(
+            f"/api/organizations/{organization['id']}/events/"
+            f"{cancelled_without_attendance['id']}/cancel",
+            headers=owner.headers,
+        ).status_code
+        == 200
+    )
+
+    _event(
+        school_client,
+        owner,
+        organization["id"],
+        start_at="2099-01-10T09:00:00-04:00",
+        participant_scope="teams",
+        team_ids=[team["id"]],
+    )
+
+    summary_url = f"/api/organizations/{organization['id']}/attendance/summary"
+    unbounded = school_client.get(summary_url, headers=owner.headers)
+    assert unbounded.status_code == 200
+    assert unbounded.json()["event_count"] == 3
+
+    bounds = {"from_at": "2019-01-01T00:00:00Z", "to_at": "2021-01-01T00:00:00Z"}
+    bounded = school_client.get(summary_url, params=bounds, headers=owner.headers)
+    assert bounded.status_code == 200
+    assert bounded.json()["event_count"] == 2
+    assert bounded.json()["counts"] == {
+        "present": 1,
+        "absent": 1,
+        "excused": 2,
+        "unmarked": 2,
+        "total": 6,
+        "attendance_percentage": 50.0,
+    }
+
+    player_summary = school_client.get(
+        summary_url,
+        params={**bounds, "roster_membership_id": players[0]["id"]},
+        headers=owner.headers,
+    )
+    assert player_summary.status_code == 200
+    assert player_summary.json()["event_count"] == 2
+    assert player_summary.json()["counts"] == {
+        "present": 1,
+        "absent": 0,
+        "excused": 1,
+        "unmarked": 0,
+        "total": 2,
+        "attendance_percentage": 100.0,
+    }
+
+    team_summary = school_client.get(
+        summary_url,
+        params={**bounds, "team_id": team["id"]},
+        headers=owner.headers,
+    )
+    assert team_summary.status_code == 200
+    assert team_summary.json()["event_count"] == 2
+    assert team_summary.json()["counts"] == bounded.json()["counts"]
+
+    zero_denominator = school_client.get(
+        summary_url,
+        params={**bounds, "roster_membership_id": players[2]["id"]},
+        headers=owner.headers,
+    )
+    assert zero_denominator.status_code == 200
+    assert zero_denominator.json()["event_count"] == 1
+    assert zero_denominator.json()["counts"]["excused"] == 1
+    assert zero_denominator.json()["counts"]["attendance_percentage"] is None
+
+
 async def test_timing_cancellation_unsupported_input_and_session_recovery(
     school_client: TestClient,
 ) -> None:
