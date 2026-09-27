@@ -41,6 +41,8 @@ async def reset_db(_setup_db):
                 text(
                     "TRUNCATE TABLE organization_player_attendance_history, "
                     "organization_player_attendance, "
+                    "organization_selection_plan_players, "
+                    "organization_selection_plans, "
                     "organization_player_availability_history, "
                     "organization_player_availability, organization_availability_targets, "
                     "organization_event_roster_players, "
