@@ -55,7 +55,11 @@ function mountView(organizationType: FreeOrganizationType, role: SchoolMembershi
     source: 'system',
     effective_from: '',
     effective_until: null,
-    capabilities: ['organization_events', 'organization_availability'],
+    capabilities: [
+      'organization_events',
+      'organization_availability',
+      'organization_attendance',
+    ],
     excluded_capabilities: [],
     created_at: '',
     updated_at: '',
@@ -145,5 +149,35 @@ describe('shared organization events view', () => {
       includeCancelled: true,
       limit: 100,
     });
+  });
+
+  it('links an organization event to its private attendance register for staff', async () => {
+    vi.mocked(schoolApi.getOrganizationCalendar).mockResolvedValue({
+      items: [
+        {
+          source_type: 'organization_event',
+          source_id: 'event-a',
+          title: 'Training',
+          start_at: '2020-04-01T14:00:00Z',
+          end_at: null,
+          location: 'Main Ground',
+          status: 'scheduled',
+          event_type: 'training',
+          participant_scope: 'organization',
+          team_ids: [],
+          game_id: null,
+          competition_id: null,
+        },
+      ],
+      total: 1,
+      limit: 100,
+      offset: 0,
+    });
+    const wrapper = mountView('school', 'coach');
+    await flushPromises();
+
+    const attendanceLink = wrapper.get('.attendance-link');
+    expect(attendanceLink.text()).toBe('Attendance');
+    expect(attendanceLink.attributes('href')).toBe('/schools/school-a/attendance/event-a');
   });
 });

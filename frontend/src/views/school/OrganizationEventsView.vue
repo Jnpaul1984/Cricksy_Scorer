@@ -56,6 +56,11 @@ const formTitle = computed(() => (editingId.value ? 'Edit event' : 'Create event
 const canViewAvailability = computed(() =>
   (entitlement.value?.capabilities || []).includes('organization_availability'),
 );
+const canViewAttendance = computed(
+  () =>
+    canManageEvents.value &&
+    (entitlement.value?.capabilities || []).includes('organization_attendance'),
+);
 
 function localDateTime(value: string): string {
   const date = new Date(value);
@@ -275,6 +280,13 @@ onMounted(load);
             }/${item.source_id}`"
           >
             Availability
+          </RouterLink>
+          <RouterLink
+            v-if="canViewAttendance && item.source_type === 'organization_event'"
+            class="attendance-link"
+            :to="`${organizationBasePath}/${organizationId}/attendance/${item.source_id}`"
+          >
+            Attendance
           </RouterLink>
           <template v-if="canManageEvents && eventFor(item)?.status === 'scheduled'">
             <button type="button" class="secondary" @click="beginEdit(eventFor(item)!)">Edit</button>

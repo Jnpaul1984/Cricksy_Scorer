@@ -2500,7 +2500,7 @@ class OrganizationAvailabilityTarget(Base):
             ["organization_event_id", "organization_id"],
             ["organization_events.id", "organization_events.organization_id"],
             name="fk_organization_availability_targets_event_organization",
-            ondelete="CASCADE",
+            ondelete="RESTRICT",
         ),
         ForeignKeyConstraint(
             ["fixture_id", "fixture_tournament_id"],
@@ -2652,6 +2652,93 @@ class OrganizationPlayerAvailabilityHistory(Base):
     recorded_after_deadline: Mapped[bool] = mapped_column(
         Boolean, default=False, server_default="false", nullable=False
     )
+
+
+class OrganizationPlayerAttendance(Base):
+    """One deterministic current attendance state per event and roster player."""
+
+    __tablename__ = "organization_player_attendance"
+    __table_args__ = (
+        UniqueConstraint(
+            "organization_event_id",
+            "school_player_membership_id",
+            name="uq_organization_player_attendance_event_player",
+        ),
+        CheckConstraint(
+            "state IN ('present', 'absent', 'excused')",
+            name="ck_organization_player_attendance_state",
+        ),
+        ForeignKeyConstraint(
+            ["organization_event_id", "organization_id"],
+            ["organization_events.id", "organization_events.organization_id"],
+            name="fk_organization_player_attendance_event_organization",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["school_player_membership_id", "organization_id"],
+            ["school_player_memberships.id", "school_player_memberships.organization_id"],
+            name="fk_organization_player_attendance_roster_organization",
+            ondelete="RESTRICT",
+        ),
+        Index(
+            "ix_organization_player_attendance_event_state",
+            "organization_id",
+            "organization_event_id",
+            "state",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(
+        String, primary_key=True, default=lambda: str(uuid.uuid4()), nullable=False
+    )
+    organization_id: Mapped[str] = mapped_column(String, nullable=False)
+    organization_event_id: Mapped[str] = mapped_column(String, nullable=False)
+    school_player_membership_id: Mapped[str] = mapped_column(String, nullable=False)
+    state: Mapped[str] = mapped_column(String(16), nullable=False)
+    recorded_by_user_id: Mapped[str] = mapped_column(String, nullable=False)
+    recorded_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class OrganizationPlayerAttendanceHistory(Base):
+    """Append-only audit history for staff-recorded event attendance changes."""
+
+    __tablename__ = "organization_player_attendance_history"
+    __table_args__ = (
+        CheckConstraint(
+            "state IN ('present', 'absent', 'excused')",
+            name="ck_organization_player_attendance_history_state",
+        ),
+        ForeignKeyConstraint(
+            ["organization_event_id", "organization_id"],
+            ["organization_events.id", "organization_events.organization_id"],
+            name="fk_organization_player_attendance_history_event_organization",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["school_player_membership_id", "organization_id"],
+            ["school_player_memberships.id", "school_player_memberships.organization_id"],
+            name="fk_organization_player_attendance_history_roster_organization",
+            ondelete="RESTRICT",
+        ),
+        Index(
+            "ix_organization_player_attendance_history_event_player_time",
+            "organization_id",
+            "organization_event_id",
+            "school_player_membership_id",
+            "recorded_at",
+            "id",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(
+        String, primary_key=True, default=lambda: str(uuid.uuid4()), nullable=False
+    )
+    organization_id: Mapped[str] = mapped_column(String, nullable=False)
+    organization_event_id: Mapped[str] = mapped_column(String, nullable=False)
+    school_player_membership_id: Mapped[str] = mapped_column(String, nullable=False)
+    state: Mapped[str] = mapped_column(String(16), nullable=False)
+    recorded_by_user_id: Mapped[str] = mapped_column(String, nullable=False)
+    recorded_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
 class AiUsageLog(Base):

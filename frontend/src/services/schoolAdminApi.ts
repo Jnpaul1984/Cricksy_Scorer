@@ -6,6 +6,9 @@ import type {
   OrganizationAvailabilitySummary,
   OrganizationAvailabilityTarget,
   OrganizationAvailabilityTargetType,
+  OrganizationAttendanceFilter,
+  OrganizationAttendanceRegister,
+  OrganizationAttendanceState,
   OrganizationEvent,
   OrganizationEventInput,
   PlayerImportPreview,
@@ -33,6 +36,7 @@ import type {
   PublicSchoolScorecard,
   FreeOrganizationType,
   OrganizationPlayerAvailability,
+  OrganizationPlayerAttendance,
 } from '@/types/schoolAdmin';
 
 const orgPath = (organizationId: string, suffix = '') =>
@@ -171,6 +175,44 @@ export const recordOrganizationPlayerAvailability = (
     orgPath(
       organizationId,
       `/availability/${targetType}/${encodeURIComponent(targetId)}/players/${encodeURIComponent(rosterMembershipId)}`,
+    ),
+    { method: 'PUT', body: JSON.stringify({ state }) },
+  );
+
+export const getOrganizationAttendance = (
+  organizationId: string,
+  eventId: string,
+  options: {
+    state?: OrganizationAttendanceFilter;
+    teamId?: string;
+    limit?: number;
+    offset?: number;
+  } = {},
+) => {
+  const params = new URLSearchParams();
+  if (options.state) params.set('state', options.state);
+  if (options.teamId) params.set('team_id', options.teamId);
+  if (options.limit !== undefined) params.set('limit', String(options.limit));
+  if (options.offset !== undefined) params.set('offset', String(options.offset));
+  const query = params.toString();
+  return apiRequest<OrganizationAttendanceRegister>(
+    orgPath(
+      organizationId,
+      `/attendance/events/${encodeURIComponent(eventId)}${query ? `?${query}` : ''}`,
+    ),
+  );
+};
+
+export const recordOrganizationPlayerAttendance = (
+  organizationId: string,
+  eventId: string,
+  rosterMembershipId: string,
+  state: OrganizationAttendanceState,
+) =>
+  apiRequest<OrganizationPlayerAttendance>(
+    orgPath(
+      organizationId,
+      `/attendance/events/${encodeURIComponent(eventId)}/players/${encodeURIComponent(rosterMembershipId)}`,
     ),
     { method: 'PUT', body: JSON.stringify({ state }) },
   );
