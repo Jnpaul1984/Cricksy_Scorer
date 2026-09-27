@@ -1,9 +1,8 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
 import { RouterLink, useRoute } from 'vue-router';
 
 import { useSchoolContext } from '@/composables/useSchoolContext';
-import { getErrorMessage } from '@/services/api';
 import {
   getOrganizationAttendance,
   listSchoolTeams,
@@ -15,15 +14,11 @@ import type {
   OrganizationAttendanceState,
   SchoolTeam,
 } from '@/types/schoolAdmin';
+import { organizationOperationError } from '@/utils/organizationOperations';
 
 const route = useRoute();
-const {
-  organizationId,
-  organizationBasePath,
-  terminology,
-  membership,
-  entitlement,
-} = useSchoolContext();
+const { organizationId, organizationBasePath, terminology, membership, entitlement } =
+  useSchoolContext();
 const eventId = computed(() => String(route.params.eventId || ''));
 const canAccess = computed(
   () =>
@@ -37,6 +32,11 @@ const teamFilter = ref('');
 const loading = ref(true);
 const saving = ref(false);
 const error = ref('');
+let loadGeneration = 0;
+let resettingFilters = false;
+const eventStarted = computed(() =>
+  Boolean(register.value && new Date(register.value.start_at).getTime() <= Date.now()),
+);
 
 const states: Array<{ value: OrganizationAttendanceState; label: string }> = [
   { value: 'present', label: 'Present' },
@@ -49,55 +49,85 @@ function stateLabel(state: OrganizationAttendanceState | null): string {
   return states.find((item) => item.value === state)?.label || state;
 }
 
-async function load() {
+async function load(includeTeams = false) {
+  const generation = ++loadGeneration;
+  const currentOrganizationId = organizationId.value;
+  const currentEventId = eventId.value;
   if (!canAccess.value) {
+    register.value = null;
+    teams.value = [];
     loading.value = false;
     return;
   }
-  loading.value = true;
+  loading.value = register.value === null;
   error.value = '';
   try {
-    register.value = await getOrganizationAttendance(organizationId.value, eventId.value, {
+    const registerRequest = getOrganizationAttendance(currentOrganizationId, currentEventId, {
       state: stateFilter.value || undefined,
       teamId: teamFilter.value || undefined,
       limit: 500,
     });
+    const [nextRegister, nextTeams] = await Promise.all([
+      registerRequest,
+      includeTeams ? listSchoolTeams(currentOrganizationId) : Promise.resolve(teams.value),
+    ]);
+    if (
+      generation !== loadGeneration ||
+      organizationId.value !== currentOrganizationId ||
+      eventId.value !== currentEventId
+    )
+      return;
+    register.value = nextRegister;
+    teams.value = nextTeams;
   } catch (reason) {
-    error.value = getErrorMessage(reason);
+    if (generation !== loadGeneration) return;
+    error.value = organizationOperationError(reason, 'attendance register');
   } finally {
-    loading.value = false;
+    if (generation === loadGeneration) loading.value = false;
   }
 }
 
 async function record(rosterMembershipId: string, state: OrganizationAttendanceState) {
   saving.value = true;
   error.value = '';
+  const currentOrganizationId = organizationId.value;
+  const currentEventId = eventId.value;
   try {
     await recordOrganizationPlayerAttendance(
-      organizationId.value,
-      eventId.value,
+      currentOrganizationId,
+      currentEventId,
       rosterMembershipId,
       state,
     );
-    await load();
+    if (organizationId.value === currentOrganizationId) await load();
   } catch (reason) {
-    error.value = getErrorMessage(reason);
+    if (organizationId.value === currentOrganizationId) {
+      error.value = organizationOperationError(reason, 'attendance record');
+    }
   } finally {
     saving.value = false;
   }
 }
 
-watch([stateFilter, teamFilter], load);
-onMounted(async () => {
-  if (canAccess.value) {
-    try {
-      teams.value = await listSchoolTeams(organizationId.value);
-    } catch (reason) {
-      error.value = getErrorMessage(reason);
-    }
-  }
-  await load();
+watch([stateFilter, teamFilter], () => {
+  if (!resettingFilters) void load();
 });
+watch(
+  [organizationId, eventId, canAccess],
+  async () => {
+    ++loadGeneration;
+    resettingFilters = true;
+    register.value = null;
+    teams.value = [];
+    error.value = '';
+    stateFilter.value = '';
+    teamFilter.value = '';
+    await nextTick();
+    resettingFilters = false;
+    await load(true);
+  },
+  { immediate: true },
+);
 </script>
 
 <template>
@@ -119,11 +149,27 @@ onMounted(async () => {
       <p v-if="register.event_status === 'cancelled'" class="notice">
         This event is cancelled. Existing attendance remains visible, but cannot be changed.
       </p>
+      <p v-else-if="!eventStarted" class="notice" data-test="attendance-future-notice">
+        Attendance can be viewed now, but it cannot be recorded until the event starts at
+        {{ new Date(register.start_at).toLocaleString() }}.
+      </p>
       <section class="summary" aria-label="Attendance summary">
-        <div><strong>{{ register.counts.present }}</strong><span>Present</span></div>
-        <div><strong>{{ register.counts.absent }}</strong><span>Absent</span></div>
-        <div><strong>{{ register.counts.excused }}</strong><span>Excused</span></div>
-        <div><strong>{{ register.counts.unmarked }}</strong><span>Unmarked</span></div>
+        <div>
+          <strong>{{ register.counts.present }}</strong
+          ><span>Present</span>
+        </div>
+        <div>
+          <strong>{{ register.counts.absent }}</strong
+          ><span>Absent</span>
+        </div>
+        <div>
+          <strong>{{ register.counts.excused }}</strong
+          ><span>Excused</span>
+        </div>
+        <div>
+          <strong>{{ register.counts.unmarked }}</strong
+          ><span>Unmarked</span>
+        </div>
       </section>
       <p class="metric">
         Attendance:
@@ -136,7 +182,7 @@ onMounted(async () => {
         </strong>
       </p>
 
-      <section class="controls">
+      <section class="controls" :aria-busy="loading || saving">
         <label>
           Filter by state
           <select v-model="stateFilter" data-test="attendance-filter">
@@ -173,7 +219,7 @@ onMounted(async () => {
             <small v-if="!player.eligible">Retained history · no longer eligible to update</small>
           </div>
           <div
-            v-if="player.eligible && register.event_status !== 'cancelled'"
+            v-if="player.eligible && register.event_status !== 'cancelled' && eventStarted"
             class="state-actions"
           >
             <button

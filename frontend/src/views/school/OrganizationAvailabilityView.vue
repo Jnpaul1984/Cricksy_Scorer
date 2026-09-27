@@ -1,9 +1,8 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
 import { RouterLink, useRoute } from 'vue-router';
 
 import { useSchoolContext } from '@/composables/useSchoolContext';
-import { getErrorMessage } from '@/services/api';
 import {
   getOrganizationAvailability,
   listSchoolTeams,
@@ -17,15 +16,11 @@ import type {
   OrganizationAvailabilityTargetType,
   SchoolTeam,
 } from '@/types/schoolAdmin';
+import { organizationOperationError } from '@/utils/organizationOperations';
 
 const route = useRoute();
-const {
-  organizationId,
-  organizationBasePath,
-  terminology,
-  membership,
-  entitlement,
-} = useSchoolContext();
+const { organizationId, organizationBasePath, terminology, membership, entitlement } =
+  useSchoolContext();
 const targetType = computed(
   () => String(route.params.targetType || 'event') as OrganizationAvailabilityTargetType,
 );
@@ -44,6 +39,8 @@ const deadline = ref('');
 const loading = ref(true);
 const saving = ref(false);
 const error = ref('');
+let loadGeneration = 0;
+let resettingFilters = false;
 
 const states: Array<{ value: OrganizationAvailabilityState; label: string }> = [
   { value: 'available', label: 'Available' },
@@ -63,45 +60,70 @@ function stateLabel(state: OrganizationAvailabilityState | null): string {
   return states.find((item) => item.value === state)?.label || state;
 }
 
-async function load() {
+async function load(includeTeams = false) {
+  const generation = ++loadGeneration;
+  const currentOrganizationId = organizationId.value;
+  const currentTargetType = targetType.value;
+  const currentTargetId = targetId.value;
   if (!canView.value) {
+    summary.value = null;
+    teams.value = [];
     loading.value = false;
     return;
   }
-  loading.value = true;
+  loading.value = summary.value === null;
   error.value = '';
   try {
-    summary.value = await getOrganizationAvailability(
-      organizationId.value,
-      targetType.value,
-      targetId.value,
+    const summaryRequest = getOrganizationAvailability(
+      currentOrganizationId,
+      currentTargetType,
+      currentTargetId,
       {
         state: stateFilter.value || undefined,
         teamId: teamFilter.value || undefined,
         limit: 500,
       },
     );
-    deadline.value = localDateTime(summary.value.target.response_deadline);
+    const [nextSummary, nextTeams] = await Promise.all([
+      summaryRequest,
+      includeTeams ? listSchoolTeams(currentOrganizationId) : Promise.resolve(teams.value),
+    ]);
+    if (
+      generation !== loadGeneration ||
+      organizationId.value !== currentOrganizationId ||
+      targetId.value !== currentTargetId ||
+      targetType.value !== currentTargetType
+    )
+      return;
+    summary.value = nextSummary;
+    teams.value = nextTeams;
+    deadline.value = localDateTime(nextSummary.target.response_deadline);
   } catch (reason) {
-    error.value = getErrorMessage(reason);
+    if (generation !== loadGeneration) return;
+    error.value = organizationOperationError(reason, 'availability register');
   } finally {
-    loading.value = false;
+    if (generation === loadGeneration) loading.value = false;
   }
 }
 
 async function saveDeadline() {
   saving.value = true;
   error.value = '';
+  const currentOrganizationId = organizationId.value;
+  const currentTargetType = targetType.value;
+  const currentTargetId = targetId.value;
   try {
     await updateOrganizationAvailabilityDeadline(
-      organizationId.value,
-      targetType.value,
-      targetId.value,
+      currentOrganizationId,
+      currentTargetType,
+      currentTargetId,
       deadline.value ? new Date(deadline.value).toISOString() : null,
     );
-    await load();
+    if (organizationId.value === currentOrganizationId) await load();
   } catch (reason) {
-    error.value = getErrorMessage(reason);
+    if (organizationId.value === currentOrganizationId) {
+      error.value = organizationOperationError(reason, 'availability deadline');
+    }
   } finally {
     saving.value = false;
   }
@@ -110,33 +132,47 @@ async function saveDeadline() {
 async function record(rosterMembershipId: string, state: OrganizationAvailabilityState) {
   saving.value = true;
   error.value = '';
+  const currentOrganizationId = organizationId.value;
+  const currentTargetType = targetType.value;
+  const currentTargetId = targetId.value;
   try {
     await recordOrganizationPlayerAvailability(
-      organizationId.value,
-      targetType.value,
-      targetId.value,
+      currentOrganizationId,
+      currentTargetType,
+      currentTargetId,
       rosterMembershipId,
       state,
     );
-    await load();
+    if (organizationId.value === currentOrganizationId) await load();
   } catch (reason) {
-    error.value = getErrorMessage(reason);
+    if (organizationId.value === currentOrganizationId) {
+      error.value = organizationOperationError(reason, 'availability response');
+    }
   } finally {
     saving.value = false;
   }
 }
 
-watch([stateFilter, teamFilter], load);
-onMounted(async () => {
-  if (canView.value) {
-    try {
-      teams.value = await listSchoolTeams(organizationId.value);
-    } catch (reason) {
-      error.value = getErrorMessage(reason);
-    }
-  }
-  await load();
+watch([stateFilter, teamFilter], () => {
+  if (!resettingFilters) void load();
 });
+watch(
+  [organizationId, targetType, targetId, canView],
+  async () => {
+    ++loadGeneration;
+    resettingFilters = true;
+    summary.value = null;
+    teams.value = [];
+    deadline.value = '';
+    error.value = '';
+    stateFilter.value = '';
+    teamFilter.value = '';
+    await nextTick();
+    resettingFilters = false;
+    await load(true);
+  },
+  { immediate: true },
+);
 </script>
 
 <template>
@@ -157,13 +193,25 @@ onMounted(async () => {
 
     <template v-if="canView && summary && !loading">
       <section class="summary" aria-label="Availability summary">
-        <div><strong>{{ summary.counts.available }}</strong><span>Available</span></div>
-        <div><strong>{{ summary.counts.unavailable }}</strong><span>Unavailable</span></div>
-        <div><strong>{{ summary.counts.maybe }}</strong><span>Maybe</span></div>
-        <div><strong>{{ summary.counts.no_response }}</strong><span>No response</span></div>
+        <div>
+          <strong>{{ summary.counts.available }}</strong
+          ><span>Available</span>
+        </div>
+        <div>
+          <strong>{{ summary.counts.unavailable }}</strong
+          ><span>Unavailable</span>
+        </div>
+        <div>
+          <strong>{{ summary.counts.maybe }}</strong
+          ><span>Maybe</span>
+        </div>
+        <div>
+          <strong>{{ summary.counts.no_response }}</strong
+          ><span>No response</span>
+        </div>
       </section>
 
-      <section class="controls">
+      <section class="controls" :aria-busy="loading || saving">
         <label>
           Filter by state
           <select v-model="stateFilter" data-test="availability-filter">
@@ -217,8 +265,11 @@ onMounted(async () => {
               Staff-recorded {{ new Date(player.recorded_at).toLocaleString() }}
               <span v-if="player.recorded_after_deadline"> · after deadline</span>
             </small>
+            <small v-if="!player.eligible" class="retained-note">
+              Retained response · no longer eligible to update
+            </small>
           </div>
-          <div v-if="canManage" class="state-actions">
+          <div v-if="canManage && player.eligible" class="state-actions">
             <button
               v-for="option in states"
               :key="option.value"
@@ -293,6 +344,10 @@ onMounted(async () => {
 }
 .late-note {
   flex-basis: 100%;
+  color: #ffd580;
+}
+.retained-note {
+  display: block;
   color: #ffd580;
 }
 .player-list {

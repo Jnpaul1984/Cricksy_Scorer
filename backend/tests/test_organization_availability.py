@@ -518,6 +518,32 @@ async def test_event_eligibility_tenant_isolation_and_inactive_memberships(
     assert overview.status_code == 200
     assert overview.json()["counts"]["total"] == 0
 
+    retained_overview = school_client.get(
+        _availability_url(organization["id"], "event", team_event["id"]),
+        headers=owner.headers,
+    )
+    assert retained_overview.status_code == 200
+    assert retained_overview.json()["counts"] == {
+        "available": 1,
+        "unavailable": 0,
+        "maybe": 0,
+        "no_response": 0,
+        "total": 1,
+    }
+    assert retained_overview.json()["players"] == [
+        {
+            "roster_membership_id": eligible["id"],
+            "player_profile_id": eligible["player_profile_id"],
+            "player_name": "Eligible Player",
+            "team_ids": [],
+            "eligible": False,
+            "state": "available",
+            "recorded_by_user_id": owner.id,
+            "recorded_at": retained_overview.json()["players"][0]["recorded_at"],
+            "recorded_after_deadline": False,
+        }
+    ]
+
 
 async def test_fixture_availability_uses_only_normalized_active_team_rosters(
     school_client: TestClient,
