@@ -49,6 +49,7 @@ Checklist cells cite these exact current-code anchors. A citation is evidence of
 - **E-COMP:** `backend/services/school_competition_service.py::{create_competition,create_fixture,link_fixture_game,standings,publication,public_scorecard}`; corresponding routes/views; tests `test_school_competition_publication.py`, `test_club_free.py`.
 - **E-EVENT:** `backend/sql_app/models.py::{OrganizationEvent,OrganizationEventTeam,OrganizationEventRosterPlayer}`; `backend/services/organization_event_service.py::{create_event,list_events,update_event,cancel_event,calendar}`; `backend/routes/organization_events.py`; `frontend/src/views/school/OrganizationEventsView.vue`; tests `backend/tests/test_organization_events.py`, `frontend/tests/unit/OrganizationEventsView.spec.ts`.
 - **E-AVL:** `backend/sql_app/models.py::{OrganizationAvailabilityTarget,OrganizationPlayerAvailability,OrganizationPlayerAvailabilityHistory}`; `backend/services/organization_availability_service.py::{availability_summary,update_target_deadline,record_player_availability,player_availability_history}`; `backend/routes/organization_availability.py`; `frontend/src/views/school/OrganizationAvailabilityView.vue`; tests `backend/tests/test_organization_availability.py`, `frontend/tests/unit/OrganizationAvailabilityView.spec.ts`.
+- **E-ATT:** `backend/sql_app/models.py::{OrganizationPlayerAttendance,OrganizationPlayerAttendanceHistory}`; `backend/services/organization_attendance_service.py::{attendance_register,record_player_attendance,player_attendance_history,attendance_summary}`; `backend/routes/organization_attendance.py`; `frontend/src/views/school/OrganizationAttendanceView.vue`; tests `backend/tests/test_organization_attendance.py`, `frontend/tests/unit/OrganizationAttendanceView.spec.ts`.
 - **E-TERMS:** `frontend/src/router/index.ts::organizationChildren`; `frontend/src/composables/{useSchoolContext,useOrganizationTerminology}.ts`; `frontend/tests/unit/ClubFreeViews.spec.ts`.
 - **E-PLAYER:** `backend/sql_app/models.py::{PlayerProfile,PlayerAchievement,PlayerForm}`; `backend/routes/player_analytics.py::{get_player_career_summary_endpoint,get_player_yearly_stats,get_player_dismissals,get_player_form_analysis,get_player_consistency_score,get_batting_leaderboard}`; `PlayerProfileView.vue`; tests `test_player_profiles.py`, `test_player_pro_features.py`, `PlayerProfileView.spec.ts`.
 - **E-FAN:** `backend/sql_app/models.py::FanFavorite`; `backend/routes/fan_mode.py::{create_favorite,list_favorites,delete_favorite}`; `frontend/src/views/PlayerProfileView.vue::{loadFavorites,toggleFavorite}`; `frontend/src/services/api.ts::{getFanFavorites,createFanFavorite,deleteFanFavorite}`.
@@ -63,7 +64,7 @@ Checklist cells cite these exact current-code anchors. A citation is evidence of
 - **E-VIDEO:** `backend/sql_app/models.py::{VideoSession,VideoAnalysisJob,VideoAnalysisChunk,VideoMomentMarker,TargetZone}`; `backend/routes/coach_pro_plus.py`; `CoachProPlusVideoSessionsView.vue`; upload/stream/quota/history/PDF tests. Ownership is personal/global-role or legacy `User.org_id`, not current membership tenancy.
 - **E-VIDEO-JOB:** `backend/services/{s3_service,sqs_service,video_job_recovery,video_quota_service,video_chunking}.py`; `backend/scripts/run_video_analysis_worker.py`; tests `test_video_job_recovery.py`, `test_video_quota.py`, `test_video_upload_s3_key_persistence.py`, `test_video_stream_url_presign.py`.
 - **E-VIDEO-RESULT:** `backend/services/{coach_plus_analysis,coach_report_v2,coach_report_presentation,coach_strength_consistency}.py`; analysis/repetition/phase/report/longitudinal endpoints in `coach_pro_plus.py`; report/V2/integration tests.
-- **E-ABSENT:** repository-wide model/route/service/view/test filename and symbol searches found no organization attendance, announcement, chat, guardian, organization-payment, donation, or fundraising runtime surface. `backend/core/live_bus.py` and Socket.IO carry scoring state, not private/team messaging.
+- **E-ABSENT:** repository-wide model/route/service/view/test filename and symbol searches found no organization announcement, chat, guardian, organization-payment, donation, or fundraising runtime surface. `backend/core/live_bus.py` and Socket.IO carry scoring state, not private/team messaging.
 
 ## 3. Current shared Free baseline — protected
 
@@ -131,14 +132,14 @@ Checklist cells cite these exact current-code anchors. A citation is evidence of
 
 | ID | Capability | Product | Status | Cost | Existing evidence | Required work | Dependencies | Owner decision? | Controls |
 |---|---|---|---|---|---|---|---|---|---|
-| FREE-ATT-001 | Training attendance | Free | NEW | LOW | E-ABSENT | Add event participant attendance. | Training events | No | C-DB |
-| FREE-ATT-002 | Event attendance | Free | NEW | LOW | E-ABSENT | Generalize attendance across event types. | Events | No | C-DB |
-| FREE-ATT-003 | Coach/admin marking | Free | NEW | LOW | Membership roles exist (E-ORG); no attendance mutation. | Define role matrix and audit. | FREE-ATT-001 | No | C-DB |
-| FREE-ATT-004 | Present / Absent / Excused | Free | NEW | LOW | E-ABSENT | Add constrained states. | FREE-ATT-001 | No | C-DB |
-| FREE-ATT-005 | Attendance history | Free | NEW | LOW | E-ABSENT | Retain event/member history and actor. | FREE-ATT-001 | No | C-DB |
-| FREE-ATT-006 | Player attendance percentage | Free | NEW | LOW | E-ABSENT | Deterministic denominator/status rules. | Attendance history | No | C-DB |
-| FREE-ATT-007 | Team participation metrics | Free | NEW | LOW | E-ABSENT | Add deterministic Team aggregates. | Attendance history | No | C-DB |
-| FREE-ATT-008 | Season attendance summary | Free | NEW | LOW | E-ABSENT | Define season/calendar bounds and summary. | Events, attendance | No | C-DB |
+| FREE-ATT-001 | Training attendance | Free | BUILT | LOW | E-ATT records event-only attendance against roster identity. | Preserve event-only truth; do not infer match participation. | Training events | No | C-DB |
+| FREE-ATT-002 | Event attendance | Free | BUILT | LOW | E-ATT supports every organization event type through one shared domain. | Preserve fixture/Game separation. | Events | No | C-DB |
+| FREE-ATT-003 | Coach/admin marking | Free | BUILT | LOW | E-ATT enforces Owner/Admin/Coach access and excludes Scorer/Viewer. | Preserve contextual membership authority and actor audit. | FREE-ATT-001 | No | C-DB |
+| FREE-ATT-004 | Present / Absent / Excused | Free | BUILT | LOW | E-ATT persists exactly three constrained states; unmarked is computed. | Preserve constrained vocabulary. | FREE-ATT-001 | No | C-DB |
+| FREE-ATT-005 | Attendance history | Free | BUILT | LOW | E-ATT appends actor/timestamp history only for real transitions and prevents history-erasing event deletion. | Preserve append-only history and retention constraints. | FREE-ATT-001 | No | C-DB |
+| FREE-ATT-006 | Player attendance percentage | Free | BUILT | LOW | E-ATT `attendance_summary`; tests lock present/(present+absent), excluding excused/unmarked, with null zero denominator. | Preserve deterministic denominator. | Attendance history | No | C-DB |
+| FREE-ATT-007 | Team participation metrics | Free | BUILT | LOW | E-ATT summary filters by active normalized Team-roster membership. | Preserve normalized roster authority. | Attendance history | No | C-DB |
+| FREE-ATT-008 | Season attendance summary | Free | BUILT | LOW | E-ATT supports timezone-aware date-range summaries over organization events. | Caller supplies governed season/calendar bounds. | Events, attendance | No | C-DB |
 | FREE-ATT-009 | Junior/minor privacy | Free | OWNER DECISION | UNKNOWN | No guardian/minor policy layer (E-ABSENT). | Lock visibility, correction, retention and exports. | Privacy/legal policy | Yes — minor handling | C-DB |
 
 ### 4.4 Selection and match preparation
@@ -618,9 +619,9 @@ Counts are mechanically derived from the 340 capability rows above. Header, evid
 
 | Status | Count |
 |---|---:|
-| BUILT | 64 |
+| BUILT | 72 |
 | ADAPT | 114 |
-| NEW | 106 |
+| NEW | 98 |
 | DEFER | 3 |
 | OWNER DECISION | 53 |
 | **Total** | **340** |
@@ -647,7 +648,7 @@ Counts are mechanically derived from the 340 capability rows above. Header, evid
 
 ## 12. Already-built summary
 
-The 64 BUILT rows are concentrated in the protected shared Free foundation: organization creation/membership/roles; one School/Club capability source; canonical roster and reusable Teams; import; saved/external match setup; XI/captain/keeper; organization scoring; fixtures/results/competitions/basic statistics; controlled public scorecards; contextual terminology and tenant isolation; the shared organization/Team calendar, training/other events, scoped participants, fixture projection, timezone contract and upcoming view; and structured event/fixture availability with deadlines, immutable staff history, Team summaries and filtering. Canonical career/batting/bowling/achievement truth and the structural separation of personal versus organization entitlements also exist. Private video is not organization-ready, but four negative public-exposure guardrails are true today: no public signup, no unrestricted unauthenticated upload, no public organization Elite promise and no organization-wide video self-service entitlement.
+The 72 BUILT rows are concentrated in the protected shared Free foundation: organization creation/membership/roles; one School/Club capability source; canonical roster and reusable Teams; import; saved/external match setup; XI/captain/keeper; organization scoring; fixtures/results/competitions/basic statistics; controlled public scorecards; contextual terminology and tenant isolation; the shared organization/Team calendar, training/other events, scoped participants, fixture projection, timezone contract and upcoming view; structured event/fixture availability with deadlines, immutable staff history, Team summaries and filtering; and private event attendance with constrained states, immutable actor history and deterministic player/Team/date-range metrics. Canonical career/batting/bowling/achievement truth and the structural separation of personal versus organization entitlements also exist. Private video is not organization-ready, but four negative public-exposure guardrails are true today: no public signup, no unrestricted unauthenticated upload, no public organization Elite promise and no organization-wide video self-service entitlement.
 
 ## 13. Adaptation summary
 
@@ -663,7 +664,7 @@ The 114 ADAPT rows are existing technology, not organization-ready product promi
 
 ## 14. Genuinely-new summary
 
-The 106 NEW rows are led by selection integration of availability, recurrence/RSVP/notification delivery, attendance, draft selection/order planning, communication/notification, participation history, organization public homepage, organization transaction processing, organization-safe benchmark products, Performance selection workspace/automation, export audit/admission, operator-service workflow, and reliable per-job economics. Existing playing XI does not prove reserves, draft publication, batting/bowling planning or selection intelligence. Mock subscription billing does not prove transaction/payment processing.
+The 98 NEW rows are led by selection integration of availability, recurrence/RSVP/notification delivery, draft selection/order planning, communication/notification, broader participation reporting, organization public homepage, organization transaction processing, organization-safe benchmark products, Performance selection workspace/automation, export audit/admission, operator-service workflow, and reliable per-job economics. Existing playing XI does not prove reserves, draft publication, batting/bowling planning or selection intelligence. Mock subscription billing does not prove transaction/payment processing.
 
 ## 15. Owner decisions
 

@@ -16,15 +16,21 @@ from backend.services import organization_service
 from backend.services.organization_entitlement_service import require_organization_capability
 from backend.sql_app.models import (
     Fixture,
+    OrganizationAvailabilityTarget,
     OrganizationEvent,
     OrganizationEventRosterPlayer,
     OrganizationEventTeam,
     OrganizationMembership,
+    OrganizationPlayerAttendance,
+    OrganizationPlayerAttendanceHistory,
+    OrganizationPlayerAvailability,
+    OrganizationPlayerAvailabilityHistory,
     SchoolPlayerMembership,
     Team,
     Tournament,
 )
 from sqlalchemy import delete, func, or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = structlog.get_logger(__name__)
@@ -107,13 +113,15 @@ async def _event(
     *,
     organization_id: str,
     event_id: str,
+    lock: bool = False,
 ) -> OrganizationEvent:
-    event = await db.scalar(
-        select(OrganizationEvent).where(
-            OrganizationEvent.id == event_id,
-            OrganizationEvent.organization_id == organization_id,
-        )
+    statement = select(OrganizationEvent).where(
+        OrganizationEvent.id == event_id,
+        OrganizationEvent.organization_id == organization_id,
     )
+    if lock:
+        statement = statement.with_for_update()
+    event = await db.scalar(statement)
     if event is None:
         raise _not_found()
     return event
@@ -436,7 +444,7 @@ async def update_event(
         actor_user_id=actor_user_id,
         allowed_roles=EVENT_WRITE_ROLES,
     )
-    current = await _event(db, organization_id=organization_id, event_id=event_id)
+    current = await _event(db, organization_id=organization_id, event_id=event_id, lock=True)
     if current.status == "cancelled":
         raise OrganizationEventServiceError(409, "Cancelled events cannot be updated")
     current_record = (await _records(db, [current]))[0]
@@ -491,7 +499,7 @@ async def cancel_event(
         actor_user_id=actor_user_id,
         allowed_roles=EVENT_WRITE_ROLES,
     )
-    event = await _event(db, organization_id=organization_id, event_id=event_id)
+    event = await _event(db, organization_id=organization_id, event_id=event_id, lock=True)
     if event.status != "cancelled":
         event.status = "cancelled"
         event.cancelled_at = dt.datetime.now(dt.UTC)
@@ -500,6 +508,75 @@ async def cancel_event(
         await db.commit()
         await db.refresh(event)
     return (await _records(db, [event]))[0]
+
+
+async def delete_event(
+    db: AsyncSession,
+    *,
+    organization_id: str,
+    event_id: str,
+    actor_user_id: str,
+) -> None:
+    """Delete an event only when no retained availability or attendance audit exists."""
+
+    await _authorize(
+        db,
+        organization_id=organization_id,
+        actor_user_id=actor_user_id,
+        allowed_roles=EVENT_WRITE_ROLES,
+    )
+    event = await _event(db, organization_id=organization_id, event_id=event_id, lock=True)
+    attendance_exists = await db.scalar(
+        select(OrganizationPlayerAttendanceHistory.id).where(
+            OrganizationPlayerAttendanceHistory.organization_id == organization_id,
+            OrganizationPlayerAttendanceHistory.organization_event_id == event_id,
+        )
+    ) or await db.scalar(
+        select(OrganizationPlayerAttendance.id).where(
+            OrganizationPlayerAttendance.organization_id == organization_id,
+            OrganizationPlayerAttendance.organization_event_id == event_id,
+        )
+    )
+    if attendance_exists is not None:
+        raise OrganizationEventServiceError(
+            409, "Event cannot be deleted while retained attendance history exists"
+        )
+
+    target = await db.scalar(
+        select(OrganizationAvailabilityTarget)
+        .where(
+            OrganizationAvailabilityTarget.organization_id == organization_id,
+            OrganizationAvailabilityTarget.target_type == "event",
+            OrganizationAvailabilityTarget.organization_event_id == event_id,
+        )
+        .with_for_update()
+    )
+    if target is not None:
+        availability_exists = await db.scalar(
+            select(OrganizationPlayerAvailabilityHistory.id).where(
+                OrganizationPlayerAvailabilityHistory.organization_id == organization_id,
+                OrganizationPlayerAvailabilityHistory.target_id == target.id,
+            )
+        ) or await db.scalar(
+            select(OrganizationPlayerAvailability.id).where(
+                OrganizationPlayerAvailability.organization_id == organization_id,
+                OrganizationPlayerAvailability.target_id == target.id,
+            )
+        )
+        if availability_exists is not None:
+            raise OrganizationEventServiceError(
+                409, "Event cannot be deleted while retained availability history exists"
+            )
+        await db.delete(target)
+
+    await db.delete(event)
+    try:
+        await db.commit()
+    except IntegrityError as exc:
+        await db.rollback()
+        raise OrganizationEventServiceError(
+            409, "Event cannot be deleted while retained operational history exists"
+        ) from exc
 
 
 async def calendar(

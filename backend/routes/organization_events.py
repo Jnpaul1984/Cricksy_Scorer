@@ -203,6 +203,27 @@ async def cancel_event(
     return _response(record)
 
 
+@router.delete(
+    "/{organization_id}/events/{event_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_event(
+    organization_id: str,
+    event_id: str,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> None:
+    try:
+        await organization_event_service.delete_event(
+            db,
+            organization_id=organization_id,
+            event_id=event_id,
+            actor_user_id=current_user.id,
+        )
+    except SERVICE_ERRORS as exc:
+        _raise_service_error(exc)
+
+
 @router.get(
     "/{organization_id}/calendar",
     response_model=OrganizationCalendarResponse,

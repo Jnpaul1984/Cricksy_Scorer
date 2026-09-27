@@ -362,6 +362,52 @@ export interface OrganizationPlayerAvailability {
   recorded_after_deadline: boolean;
 }
 
+export type OrganizationAttendanceState = 'present' | 'absent' | 'excused';
+export type OrganizationAttendanceFilter = OrganizationAttendanceState | 'unmarked';
+
+export interface OrganizationAttendanceCounts {
+  present: number;
+  absent: number;
+  excused: number;
+  unmarked: number;
+  total: number;
+  attendance_percentage: number | null;
+}
+
+export interface OrganizationAttendancePlayer {
+  roster_membership_id: string;
+  player_profile_id: string;
+  player_name: string;
+  team_ids: string[];
+  eligible: boolean;
+  state: OrganizationAttendanceState | null;
+  recorded_by_user_id: string | null;
+  recorded_at: string | null;
+}
+
+export interface OrganizationAttendanceRegister {
+  organization_id: string;
+  event_id: string;
+  event_title: string;
+  event_status: string;
+  start_at: string;
+  counts: OrganizationAttendanceCounts;
+  players: OrganizationAttendancePlayer[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface OrganizationPlayerAttendance {
+  organization_id: string;
+  event_id: string;
+  roster_membership_id: string;
+  player_profile_id: string;
+  state: OrganizationAttendanceState;
+  recorded_by_user_id: string;
+  recorded_at: string;
+}
+
 export interface SchoolStandingEntry {
   team_id: string;
   team_name: string;

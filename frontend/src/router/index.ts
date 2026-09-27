@@ -69,6 +69,11 @@ const organizationAdminChildren = (namePrefix: 'school' | 'club'): RouteRecordRa
     name: `${namePrefix}-availability`,
     component: () => import('@/views/school/OrganizationAvailabilityView.vue'),
   },
+  {
+    path: 'attendance/:eventId',
+    name: `${namePrefix}-attendance`,
+    component: () => import('@/views/school/OrganizationAttendanceView.vue'),
+  },
 ]
 
 const router = createRouter({

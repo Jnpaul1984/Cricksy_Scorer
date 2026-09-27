@@ -38,6 +38,7 @@ FREE_ORGANIZATION_CAPABILITIES = frozenset(
         "school_competitions",
         "organization_events",
         "organization_availability",
+        "organization_attendance",
     }
 )
 FREE_ORGANIZATION_EXCLUDED_CAPABILITIES = frozenset(
