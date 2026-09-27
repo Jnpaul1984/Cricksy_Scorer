@@ -18,7 +18,7 @@ from backend.services import (
 )
 from backend.sql_app.database import get_db
 from backend.sql_app.models import User
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(prefix="/api/organizations", tags=["organization-selection-plans"])
@@ -62,6 +62,29 @@ async def create_or_open_selection_plan(
             organization_id=organization_id,
             actor_user_id=current_user.id,
             payload=payload,
+        )
+    except SERVICE_ERRORS as exc:
+        _raise_service_error(exc)
+
+
+@router.get(
+    "/{organization_id}/selection-plans",
+    response_model=OrganizationSelectionPlanResponse,
+)
+async def get_selection_plan_by_context(
+    organization_id: str,
+    team_id: Annotated[str, Query(min_length=1)],
+    fixture_id: Annotated[str, Query(min_length=1)],
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> OrganizationSelectionPlanResponse:
+    try:
+        return await organization_selection_plan_service.get_selection_plan_by_context(
+            db,
+            organization_id=organization_id,
+            team_id=team_id,
+            fixture_id=fixture_id,
+            actor_user_id=current_user.id,
         )
     except SERVICE_ERRORS as exc:
         _raise_service_error(exc)

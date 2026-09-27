@@ -288,6 +288,33 @@ async def get_selection_plan(
     return await _response(db, plan)
 
 
+async def get_selection_plan_by_context(
+    db: AsyncSession,
+    *,
+    organization_id: str,
+    team_id: str,
+    fixture_id: str,
+    actor_user_id: str,
+) -> OrganizationSelectionPlanResponse:
+    """Return an existing current plan without creating or inferring resources."""
+    await _authorize(
+        db,
+        organization_id=organization_id,
+        actor_user_id=actor_user_id,
+        allowed_roles=SELECTION_READ_ROLES,
+    )
+    plan = await db.scalar(
+        select(OrganizationSelectionPlan).where(
+            OrganizationSelectionPlan.organization_id == organization_id,
+            OrganizationSelectionPlan.team_id == team_id,
+            OrganizationSelectionPlan.fixture_id == fixture_id,
+        )
+    )
+    if plan is None:
+        raise _not_found("Selection plan")
+    return await _response(db, plan)
+
+
 async def _validate_active_candidates(
     db: AsyncSession,
     *,

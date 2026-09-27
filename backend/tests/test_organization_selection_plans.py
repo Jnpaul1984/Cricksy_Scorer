@@ -134,6 +134,20 @@ def _create_plan(
     )
 
 
+def _lookup_plan(
+    client: TestClient,
+    actor: RegisteredUser,
+    organization_id: str,
+    team_id: str,
+    fixture_id: str,
+):
+    return client.get(
+        f"/api/organizations/{organization_id}/selection-plans",
+        params={"team_id": team_id, "fixture_id": fixture_id},
+        headers=actor.headers,
+    )
+
+
 def _update_plan(
     client: TestClient,
     actor: RegisteredUser,
@@ -204,6 +218,123 @@ async def test_shared_school_club_draft_creation_candidates_and_no_user_identity
     async with session_maker() as session:
         assert await session.scalar(select(func.count(User.id))) == 1
         assert await session.get(PlayerProfile, player["player_profile_id"]) is not None
+
+
+async def test_read_only_roles_discover_existing_plan_by_team_fixture_context(
+    school_client: TestClient,
+) -> None:
+    owner = register_user(school_client, "selection-lookup-owner@example.com")
+    scorer = register_user(school_client, "selection-lookup-scorer@example.com")
+    viewer = register_user(school_client, "selection-lookup-viewer@example.com")
+    foreign_owner = register_user(school_client, "selection-lookup-foreign@example.com")
+    organization = create_school(school_client, owner, "Lookup School")
+    add_membership(school_client, owner, organization["id"], scorer.id, "scorer")
+    add_membership(school_client, owner, organization["id"], viewer.id, "viewer")
+
+    team = _team(school_client, owner, organization["id"], "Lookup XI")
+    opponent = _team(school_client, owner, organization["id"], "Lookup Opponent")
+    fixture = _fixture(
+        school_client,
+        owner,
+        organization["id"],
+        team["id"],
+        opponent["id"],
+        name="Lookup Cup",
+    )
+    created = _create_plan(
+        school_client,
+        owner,
+        organization["id"],
+        team["id"],
+        fixture["id"],
+    )
+    assert created.status_code == 201, created.text
+    plan = created.json()
+
+    for actor in (scorer, viewer):
+        discovered = _lookup_plan(
+            school_client,
+            actor,
+            organization["id"],
+            team["id"],
+            fixture["id"],
+        )
+        assert discovered.status_code == 200, discovered.text
+        assert discovered.json()["id"] == plan["id"]
+
+    by_id = school_client.get(
+        f"/api/organizations/{organization['id']}/selection-plans/{plan['id']}",
+        headers=viewer.headers,
+    )
+    assert by_id.status_code == 200, by_id.text
+    assert by_id.json()["id"] == plan["id"]
+
+    missing_team = _team(school_client, owner, organization["id"], "Missing Plan XI")
+    missing_opponent = _team(
+        school_client,
+        owner,
+        organization["id"],
+        "Missing Plan Opponent",
+    )
+    missing_fixture = _fixture(
+        school_client,
+        owner,
+        organization["id"],
+        missing_team["id"],
+        missing_opponent["id"],
+        name="Missing Plan Cup",
+    )
+    for actor in (scorer, viewer):
+        denied_create = _create_plan(
+            school_client,
+            actor,
+            organization["id"],
+            missing_team["id"],
+            missing_fixture["id"],
+        )
+        assert denied_create.status_code == 403
+
+    missing = _lookup_plan(
+        school_client,
+        viewer,
+        organization["id"],
+        missing_team["id"],
+        missing_fixture["id"],
+    )
+    assert missing.status_code == 404
+    assert missing.json()["detail"] == "Selection plan not found"
+
+    foreign = create_club(school_client, foreign_owner, "Foreign Lookup Club")
+    foreign_team = _team(school_client, foreign_owner, foreign["id"], "Foreign Lookup XI")
+    foreign_opponent = _team(
+        school_client,
+        foreign_owner,
+        foreign["id"],
+        "Foreign Lookup Opponent",
+    )
+    foreign_fixture = _fixture(
+        school_client,
+        foreign_owner,
+        foreign["id"],
+        foreign_team["id"],
+        foreign_opponent["id"],
+        name="Foreign Lookup Cup",
+    )
+    foreign_contexts = (
+        (foreign_team["id"], fixture["id"]),
+        (team["id"], foreign_fixture["id"]),
+        (foreign_team["id"], foreign_fixture["id"]),
+    )
+    for foreign_team_id, foreign_fixture_id in foreign_contexts:
+        hidden = _lookup_plan(
+            school_client,
+            scorer,
+            organization["id"],
+            foreign_team_id,
+            foreign_fixture_id,
+        )
+        assert hidden.status_code == 404
+        assert hidden.json()["detail"] == "Selection plan not found"
 
 
 async def test_aggregate_update_revision_idempotency_roles_and_draft_rules(
