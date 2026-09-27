@@ -18,4 +18,16 @@ describe('organization operations error presentation', () => {
       'The service could not be reached. Check your connection and try again.',
     );
   });
+
+  it.each([500, 502, 503])('sanitizes HTTP %s backend failures', (status) => {
+    const sensitiveDetail =
+      'IntegrityError: relation fk_org_event_42 failed at /srv/app/routes/private.py';
+    const reason = Object.assign(new Error(sensitiveDetail), { status });
+    const message = organizationOperationError(reason, 'event');
+
+    expect(message).toBe('The service encountered a problem. Please try again.');
+    expect(message).not.toContain(sensitiveDetail);
+    expect(message).not.toContain('fk_org_event_42');
+    expect(message).not.toContain('/srv/app');
+  });
 });

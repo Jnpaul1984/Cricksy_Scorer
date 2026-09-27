@@ -6,6 +6,9 @@ export function organizationOperationError(reason: unknown, subject: string): st
   const status = (reason as HttpError | null)?.status;
   const detail = getErrorMessage(reason);
 
+  if (typeof status === 'number' && status >= 500) {
+    return 'The service encountered a problem. Please try again.';
+  }
   if (status === 403) return `You do not have permission to manage this ${subject}.`;
   if (status === 404)
     return `This ${subject} was not found or is not available in this organization.`;
