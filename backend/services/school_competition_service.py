@@ -213,6 +213,12 @@ async def delete_competition(
         fixture_ids=[fixture.id for fixture in fixtures],
         conflict_detail="Competition cannot be deleted while availability history is retained",
     )
+    await _remove_draft_selection_plans(
+        db,
+        organization_id=organization_id,
+        fixture_ids=[fixture.id for fixture in fixtures],
+        conflict_detail="Competition cannot be deleted while retained selection evidence exists",
+    )
     await db.delete(competition)
     await db.commit()
 
@@ -374,6 +380,36 @@ async def _remove_history_free_availability_targets(
         raise SchoolCompetitionServiceError(409, conflict_detail)
     for target in targets:
         await db.delete(target)
+    await db.flush()
+
+
+async def _remove_draft_selection_plans(
+    db: AsyncSession,
+    *,
+    organization_id: str,
+    fixture_ids: list[str],
+    conflict_detail: str,
+) -> None:
+    """Remove only 2A draft state before ordinary Fixture/competition deletion."""
+    if not fixture_ids:
+        return
+    plans = list(
+        (
+            await db.scalars(
+                select(models.OrganizationSelectionPlan)
+                .where(
+                    models.OrganizationSelectionPlan.organization_id == organization_id,
+                    models.OrganizationSelectionPlan.fixture_id.in_(fixture_ids),
+                )
+                .order_by(models.OrganizationSelectionPlan.id)
+                .with_for_update()
+            )
+        ).all()
+    )
+    if any(plan.status != "draft" for plan in plans):
+        raise SchoolCompetitionServiceError(409, conflict_detail)
+    for plan in plans:
+        await db.delete(plan)
     await db.flush()
 
 
@@ -556,6 +592,12 @@ async def delete_fixture(
         organization_id=organization_id,
         fixture_ids=[fixture.id],
         conflict_detail="Fixture cannot be deleted while availability history is retained",
+    )
+    await _remove_draft_selection_plans(
+        db,
+        organization_id=organization_id,
+        fixture_ids=[fixture.id],
+        conflict_detail="Fixture cannot be deleted while retained selection evidence exists",
     )
     await db.delete(fixture)
     await db.commit()

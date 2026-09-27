@@ -2741,6 +2741,139 @@ class OrganizationPlayerAttendanceHistory(Base):
     recorded_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
+class OrganizationSelectionPlan(Base):
+    """One current private draft selection plan for an organization Team and Fixture."""
+
+    __tablename__ = "organization_selection_plans"
+    __table_args__ = (
+        UniqueConstraint(
+            "id",
+            "organization_id",
+            name="uq_organization_selection_plans_id_organization",
+        ),
+        UniqueConstraint(
+            "organization_id",
+            "team_id",
+            "fixture_id",
+            name="uq_organization_selection_plans_context",
+        ),
+        CheckConstraint(
+            "status IN ('draft', 'published')",
+            name="ck_organization_selection_plans_status",
+        ),
+        CheckConstraint(
+            "revision >= 1",
+            name="ck_organization_selection_plans_revision",
+        ),
+        ForeignKeyConstraint(
+            ["team_id", "organization_id"],
+            ["teams.id", "teams.organization_id"],
+            name="fk_organization_selection_plans_team_organization",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["fixture_id", "fixture_tournament_id"],
+            ["fixtures.id", "fixtures.tournament_id"],
+            name="fk_organization_selection_plans_fixture_tournament",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["fixture_tournament_id", "organization_id"],
+            ["tournaments.id", "tournaments.organization_id"],
+            name="fk_organization_selection_plans_tournament_organization",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["captain_roster_membership_id", "organization_id"],
+            ["school_player_memberships.id", "school_player_memberships.organization_id"],
+            name="fk_organization_selection_plans_captain_organization",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["wicketkeeper_roster_membership_id", "organization_id"],
+            ["school_player_memberships.id", "school_player_memberships.organization_id"],
+            name="fk_organization_selection_plans_wicketkeeper_organization",
+            ondelete="RESTRICT",
+        ),
+        Index(
+            "ix_organization_selection_plans_fixture",
+            "organization_id",
+            "fixture_id",
+        ),
+        Index(
+            "ix_organization_selection_plans_team_status",
+            "organization_id",
+            "team_id",
+            "status",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(
+        String, primary_key=True, default=lambda: str(uuid.uuid4()), nullable=False
+    )
+    organization_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    team_id: Mapped[str] = mapped_column(String, nullable=False)
+    fixture_id: Mapped[str] = mapped_column(String, nullable=False)
+    fixture_tournament_id: Mapped[str] = mapped_column(String, nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(16), default="draft", server_default="draft", nullable=False
+    )
+    revision: Mapped[int] = mapped_column(Integer, default=1, server_default="1", nullable=False)
+    captain_roster_membership_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    wicketkeeper_roster_membership_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    created_by_user_id: Mapped[str] = mapped_column(String, nullable=False)
+    updated_by_user_id: Mapped[str] = mapped_column(String, nullable=False)
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+
+class OrganizationSelectionPlanPlayer(Base):
+    """Normalized planned XI or reserve membership for a selection plan."""
+
+    __tablename__ = "organization_selection_plan_players"
+    __table_args__ = (
+        CheckConstraint(
+            "selection_role IN ('xi', 'reserve')",
+            name="ck_organization_selection_plan_players_role",
+        ),
+        ForeignKeyConstraint(
+            ["selection_plan_id", "organization_id"],
+            ["organization_selection_plans.id", "organization_selection_plans.organization_id"],
+            name="fk_organization_selection_plan_players_plan_organization",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["school_player_membership_id", "organization_id"],
+            ["school_player_memberships.id", "school_player_memberships.organization_id"],
+            name="fk_organization_selection_plan_players_roster_organization",
+            ondelete="RESTRICT",
+        ),
+        Index(
+            "ix_organization_selection_plan_players_plan_role",
+            "organization_id",
+            "selection_plan_id",
+            "selection_role",
+        ),
+    )
+
+    selection_plan_id: Mapped[str] = mapped_column(String, primary_key=True)
+    school_player_membership_id: Mapped[str] = mapped_column(String, primary_key=True)
+    organization_id: Mapped[str] = mapped_column(String, nullable=False)
+    selection_role: Mapped[str] = mapped_column(String(16), nullable=False)
+
+
 class AiUsageLog(Base):
     """Tracks AI/LLM feature usage for billing and analytics."""
 
