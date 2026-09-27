@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, reactive, ref, watch } from 'vue';
 import { RouterLink } from 'vue-router';
 
 import { useSchoolContext } from '@/composables/useSchoolContext';
-import { getErrorMessage } from '@/services/api';
 import {
   cancelOrganizationEvent,
   createOrganizationEvent,
+  deleteOrganizationEvent,
   getOrganizationCalendar,
   listOrganizationEvents,
   listSchoolPlayers,
@@ -22,6 +22,7 @@ import type {
   SchoolRosterPlayer,
   SchoolTeam,
 } from '@/types/schoolAdmin';
+import { organizationOperationError } from '@/utils/organizationOperations';
 
 const {
   organizationId,
@@ -38,7 +39,9 @@ const players = ref<SchoolRosterPlayer[]>([]);
 const loading = ref(true);
 const saving = ref(false);
 const error = ref('');
+const notice = ref('');
 const editingId = ref<string | null>(null);
+let loadGeneration = 0;
 
 const form = reactive({
   eventType: 'training' as OrganizationEventType,
@@ -99,41 +102,58 @@ function eventPayload(): OrganizationEventInput {
 }
 
 async function load() {
-  if (!canViewEvents.value) return;
+  const generation = ++loadGeneration;
+  const currentOrganizationId = organizationId.value;
+  events.value = [];
+  calendarItems.value = [];
+  teams.value = [];
+  players.value = [];
+  if (!canViewEvents.value) {
+    loading.value = false;
+    return;
+  }
   loading.value = true;
   error.value = '';
   try {
     const [eventResult, calendar, teamRows, playerRows] = await Promise.all([
-      listOrganizationEvents(organizationId.value, { includeCancelled: true, limit: 100 }),
-      getOrganizationCalendar(organizationId.value, { includeCancelled: true, limit: 100 }),
-      listSchoolTeams(organizationId.value),
-      listSchoolPlayers(organizationId.value),
+      listOrganizationEvents(currentOrganizationId, { includeCancelled: true, limit: 100 }),
+      getOrganizationCalendar(currentOrganizationId, { includeCancelled: true, limit: 100 }),
+      listSchoolTeams(currentOrganizationId),
+      listSchoolPlayers(currentOrganizationId),
     ]);
+    if (generation !== loadGeneration || organizationId.value !== currentOrganizationId) return;
     events.value = eventResult.items;
     calendarItems.value = calendar.items;
     teams.value = teamRows;
     players.value = playerRows;
   } catch (reason) {
-    error.value = getErrorMessage(reason);
+    if (generation !== loadGeneration) return;
+    error.value = organizationOperationError(reason, 'calendar');
   } finally {
-    loading.value = false;
+    if (generation === loadGeneration) loading.value = false;
   }
 }
 
 async function save() {
   saving.value = true;
   error.value = '';
+  notice.value = '';
+  const currentOrganizationId = organizationId.value;
   try {
     const payload = eventPayload();
     if (editingId.value) {
-      await updateOrganizationEvent(organizationId.value, editingId.value, payload);
+      await updateOrganizationEvent(currentOrganizationId, editingId.value, payload);
     } else {
-      await createOrganizationEvent(organizationId.value, payload);
+      await createOrganizationEvent(currentOrganizationId, payload);
     }
+    if (organizationId.value !== currentOrganizationId) return;
+    notice.value = editingId.value ? 'Event updated.' : 'Event created.';
     resetForm();
     await load();
   } catch (reason) {
-    error.value = getErrorMessage(reason);
+    if (organizationId.value === currentOrganizationId) {
+      error.value = organizationOperationError(reason, 'event');
+    }
   } finally {
     saving.value = false;
   }
@@ -157,13 +177,63 @@ function beginEdit(event: OrganizationEvent) {
 async function cancel(event: OrganizationEvent) {
   if (!window.confirm(`Cancel ${event.title}? The event will remain in calendar history.`)) return;
   error.value = '';
+  notice.value = '';
+  saving.value = true;
+  const currentOrganizationId = organizationId.value;
   try {
-    await cancelOrganizationEvent(organizationId.value, event.id);
+    await cancelOrganizationEvent(currentOrganizationId, event.id);
+    if (organizationId.value !== currentOrganizationId) return;
+    notice.value = 'Event cancelled. Its operational history remains retained.';
     if (editingId.value === event.id) resetForm();
     await load();
   } catch (reason) {
-    error.value = getErrorMessage(reason);
+    if (organizationId.value === currentOrganizationId) {
+      error.value = organizationOperationError(reason, 'event');
+    }
+  } finally {
+    saving.value = false;
   }
+}
+
+async function remove(event: OrganizationEvent) {
+  if (!window.confirm(`Delete ${event.title}? Events with retained history cannot be deleted.`))
+    return;
+  error.value = '';
+  notice.value = '';
+  saving.value = true;
+  const currentOrganizationId = organizationId.value;
+  try {
+    await deleteOrganizationEvent(currentOrganizationId, event.id);
+    if (organizationId.value !== currentOrganizationId) return;
+    if (editingId.value === event.id) resetForm();
+    notice.value = 'Event deleted.';
+    await load();
+  } catch (reason) {
+    if (organizationId.value === currentOrganizationId) {
+      error.value = organizationOperationError(reason, 'event');
+    }
+  } finally {
+    saving.value = false;
+  }
+}
+
+function audience(item: OrganizationCalendarItem): string {
+  if (item.source_type === 'fixture') {
+    const names = item.team_ids.map((id) => teams.value.find((team) => team.id === id)?.name || id);
+    return names.length ? names.join(' vs ') : 'Fixture teams';
+  }
+  const event = eventFor(item);
+  if (!event || event.participant_scope === 'organization') {
+    return `Whole ${terminology.value.kindLabelLower}`;
+  }
+  if (event.participant_scope === 'teams') {
+    return event.team_ids
+      .map((id) => teams.value.find((team) => team.id === id)?.name || 'Unknown team')
+      .join(', ');
+  }
+  return event.roster_membership_ids
+    .map((id) => players.value.find((player) => player.id === id)?.player_name || 'Retained player')
+    .join(', ');
 }
 
 function eventFor(item: OrganizationCalendarItem): OrganizationEvent | undefined {
@@ -172,7 +242,16 @@ function eventFor(item: OrganizationCalendarItem): OrganizationEvent | undefined
     : undefined;
 }
 
-onMounted(load);
+watch(
+  [organizationId, canViewEvents],
+  () => {
+    ++loadGeneration;
+    resetForm();
+    notice.value = '';
+    void load();
+  },
+  { immediate: true },
+);
 </script>
 
 <template>
@@ -189,8 +268,15 @@ onMounted(load);
     <p v-if="!canViewEvents" class="notice">Events are not enabled for this organization.</p>
     <p v-else-if="loading" role="status">Loading calendar…</p>
     <p v-if="error" class="error" role="alert">{{ error }}</p>
+    <p v-if="notice" class="notice" role="status">{{ notice }}</p>
 
-    <form v-if="canManageEvents" class="event-form" data-test="event-form" @submit.prevent="save">
+    <form
+      v-if="canManageEvents"
+      class="event-form"
+      data-test="event-form"
+      :aria-busy="saving"
+      @submit.prevent="save"
+    >
       <h3>{{ formTitle }}</h3>
       <label>
         Type
@@ -269,7 +355,20 @@ onMounted(load);
             <time :datetime="item.start_at">{{ new Date(item.start_at).toLocaleString() }}</time>
             <span v-if="item.location"> · {{ item.location }}</span>
           </p>
-          <p>Status: {{ item.status }}</p>
+          <dl class="event-details">
+            <div>
+              <dt>Participants</dt>
+              <dd>{{ item.participant_scope || 'Fixture teams' }}</dd>
+            </div>
+            <div>
+              <dt>Audience</dt>
+              <dd>{{ audience(item) }}</dd>
+            </div>
+            <div>
+              <dt>Status</dt>
+              <dd>{{ item.status }}</dd>
+            </div>
+          </dl>
         </div>
         <div class="actions">
           <RouterLink
@@ -289,9 +388,33 @@ onMounted(load);
             Attendance
           </RouterLink>
           <template v-if="canManageEvents && eventFor(item)?.status === 'scheduled'">
-            <button type="button" class="secondary" @click="beginEdit(eventFor(item)!)">Edit</button>
-            <button type="button" class="danger" @click="cancel(eventFor(item)!)">Cancel</button>
+            <button
+              type="button"
+              class="secondary"
+              :disabled="saving"
+              @click="beginEdit(eventFor(item)!)"
+            >
+              Edit
+            </button>
+            <button
+              type="button"
+              class="danger"
+              :disabled="saving"
+              @click="cancel(eventFor(item)!)"
+            >
+              Cancel
+            </button>
           </template>
+          <button
+            v-if="canManageEvents && eventFor(item)"
+            type="button"
+            class="danger secondary"
+            :disabled="saving"
+            :data-test="`delete-event-${item.source_id}`"
+            @click="remove(eventFor(item)!)"
+          >
+            Delete
+          </button>
         </div>
       </article>
     </section>
@@ -324,6 +447,18 @@ onMounted(load);
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.85rem;
+  min-width: 0;
+}
+.event-form > * {
+  min-width: 0;
+}
+.event-form input,
+.event-form select,
+.event-form textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
 }
 .event-form h3,
 .wide {
@@ -351,8 +486,27 @@ label {
 .calendar-card p {
   margin: 0.25rem 0;
 }
+.event-details {
+  display: grid;
+  gap: 0.3rem;
+  margin: 0.65rem 0 0;
+}
+.event-details div {
+  display: grid;
+  grid-template-columns: 7rem minmax(0, 1fr);
+  gap: 0.5rem;
+}
+.event-details dt {
+  color: #b8c2dc;
+  font-weight: 700;
+}
+.event-details dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
 .actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.6rem;
 }
 .secondary {

@@ -71,6 +71,7 @@ class OrganizationAvailabilityPlayer(BaseModel):
     player_profile_id: str
     player_name: str
     team_ids: list[str]
+    eligible: bool
     state: AvailabilityState | None
     recorded_by_user_id: str | None
     recorded_at: dt.datetime | None

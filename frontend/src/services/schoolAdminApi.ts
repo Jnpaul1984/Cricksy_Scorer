@@ -108,6 +108,10 @@ export const cancelOrganizationEvent = (organizationId: string, eventId: string)
     orgPath(organizationId, `/events/${encodeURIComponent(eventId)}/cancel`),
     { method: 'POST' },
   );
+export const deleteOrganizationEvent = (organizationId: string, eventId: string) =>
+  apiRequest<void>(orgPath(organizationId, `/events/${encodeURIComponent(eventId)}`), {
+    method: 'DELETE',
+  });
 export const getOrganizationCalendar = (
   organizationId: string,
   options: { upcoming?: boolean; includeCancelled?: boolean; teamId?: string; limit?: number } = {},

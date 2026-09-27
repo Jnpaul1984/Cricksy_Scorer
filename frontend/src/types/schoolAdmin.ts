@@ -335,6 +335,7 @@ export interface OrganizationAvailabilityPlayer {
   player_profile_id: string;
   player_name: string;
   team_ids: string[];
+  eligible: boolean;
   state: OrganizationAvailabilityState | null;
   recorded_by_user_id: string | null;
   recorded_at: string | null;

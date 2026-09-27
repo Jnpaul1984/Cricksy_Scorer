@@ -151,6 +151,7 @@ const showAdminNav = computed(() => auth.isSuper)
 <style scoped>
 .app {
   min-height: 100vh;
+  min-width: 0;
   display: grid;
   grid-template-rows: auto 1fr auto;
   background: linear-gradient(135deg, #0f1115, #151926 35%, #1c2340);
@@ -289,6 +290,7 @@ const showAdminNav = computed(() => auth.isSuper)
 
 /* Main */
 .app-main {
+  min-width: 0;
   padding: 0;
 }
 
@@ -299,5 +301,25 @@ const showAdminNav = computed(() => auth.isSuper)
   text-align: center;
   background: rgba(16, 22, 36, 0.85);
   border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+@media (max-width: 700px) {
+  .app-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem 0.7rem;
+  }
+  .user-menu {
+    flex-basis: 100%;
+    flex-wrap: wrap;
+    padding-top: 0.5rem;
+    padding-left: 0;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    border-left: 0;
+  }
 }
 </style>

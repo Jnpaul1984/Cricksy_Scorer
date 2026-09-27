@@ -1,8 +1,11 @@
 import { flushPromises, mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { computed, ref } from 'vue';
+import { computed, ref, type Ref } from 'vue';
 
-import { organizationBasePath, organizationTerminology } from '@/composables/useOrganizationTerminology';
+import {
+  organizationBasePath,
+  organizationTerminology,
+} from '@/composables/useOrganizationTerminology';
 import { schoolContextKey, type SchoolContext } from '@/composables/useSchoolContext';
 import * as schoolApi from '@/services/schoolAdminApi';
 import type { SchoolMembershipRole } from '@/types/schoolAdmin';
@@ -14,10 +17,13 @@ vi.mock('vue-router', () => ({
   RouterLink: { props: ['to'], template: '<a :href="String(to)"><slot /></a>' },
 }));
 
-function context(role: SchoolMembershipRole): SchoolContext {
+function context(
+  role: SchoolMembershipRole,
+  organizationId: Ref<string> = ref('school-a'),
+): SchoolContext {
   const writable = computed(() => ['owner', 'admin', 'coach'].includes(role));
   return {
-    organizationId: computed(() => 'school-a'),
+    organizationId: computed(() => organizationId.value),
     organizationType: computed(() => 'school'),
     organizationBasePath: computed(() => organizationBasePath('school')),
     terminology: computed(() => organizationTerminology('school')),
@@ -104,9 +110,9 @@ const register = {
   offset: 0,
 };
 
-function mountView(role: SchoolMembershipRole) {
+function mountView(role: SchoolMembershipRole, organizationId: Ref<string> = ref('school-a')) {
   return mount(OrganizationAttendanceView, {
-    global: { provide: { [schoolContextKey as symbol]: context(role) } },
+    global: { provide: { [schoolContextKey as symbol]: context(role, organizationId) } },
   });
 }
 
@@ -163,10 +169,55 @@ describe('shared organization attendance view', () => {
     await wrapper.get('[data-test="attendance-filter"]').setValue('unmarked');
     await wrapper.get('[data-test="attendance-team-filter"]').setValue('team-a');
     await flushPromises();
-    expect(schoolApi.getOrganizationAttendance).toHaveBeenLastCalledWith(
-      'school-a',
-      'event-a',
-      { state: 'unmarked', teamId: 'team-a', limit: 500 },
+    expect(schoolApi.getOrganizationAttendance).toHaveBeenLastCalledWith('school-a', 'event-a', {
+      state: 'unmarked',
+      teamId: 'team-a',
+      limit: 500,
+    });
+  });
+
+  it('shows a future-event restriction and exposes no mutation controls', async () => {
+    vi.mocked(schoolApi.getOrganizationAttendance).mockResolvedValue({
+      ...register,
+      start_at: '2099-01-01T10:00:00Z',
+    });
+    const wrapper = mountView('coach');
+    await flushPromises();
+
+    expect(wrapper.get('[data-test="attendance-future-notice"]').text()).toContain(
+      'cannot be recorded until the event starts',
     );
+    expect(wrapper.find('[data-test="set-present-player-a"]').exists()).toBe(false);
+  });
+
+  it('suppresses old attendance data and resets filters on organization change', async () => {
+    let resolveOld: (value: typeof register) => void = () => undefined;
+    const oldRequest = new Promise<typeof register>((resolve) => {
+      resolveOld = resolve;
+    });
+    vi.mocked(schoolApi.getOrganizationAttendance)
+      .mockReturnValueOnce(oldRequest)
+      .mockResolvedValueOnce({
+        ...register,
+        organization_id: 'club-b',
+        event_title: 'Club Training',
+        players: [{ ...register.players[1], player_name: 'Club Player' }],
+      });
+    const organizationId = ref('school-a');
+    const wrapper = mountView('coach', organizationId);
+    await wrapper.vm.$nextTick();
+    organizationId.value = 'club-b';
+    await flushPromises();
+
+    expect(wrapper.text()).toContain('Club Training');
+    expect(wrapper.text()).toContain('Club Player');
+    resolveOld({ ...register, event_title: 'Old School Training' });
+    await flushPromises();
+    expect(wrapper.text()).not.toContain('Old School Training');
+    expect(schoolApi.getOrganizationAttendance).toHaveBeenLastCalledWith('club-b', 'event-a', {
+      state: undefined,
+      teamId: undefined,
+      limit: 500,
+    });
   });
 });

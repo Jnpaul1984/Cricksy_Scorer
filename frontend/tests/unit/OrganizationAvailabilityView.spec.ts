@@ -1,8 +1,11 @@
 import { flushPromises, mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { computed, ref } from 'vue';
+import { computed, ref, type Ref } from 'vue';
 
-import { organizationBasePath, organizationTerminology } from '@/composables/useOrganizationTerminology';
+import {
+  organizationBasePath,
+  organizationTerminology,
+} from '@/composables/useOrganizationTerminology';
 import { schoolContextKey, type SchoolContext } from '@/composables/useSchoolContext';
 import * as schoolApi from '@/services/schoolAdminApi';
 import type { SchoolMembershipRole } from '@/types/schoolAdmin';
@@ -18,10 +21,13 @@ vi.mock('vue-router', () => ({
   RouterLink: { props: ['to'], template: '<a :href="String(to)"><slot /></a>' },
 }));
 
-function context(role: SchoolMembershipRole): SchoolContext {
+function context(
+  role: SchoolMembershipRole,
+  organizationId: Ref<string> = ref('school-a'),
+): SchoolContext {
   const writable = computed(() => ['owner', 'admin', 'coach'].includes(role));
   return {
-    organizationId: computed(() => 'school-a'),
+    organizationId: computed(() => organizationId.value),
     organizationType: computed(() => 'school'),
     organizationBasePath: computed(() => organizationBasePath('school')),
     terminology: computed(() => organizationTerminology('school')),
@@ -83,6 +89,7 @@ const summary = {
       player_profile_id: 'profile-a',
       player_name: 'Alice Able',
       team_ids: ['team-a'],
+      eligible: true,
       state: 'available' as const,
       recorded_by_user_id: 'actor-a',
       recorded_at: '2099-01-01T10:00:00Z',
@@ -93,6 +100,7 @@ const summary = {
       player_profile_id: 'profile-b',
       player_name: 'Bob Baker',
       team_ids: [],
+      eligible: true,
       state: null,
       recorded_by_user_id: null,
       recorded_at: null,
@@ -104,9 +112,9 @@ const summary = {
   offset: 0,
 };
 
-function mountView(role: SchoolMembershipRole) {
+function mountView(role: SchoolMembershipRole, organizationId: Ref<string> = ref('school-a')) {
   return mount(OrganizationAvailabilityView, {
-    global: { provide: { [schoolContextKey as symbol]: context(role) } },
+    global: { provide: { [schoolContextKey as symbol]: context(role, organizationId) } },
   });
 }
 
@@ -173,6 +181,51 @@ describe('shared organization availability view', () => {
       'event',
       'event-a',
       { state: 'no_response', teamId: 'team-a', limit: 500 },
+    );
+  });
+
+  it('shows retained responses without mutation controls', async () => {
+    vi.mocked(schoolApi.getOrganizationAvailability).mockResolvedValue({
+      ...summary,
+      players: [{ ...summary.players[0], eligible: false }],
+      counts: { available: 1, unavailable: 0, maybe: 0, no_response: 0, total: 1 },
+      total: 1,
+    });
+    const wrapper = mountView('owner');
+    await flushPromises();
+
+    expect(wrapper.text()).toContain('Retained response · no longer eligible to update');
+    expect(wrapper.find('[data-test="set-available-player-a"]').exists()).toBe(false);
+  });
+
+  it('clears filters and suppresses a stale response when the organization changes', async () => {
+    let resolveOld: (value: typeof summary) => void = () => undefined;
+    const oldRequest = new Promise<typeof summary>((resolve) => {
+      resolveOld = resolve;
+    });
+    vi.mocked(schoolApi.getOrganizationAvailability)
+      .mockReturnValueOnce(oldRequest)
+      .mockResolvedValueOnce({
+        ...summary,
+        target: { ...summary.target, title: 'New Club Training' },
+        players: [{ ...summary.players[1], player_name: 'Club Player' }],
+      });
+    const organizationId = ref('school-a');
+    const wrapper = mountView('owner', organizationId);
+    await wrapper.vm.$nextTick();
+    organizationId.value = 'club-b';
+    await flushPromises();
+
+    expect(wrapper.text()).toContain('New Club Training');
+    expect(wrapper.text()).toContain('Club Player');
+    resolveOld({ ...summary, target: { ...summary.target, title: 'Old School Training' } });
+    await flushPromises();
+    expect(wrapper.text()).not.toContain('Old School Training');
+    expect(schoolApi.getOrganizationAvailability).toHaveBeenLastCalledWith(
+      'club-b',
+      'event',
+      'event-a',
+      { state: undefined, teamId: undefined, limit: 500 },
     );
   });
 });

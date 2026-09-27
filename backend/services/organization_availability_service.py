@@ -466,21 +466,44 @@ async def availability_summary(
     target = await _target(db, source=source)
     eligible = await _eligible_players(db, source=source, team_id=team_id)
     current_by_player: dict[str, OrganizationPlayerAvailability] = {}
-    if target is not None and eligible:
+    if target is not None:
         current_rows = await db.scalars(
             select(OrganizationPlayerAvailability).where(
                 OrganizationPlayerAvailability.organization_id == organization_id,
                 OrganizationPlayerAvailability.target_id == target.id,
-                OrganizationPlayerAvailability.school_player_membership_id.in_(
-                    [record.membership.id for record in eligible]
-                ),
             )
         )
         current_by_player = {row.school_player_membership_id: row for row in current_rows.all()}
 
+    eligible_by_id = {record.membership.id: record for record in eligible}
+    missing_ids = set(current_by_player) - set(eligible_by_id)
+    retained: dict[str, EligiblePlayer] = {}
+    if missing_ids and team_id is None:
+        rows = list(
+            (
+                await db.execute(
+                    select(SchoolPlayerMembership, PlayerProfile)
+                    .join(
+                        PlayerProfile,
+                        PlayerProfile.player_id == SchoolPlayerMembership.player_profile_id,
+                    )
+                    .where(
+                        SchoolPlayerMembership.organization_id == organization_id,
+                        SchoolPlayerMembership.id.in_(missing_ids),
+                    )
+                )
+            ).tuples()
+        )
+        retained = {
+            membership.id: EligiblePlayer(membership, profile, ()) for membership, profile in rows
+        }
+
+    records = list(eligible_by_id.values()) + list(retained.values())
+    records.sort(key=lambda record: (record.profile.player_name, record.membership.id))
+
     counts = {"available": 0, "unavailable": 0, "maybe": 0, "no_response": 0}
     players: list[OrganizationAvailabilityPlayer] = []
-    for record in eligible:
+    for record in records:
         current = current_by_player.get(record.membership.id)
         current_state = current.state if current is not None else "no_response"
         counts[current_state] += 1
@@ -492,6 +515,7 @@ async def availability_summary(
                 player_profile_id=record.profile.player_id,
                 player_name=record.profile.player_name,
                 team_ids=list(record.team_ids),
+                eligible=record.membership.id in eligible_by_id,
                 state=current.state if current is not None else None,
                 recorded_by_user_id=(current.recorded_by_user_id if current is not None else None),
                 recorded_at=_utc(current.recorded_at) if current is not None else None,
@@ -507,7 +531,7 @@ async def availability_summary(
             unavailable=counts["unavailable"],
             maybe=counts["maybe"],
             no_response=counts["no_response"],
-            total=len(eligible),
+            total=len(records),
         ),
         players=players[offset : offset + limit],
         total=len(players),
