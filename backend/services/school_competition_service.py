@@ -393,6 +393,16 @@ async def _remove_draft_selection_plans(
     """Remove only 2A draft state before ordinary Fixture/competition deletion."""
     if not fixture_ids:
         return
+    retained_publication = await db.scalar(
+        select(models.OrganizationSelectionPublication.id)
+        .where(
+            models.OrganizationSelectionPublication.organization_id == organization_id,
+            models.OrganizationSelectionPublication.fixture_id.in_(fixture_ids),
+        )
+        .limit(1)
+    )
+    if retained_publication is not None:
+        raise SchoolCompetitionServiceError(409, conflict_detail)
     plans = list(
         (
             await db.scalars(

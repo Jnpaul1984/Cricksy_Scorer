@@ -60,6 +60,9 @@ const basePlan: OrganizationSelectionPlan = {
   reserve_roster_membership_ids: [],
   captain_roster_membership_id: null,
   wicketkeeper_roster_membership_id: null,
+  batting_order_roster_membership_ids: [],
+  bowling_plan: [],
+  latest_publication_version: null,
   created_by_user_id: 'owner-a',
   updated_by_user_id: 'owner-a',
   created_at: '',
@@ -140,6 +143,7 @@ describe('shared organization selection plan workspace', () => {
       candidates,
     });
     vi.mocked(schoolApi.createOrganizationSelectionPlan).mockResolvedValue(basePlan);
+    vi.mocked(schoolApi.listOrganizationSelectionPublications).mockResolvedValue([]);
     vi.mocked(schoolApi.updateOrganizationSelectionPlan).mockImplementation(
       async (_organizationId, _planId, payload) => ({
         ...basePlan,
@@ -308,5 +312,51 @@ describe('shared organization selection plan workspace', () => {
     await validationFailure.get('[data-test="save-selection-plan"]').trigger('click');
     await flushPromises();
     expect(validationFailure.text()).toContain('Captain must be a member');
+  });
+
+  it('edits structured plans, publishes privately, and explicitly begins a new draft', async () => {
+    const fullPlan = {
+      ...basePlan,
+      revision: 2,
+      xi_roster_membership_ids: Array.from({ length: 11 }, (_, index) => `player-${index}`),
+      captain_roster_membership_id: 'player-0',
+      wicketkeeper_roster_membership_id: 'player-1',
+    };
+    const publication = {
+      id: 'publication-a',
+      organization_id: 'school-a',
+      selection_plan_id: 'plan-a',
+      team_id: 'team-a',
+      fixture_id: 'fixture-a',
+      plan_revision: 2,
+      publication_version: 1,
+      status: 'published' as const,
+      captain_roster_membership_id: 'player-0',
+      wicketkeeper_roster_membership_id: 'player-1',
+      players: [],
+      published_by_user_id: 'owner-a',
+      published_at: '2026-09-28T00:00:00Z',
+    };
+    vi.mocked(schoolApi.getOrganizationSelectionPlan)
+      .mockResolvedValueOnce(fullPlan)
+      .mockResolvedValueOnce({ ...fullPlan, status: 'published', latest_publication_version: 1 });
+    vi.mocked(schoolApi.publishOrganizationSelectionPlan).mockResolvedValue(publication);
+    vi.mocked(schoolApi.beginOrganizationSelectionDraft).mockResolvedValue({
+      ...fullPlan,
+      revision: 3,
+      status: 'draft',
+      latest_publication_version: 1,
+    });
+    const wrapper = mountView('owner');
+    await flushPromises();
+    await wrapper.get('[data-test="publish-selection-plan"]').trigger('click');
+    await flushPromises();
+    expect(schoolApi.publishOrganizationSelectionPlan).toHaveBeenCalledWith('school-a', 'plan-a', 2);
+    expect(wrapper.text()).toContain('Published selection history');
+    expect(wrapper.text()).toContain('Version 1');
+    await wrapper.get('[data-test="begin-selection-draft"]').trigger('click');
+    await flushPromises();
+    expect(schoolApi.beginOrganizationSelectionDraft).toHaveBeenCalledWith('school-a', 'plan-a', 2);
+    expect(wrapper.text()).toContain('New draft started at revision 3');
   });
 });
