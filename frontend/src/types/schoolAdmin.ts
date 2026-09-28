@@ -110,6 +110,11 @@ export interface SchoolMatchCreate {
     captain_index: number;
     wicketkeeper_index: number;
   } | null;
+  selection_handoff?: {
+    selection_plan_id: string;
+    publication_version: number;
+    fixture_id: string;
+  } | null;
   match_type: 'limited' | 'multi_day' | 'custom';
   overs_limit: number | null;
   days_limit: number | null;
@@ -319,6 +324,18 @@ export interface OrganizationSelectionPublication {
   players: OrganizationSelectionPublishedPlayer[];
   published_by_user_id: string;
   published_at: string;
+}
+
+export interface OrganizationSelectionHandoff {
+  organization_id: string;
+  selection_plan_id: string;
+  publication_version: number;
+  fixture_id: string;
+  fixture_team_a_id: string;
+  fixture_team_b_id: string;
+  selected_side: 'team_a' | 'team_b';
+  selected_team: SchoolMatchSideSelection;
+  planned_batting_order_membership_ids: string[];
 }
 
 export type OrganizationEventType = 'training' | 'other';

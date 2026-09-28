@@ -8,6 +8,7 @@ from backend.api.schemas.school_matches import SchoolMatchCreate, SchoolMatchCre
 from backend.security import get_current_active_user
 from backend.services import (
     organization_entitlement_service,
+    organization_selection_plan_service,
     organization_service,
     school_match_service,
 )
@@ -23,6 +24,7 @@ def _service_error(
     exc: (
         organization_service.OrganizationServiceError
         | organization_entitlement_service.OrganizationCapabilityError
+        | organization_selection_plan_service.OrganizationSelectionPlanServiceError
         | school_match_service.SchoolMatchServiceError
     ),
 ) -> NoReturn:
@@ -55,6 +57,7 @@ async def create_school_match(
     except (
         organization_service.OrganizationServiceError,
         organization_entitlement_service.OrganizationCapabilityError,
+        organization_selection_plan_service.OrganizationSelectionPlanServiceError,
         school_match_service.SchoolMatchServiceError,
     ) as exc:
         _service_error(exc)

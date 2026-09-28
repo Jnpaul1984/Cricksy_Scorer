@@ -47,6 +47,16 @@ class ExternalOpponentSelection(BaseModel):
         return self
 
 
+class SchoolMatchSelectionHandoff(BaseModel):
+    """Bind final match creation to one exact immutable Selection publication."""
+
+    selection_plan_id: str = Field(min_length=1)
+    publication_version: int = Field(ge=1)
+    fixture_id: str = Field(min_length=1)
+
+    model_config = ConfigDict(extra="forbid")
+
+
 class SchoolMatchCreate(BaseModel):
     """Create a Game from governed School snapshots and an optional external side."""
 
@@ -55,6 +65,7 @@ class SchoolMatchCreate(BaseModel):
     team_a: SchoolMatchSideSelection | None = None
     team_b: SchoolMatchSideSelection | None = None
     external_opponent: ExternalOpponentSelection | None = None
+    selection_handoff: SchoolMatchSelectionHandoff | None = None
     match_type: Literal["limited", "multi_day", "custom"] = "limited"
     overs_limit: int | None = Field(default=20, ge=1, le=120)
     days_limit: int | None = Field(default=None, ge=1, le=7)
@@ -83,6 +94,10 @@ class SchoolMatchCreate(BaseModel):
                 )
             if external_selection is not None:
                 raise _contract_error("The external side must not reference a saved School Team")
+            if self.selection_handoff is not None:
+                raise _contract_error(
+                    "Selection handoff is not supported for an external-opponent match"
+                )
         if self.match_type == "limited" and self.overs_limit is None:
             raise _contract_error("overs_limit is required for a limited-overs match")
         if self.match_type == "multi_day" and (

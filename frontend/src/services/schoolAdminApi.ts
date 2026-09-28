@@ -38,6 +38,7 @@ import type {
   OrganizationPlayerAvailability,
   OrganizationPlayerAttendance,
   OrganizationSelectionCandidateResponse,
+  OrganizationSelectionHandoff,
   OrganizationSelectionPlan,
   OrganizationSelectionPublication,
   OrganizationSelectionPlanUpdate,
@@ -416,6 +417,19 @@ export const getOrganizationSelectionPublication = (
       organizationId,
       `/selection-plans/${encodeURIComponent(planId)}/publications/${publicationVersion}`,
     ),
+  );
+
+export const prepareOrganizationSelectionHandoff = (
+  organizationId: string,
+  planId: string,
+  publicationVersion: number,
+) =>
+  apiRequest<OrganizationSelectionHandoff>(
+    orgPath(
+      organizationId,
+      `/selection-plans/${encodeURIComponent(planId)}/publications/${publicationVersion}/handoff`,
+    ),
+    { method: 'POST' },
   );
 
 export const listSchoolCompetitions = (organizationId: string) =>
