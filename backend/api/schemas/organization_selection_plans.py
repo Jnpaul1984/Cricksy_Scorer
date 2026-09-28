@@ -144,3 +144,26 @@ class OrganizationSelectionPublicationResponse(BaseModel):
     players: list[OrganizationSelectionPublishedPlayer]
     published_by_user_id: str
     published_at: dt.datetime
+
+
+class OrganizationSelectionHandoffSide(BaseModel):
+    """Current match-setup identities derived from one immutable publication."""
+
+    team_id: str
+    playing_xi_membership_ids: list[str] = Field(min_length=11, max_length=11)
+    captain_membership_id: str
+    wicketkeeper_membership_id: str
+
+
+class OrganizationSelectionHandoffResponse(BaseModel):
+    """Validated one-way prefill for the existing organization match setup."""
+
+    organization_id: str
+    selection_plan_id: str
+    publication_version: int
+    fixture_id: str
+    fixture_team_a_id: str
+    fixture_team_b_id: str
+    selected_side: Literal["team_a", "team_b"]
+    selected_team: OrganizationSelectionHandoffSide
+    planned_batting_order_membership_ids: list[str]

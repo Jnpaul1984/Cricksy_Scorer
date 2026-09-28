@@ -10,6 +10,8 @@ from backend.api.schemas.organization_selection_plans import (
     OrganizationBowlingPlanEntry,
     OrganizationSelectionCandidate,
     OrganizationSelectionCandidateResponse,
+    OrganizationSelectionHandoffResponse,
+    OrganizationSelectionHandoffSide,
     OrganizationSelectionPlanCreate,
     OrganizationSelectionPlanResponse,
     OrganizationSelectionPlanUpdate,
@@ -59,6 +61,14 @@ class _SelectionState:
     bowling_plan: tuple[tuple[str, str], ...]
 
 
+@dataclass(frozen=True)
+class PreparedSelectionHandoff:
+    """Current validated handoff plus the authoritative locked Fixture when requested."""
+
+    fixture: Fixture
+    response: OrganizationSelectionHandoffResponse
+
+
 def _not_found(resource: str) -> OrganizationSelectionPlanServiceError:
     return OrganizationSelectionPlanServiceError(404, f"{resource} not found")
 
@@ -103,6 +113,7 @@ async def _team_and_fixture(
     organization_id: str,
     team_id: str,
     fixture_id: str,
+    lock_fixture: bool = False,
 ) -> tuple[Team, Fixture]:
     team = await db.scalar(
         select(Team).where(
@@ -115,16 +126,17 @@ async def _team_and_fixture(
     if team.status != "active":
         raise _conflict("Archived Team cannot be used for a selection plan")
 
-    row = (
-        await db.execute(
-            select(Fixture, Tournament)
-            .join(Tournament, Tournament.id == Fixture.tournament_id)
-            .where(
-                Fixture.id == fixture_id,
-                Tournament.organization_id == organization_id,
-            )
+    fixture_statement = (
+        select(Fixture, Tournament)
+        .join(Tournament, Tournament.id == Fixture.tournament_id)
+        .where(
+            Fixture.id == fixture_id,
+            Tournament.organization_id == organization_id,
         )
-    ).one_or_none()
+    )
+    if lock_fixture:
+        fixture_statement = fixture_statement.with_for_update(of=Fixture)
+    row = (await db.execute(fixture_statement)).one_or_none()
     if row is None:
         raise _not_found("Fixture")
     fixture: Fixture = row[0]
@@ -820,6 +832,134 @@ async def get_selection_publication(
     if publication is None:
         raise _not_found("Selection publication")
     return await _publication_response(db, publication)
+
+
+async def prepare_selection_handoff(
+    db: AsyncSession,
+    *,
+    organization_id: str,
+    plan_id: str,
+    publication_version: int,
+    actor_user_id: str,
+    lock_fixture: bool = False,
+) -> PreparedSelectionHandoff:
+    """Revalidate one immutable publication for the existing match-setup contract."""
+    await _authorize(
+        db,
+        organization_id=organization_id,
+        actor_user_id=actor_user_id,
+        allowed_roles=SELECTION_WRITE_ROLES,
+    )
+    plan = await _plan(db, organization_id=organization_id, plan_id=plan_id)
+    publication = await db.scalar(
+        select(OrganizationSelectionPublication).where(
+            OrganizationSelectionPublication.organization_id == organization_id,
+            OrganizationSelectionPublication.selection_plan_id == plan.id,
+            OrganizationSelectionPublication.publication_version == publication_version,
+        )
+    )
+    if publication is None:
+        raise _not_found("Selection publication")
+
+    _, fixture = await _team_and_fixture(
+        db,
+        organization_id=organization_id,
+        team_id=publication.team_id,
+        fixture_id=publication.fixture_id,
+        lock_fixture=lock_fixture,
+    )
+    if fixture.game_id is not None:
+        raise _conflict("Fixture already has a linked Game; its Playing XI was not changed")
+
+    publication_players = list(
+        (
+            await db.scalars(
+                select(OrganizationSelectionPublicationPlayer)
+                .where(
+                    OrganizationSelectionPublicationPlayer.organization_id == organization_id,
+                    OrganizationSelectionPublicationPlayer.publication_id == publication.id,
+                )
+                .order_by(
+                    OrganizationSelectionPublicationPlayer.selection_role,
+                    OrganizationSelectionPublicationPlayer.school_player_membership_id,
+                )
+            )
+        ).all()
+    )
+    xi_players = [player for player in publication_players if player.selection_role == "xi"]
+    if len(xi_players) != 11:
+        raise _invalid("Selection handoff requires exactly 11 published XI players")
+    xi_ids = {player.school_player_membership_id for player in xi_players}
+    if publication.captain_roster_membership_id not in xi_ids:
+        raise _invalid("Published captain must belong to the XI")
+    if publication.wicketkeeper_roster_membership_id not in xi_ids:
+        raise _invalid("Published wicketkeeper must belong to the XI")
+    await _validate_active_candidates(
+        db,
+        organization_id=organization_id,
+        team_id=publication.team_id,
+        roster_membership_ids=xi_ids,
+    )
+
+    current_team_memberships = list(
+        (
+            await db.scalars(
+                select(SchoolTeamPlayerMembership).where(
+                    SchoolTeamPlayerMembership.organization_id == organization_id,
+                    SchoolTeamPlayerMembership.team_id == publication.team_id,
+                    SchoolTeamPlayerMembership.school_player_membership_id.in_(xi_ids),
+                    SchoolTeamPlayerMembership.status == "active",
+                )
+            )
+        ).all()
+    )
+    team_membership_by_roster_id = {
+        membership.school_player_membership_id: membership.id
+        for membership in current_team_memberships
+    }
+    if set(team_membership_by_roster_id) != xi_ids:
+        raise _invalid("One or more published players are no longer eligible for this Team")
+
+    ordered_xi = sorted(
+        xi_players,
+        key=lambda player: (
+            player.batting_position is None,
+            player.batting_position or 0,
+            player.school_player_membership_id,
+        ),
+    )
+    selected_side = "team_a" if fixture.team_a_id == publication.team_id else "team_b"
+    assert fixture.team_a_id is not None and fixture.team_b_id is not None
+    response = OrganizationSelectionHandoffResponse(
+        organization_id=organization_id,
+        selection_plan_id=plan.id,
+        publication_version=publication.publication_version,
+        fixture_id=fixture.id,
+        fixture_team_a_id=fixture.team_a_id,
+        fixture_team_b_id=fixture.team_b_id,
+        selected_side=selected_side,
+        selected_team=OrganizationSelectionHandoffSide(
+            team_id=publication.team_id,
+            playing_xi_membership_ids=[
+                team_membership_by_roster_id[player.school_player_membership_id]
+                for player in ordered_xi
+            ],
+            captain_membership_id=team_membership_by_roster_id[
+                publication.captain_roster_membership_id
+            ],
+            wicketkeeper_membership_id=team_membership_by_roster_id[
+                publication.wicketkeeper_roster_membership_id
+            ],
+        ),
+        planned_batting_order_membership_ids=[
+            team_membership_by_roster_id[player.school_player_membership_id]
+            for player in sorted(
+                (player for player in xi_players if player.batting_position is not None),
+                key=lambda player: player.batting_position or 0,
+            )
+        ],
+    )
+    return PreparedSelectionHandoff(fixture=fixture, response=response)
 
 
 async def selection_candidates(

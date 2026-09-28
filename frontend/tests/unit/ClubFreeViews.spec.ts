@@ -18,6 +18,7 @@ import SchoolTeamsView from '@/views/school/SchoolTeamsView.vue';
 const mocks = vi.hoisted(() => ({
   route: {
     params: { organizationId: 'club-a', teamId: 'team-a' },
+    query: {},
     meta: { organizationType: 'club' },
     fullPath: '/clubs/club-a',
   },

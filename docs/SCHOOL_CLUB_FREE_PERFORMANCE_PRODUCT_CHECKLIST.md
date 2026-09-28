@@ -160,7 +160,7 @@ Checklist cells cite these exact current-code anchors. A citation is evidence of
 | FREE-SEL-011 | Notify selected players | Free | NEW | USAGE-SENSITIVE | E-ABSENT | In-app first; external channel bounded. | Published selection, notifications | No | C-MSG |
 | FREE-SEL-012 | Notify reserves | Free | NEW | USAGE-SENSITIVE | E-ABSENT | Same controlled delivery. | Reserves, notifications | No | C-MSG |
 | FREE-SEL-013 | Selection history | Free | BUILT | LOW | E-SEL stores append-only normalized publication versions with retained player identity, tenant-safe read APIs, deterministic ordering and Fixture/competition deletion protection. | Preserve immutable evidence and explicit new-draft semantics; do not treat history as match truth. | Selection plan | No | C-DB |
-| FREE-SEL-014 | Planned order separate from live scoring truth | Free | ADAPT | LOW | E-MATCH snapshots and Game scorecards are distinct; scoring protected by master checklist Rule 5. | Enforce one-way handoff and no mutation of scoring truth. | Selection plan, scoring contract | No | C-DB |
+| FREE-SEL-014 | Planned order separate from live scoring truth | Free | BUILT | LOW | E-SEL/E-MATCH provide an explicit exact-version publication handoff that revalidates current Fixture/Team/roster truth, prefills the existing match setup contract, and atomically links one newly confirmed Game without mutating publication history, planned bowling metadata, live batting order, innings, DLS or scoring truth. | Preserve the one-way publication-to-match-setup boundary and authoritative confirmed Game snapshot. | Selection publication, match setup contract | No | C-DB |
 
 ### 4.5 Messaging and communication
 
@@ -620,8 +620,8 @@ Counts are mechanically derived from the 340 capability rows above. Header, evid
 
 | Status | Count |
 |---|---:|
-| BUILT | 79 |
-| ADAPT | 114 |
+| BUILT | 80 |
+| ADAPT | 113 |
 | NEW | 91 |
 | DEFER | 3 |
 | OWNER DECISION | 53 |
@@ -649,11 +649,11 @@ Counts are mechanically derived from the 340 capability rows above. Header, evid
 
 ## 12. Already-built summary
 
-The 79 BUILT rows are concentrated in the protected shared Free foundation: organization creation/membership/roles; one School/Club capability source; canonical roster and reusable Teams; import; saved/external match setup; XI/captain/keeper; organization scoring; fixtures/results/competitions/basic statistics; controlled public scorecards; contextual terminology and tenant isolation; the shared organization/Team calendar, training/other events, scoped participants, fixture projection, timezone contract and upcoming view; structured event/fixture availability with deadlines, immutable staff history, Team summaries and filtering; private event attendance with constrained states, immutable actor history and deterministic player/Team/date-range metrics; and private shared selection planning with normalized reserves, deterministic revisions, batting/bowling plans, internal publication and immutable version history. Canonical career/batting/bowling/achievement truth and the structural separation of personal versus organization entitlements also exist. Private video is not organization-ready, but four negative public-exposure guardrails are true today: no public signup, no unrestricted unauthenticated upload, no public organization Elite promise and no organization-wide video self-service entitlement.
+The 80 BUILT rows are concentrated in the protected shared Free foundation: organization creation/membership/roles; one School/Club capability source; canonical roster and reusable Teams; import; saved/external match setup; XI/captain/keeper; organization scoring; fixtures/results/competitions/basic statistics; controlled public scorecards; contextual terminology and tenant isolation; the shared organization/Team calendar, training/other events, scoped participants, fixture projection, timezone contract and upcoming view; structured event/fixture availability with deadlines, immutable staff history, Team summaries and filtering; private event attendance with constrained states, immutable actor history and deterministic player/Team/date-range metrics; and private shared selection planning with normalized reserves, deterministic revisions, batting/bowling plans, internal publication, immutable version history, and explicit one-way handoff into authoritative match setup. Canonical career/batting/bowling/achievement truth and the structural separation of personal versus organization entitlements also exist. Private video is not organization-ready, but four negative public-exposure guardrails are true today: no public signup, no unrestricted unauthenticated upload, no public organization Elite promise and no organization-wide video self-service entitlement.
 
 ## 13. Adaptation summary
 
-The 114 ADAPT rows are existing technology, not organization-ready product promises. Major reuse pools are:
+The 113 ADAPT rows are existing technology, not organization-ready product promises. Major reuse pools are:
 
 - Player/Analyst deterministic analytics, filters, comparisons, exports and match-context packages.
 - Coach assignments, sessions, notes, development plans/checkpoints/dashboards/reports and longitudinal progress.

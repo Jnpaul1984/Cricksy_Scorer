@@ -1,19 +1,26 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
-import { RouterLink, useRouter } from 'vue-router';
+import { RouterLink, useRoute, useRouter } from 'vue-router';
 
 import { useSchoolContext } from '@/composables/useSchoolContext';
-import { getErrorMessage } from '@/services/api';
-import { createSchoolMatch, listSchoolTeams, listTeamRoster } from '@/services/schoolAdminApi';
+import {
+  createSchoolMatch,
+  listSchoolTeams,
+  listTeamRoster,
+  prepareOrganizationSelectionHandoff,
+} from '@/services/schoolAdminApi';
 import type {
+  OrganizationSelectionHandoff,
   SchoolMatchCreate,
   SchoolTeam,
   SchoolTeamRosterPlayer,
 } from '@/types/schoolAdmin';
+import { organizationOperationError } from '@/utils/organizationOperations';
 
 type Side = 'a' | 'b';
 type MatchMode = 'school_vs_school' | 'school_vs_external';
 
+const route = useRoute();
 const router = useRouter();
 const { organizationId, terminology, canCreateSchoolMatch } = useSchoolContext();
 const teams = ref<SchoolTeam[]>([]);
@@ -31,6 +38,8 @@ const loadingTeams = ref(false);
 const loadingA = ref(false);
 const loadingB = ref(false);
 const creating = ref(false);
+const loadingHandoff = ref(false);
+const handoff = ref<OrganizationSelectionHandoff | null>(null);
 const error = ref('');
 const mode = ref<MatchMode>('school_vs_school');
 const schoolOrientation = ref<'team_a' | 'team_b'>('team_a');
@@ -46,10 +55,28 @@ const oversPerDay = ref<number | null>(null);
 const dlsEnabled = ref(false);
 const tossWinnerSide = ref<'team_a' | 'team_b'>('team_a');
 const decision = ref<'bat' | 'bowl'>('bat');
+let loadGeneration = 0;
+let applyingHandoff = false;
+
+const handoffQueryKey = computed(() => {
+  const planId = String(route.query.selectionPlanId || '');
+  const publicationVersion = String(route.query.publicationVersion || '');
+  const fixtureId = String(route.query.fixtureId || '');
+  return planId && publicationVersion && fixtureId
+    ? `${planId}|${publicationVersion}|${fixtureId}`
+    : '';
+});
 
 const teamA = computed(() => teams.value.find((team) => team.id === teamAId.value));
 const teamB = computed(() => teams.value.find((team) => team.id === teamBId.value));
 const schoolTeam = computed(() => teamA.value);
+const plannedBattingOrder = computed(() => {
+  if (!handoff.value) return [];
+  const roster = handoff.value.selected_side === 'team_a' ? rosterA.value : rosterB.value;
+  return handoff.value.planned_batting_order_membership_ids
+    .map((membershipId) => roster.find((player) => player.id === membershipId)?.player_name)
+    .filter((name): name is string => Boolean(name));
+});
 const displayTeamAName = computed(() =>
   mode.value === 'school_vs_external' && schoolOrientation.value === 'team_b'
     ? externalTeamName.value.trim() || 'External opponent'
@@ -89,35 +116,51 @@ function resetSchoolState() {
   externalPlayerNames.value = Array.from({ length: 11 }, () => '');
   externalCaptainIndex.value = 0;
   externalWicketkeeperIndex.value = 1;
+  handoff.value = null;
+  loadingHandoff.value = false;
   error.value = '';
 }
 
 function setMode(nextMode: MatchMode) {
+  if (handoff.value) return;
   mode.value = nextMode;
   error.value = '';
   if (nextMode === 'school_vs_external') resetSide('b');
 }
 
 async function loadTeams() {
+  const generation = ++loadGeneration;
   const requestedOrganization = organizationId.value;
   resetSchoolState();
   if (!canCreateSchoolMatch.value) return;
   loadingTeams.value = true;
   try {
     const result = await listSchoolTeams(requestedOrganization);
-    if (organizationId.value === requestedOrganization && canCreateSchoolMatch.value) {
+    if (
+      generation === loadGeneration &&
+      organizationId.value === requestedOrganization &&
+      canCreateSchoolMatch.value
+    ) {
       teams.value = result;
+      if (handoffQueryKey.value) await loadSelectionHandoff(generation, requestedOrganization);
     }
   } catch (reason) {
-    if (organizationId.value === requestedOrganization && canCreateSchoolMatch.value) {
-      error.value = getErrorMessage(reason);
+    if (
+      generation === loadGeneration &&
+      organizationId.value === requestedOrganization &&
+      canCreateSchoolMatch.value
+    ) {
+      error.value = organizationOperationError(reason, 'match setup');
     }
   } finally {
-    if (organizationId.value === requestedOrganization) loadingTeams.value = false;
+    if (generation === loadGeneration && organizationId.value === requestedOrganization) {
+      loadingTeams.value = false;
+    }
   }
 }
 
 async function loadRoster(side: Side, teamId: string) {
+  const generation = loadGeneration;
   resetSide(side);
   if (!teamId || !canCreateSchoolMatch.value) return;
   const requestedOrganization = organizationId.value;
@@ -127,6 +170,7 @@ async function loadRoster(side: Side, teamId: string) {
     const result = await listTeamRoster(requestedOrganization, teamId);
     const stillCurrent =
       organizationId.value === requestedOrganization &&
+      generation === loadGeneration &&
       canCreateSchoolMatch.value &&
       (side === 'a' ? teamAId.value === teamId : teamBId.value === teamId);
     if (!stillCurrent) return;
@@ -135,12 +179,77 @@ async function loadRoster(side: Side, teamId: string) {
   } catch (reason) {
     const stillCurrent =
       organizationId.value === requestedOrganization &&
+      generation === loadGeneration &&
       canCreateSchoolMatch.value &&
       (side === 'a' ? teamAId.value === teamId : teamBId.value === teamId);
-    if (stillCurrent) error.value = getErrorMessage(reason);
+    if (stillCurrent) error.value = organizationOperationError(reason, 'match setup');
   } finally {
     if (side === 'a' && teamAId.value === teamId) loadingA.value = false;
     if (side === 'b' && teamBId.value === teamId) loadingB.value = false;
+  }
+}
+
+async function loadSelectionHandoff(generation: number, requestedOrganization: string) {
+  const [selectionPlanId, rawPublicationVersion, fixtureId] = handoffQueryKey.value.split('|');
+  const publicationVersion = Number(rawPublicationVersion);
+  if (!selectionPlanId || !fixtureId || !Number.isInteger(publicationVersion) || publicationVersion < 1) {
+    error.value = 'The published selection handoff link is invalid.';
+    return;
+  }
+  loadingHandoff.value = true;
+  try {
+    const prepared = await prepareOrganizationSelectionHandoff(
+      requestedOrganization,
+      selectionPlanId,
+      publicationVersion,
+    );
+    if (
+      generation !== loadGeneration ||
+      organizationId.value !== requestedOrganization ||
+      handoffQueryKey.value !== `${selectionPlanId}|${rawPublicationVersion}|${fixtureId}`
+    ) {
+      return;
+    }
+    if (prepared.fixture_id !== fixtureId) {
+      throw Object.assign(new Error('Selection Fixture does not match this handoff'), { status: 422 });
+    }
+    mode.value = 'school_vs_school';
+    applyingHandoff = true;
+    teamAId.value = prepared.fixture_team_a_id;
+    teamBId.value = prepared.fixture_team_b_id;
+    await Promise.all([
+      loadRoster('a', prepared.fixture_team_a_id),
+      loadRoster('b', prepared.fixture_team_b_id),
+    ]);
+    applyingHandoff = false;
+    if (generation !== loadGeneration || organizationId.value !== requestedOrganization) return;
+    const selectedRoster = prepared.selected_side === 'team_a' ? rosterA.value : rosterB.value;
+    const eligibleIds = new Set(
+      selectedRoster.filter((player) => player.operationally_available).map((player) => player.id),
+    );
+    if (prepared.selected_team.playing_xi_membership_ids.some((id) => !eligibleIds.has(id))) {
+      throw Object.assign(new Error('Published players are no longer eligible for match setup'), {
+        status: 409,
+      });
+    }
+    handoff.value = prepared;
+    if (prepared.selected_side === 'team_a') {
+      selectedA.value = [...prepared.selected_team.playing_xi_membership_ids];
+      captainA.value = prepared.selected_team.captain_membership_id;
+      wicketkeeperA.value = prepared.selected_team.wicketkeeper_membership_id;
+    } else {
+      selectedB.value = [...prepared.selected_team.playing_xi_membership_ids];
+      captainB.value = prepared.selected_team.captain_membership_id;
+      wicketkeeperB.value = prepared.selected_team.wicketkeeper_membership_id;
+    }
+  } catch (reason) {
+    if (generation === loadGeneration && organizationId.value === requestedOrganization) {
+      handoff.value = null;
+      error.value = organizationOperationError(reason, 'selection handoff');
+    }
+  } finally {
+    applyingHandoff = false;
+    if (generation === loadGeneration) loadingHandoff.value = false;
   }
 }
 
@@ -259,6 +368,13 @@ async function createMatch() {
             wicketkeeper_index: externalWicketkeeperIndex.value,
           }
         : null,
+    selection_handoff: handoff.value
+      ? {
+          selection_plan_id: handoff.value.selection_plan_id,
+          publication_version: handoff.value.publication_version,
+          fixture_id: handoff.value.fixture_id,
+        }
+      : null,
     match_type: matchType.value,
     overs_limit: matchType.value === 'limited' ? oversLimit.value : null,
     days_limit: matchType.value === 'multi_day' ? daysLimit.value : null,
@@ -277,22 +393,26 @@ async function createMatch() {
     const result = await createSchoolMatch(organizationId.value, payload);
     await router.push({ name: 'GameScoringView', params: { gameId: result.game_id } });
   } catch (reason) {
-    error.value = getErrorMessage(reason);
+    error.value = organizationOperationError(reason, handoff.value ? 'selection handoff' : 'match setup');
   } finally {
     creating.value = false;
   }
 }
 
 watch(
-  [organizationId, canCreateSchoolMatch],
+  [organizationId, canCreateSchoolMatch, handoffQueryKey],
   ([, allowed]) => {
     if (allowed) void loadTeams();
     else resetSchoolState();
   },
   { immediate: true },
 );
-watch(teamAId, (teamId) => loadRoster('a', teamId));
-watch(teamBId, (teamId) => loadRoster('b', teamId));
+watch(teamAId, (teamId) => {
+  if (!applyingHandoff) void loadRoster('a', teamId);
+});
+watch(teamBId, (teamId) => {
+  if (!applyingHandoff) void loadRoster('b', teamId);
+});
 </script>
 
 <template>
@@ -307,6 +427,20 @@ watch(teamBId, (teamId) => loadRoster('b', teamId));
       <RouterLink to="/setup">Use generic/manual match setup instead</RouterLink>
     </header>
 
+    <p v-if="loadingHandoff" class="notice" role="status">
+      Revalidating the published selection against the current roster and Fixture…
+    </p>
+    <aside v-if="handoff" class="handoff-notice" data-testid="selection-handoff-context">
+      <strong>Published selection version {{ handoff.publication_version }}</strong>
+      <p>
+        The published XI, captain, and wicketkeeper are prefilled for review. Match setup creates
+        the authoritative Playing XI; toss, decision, format, limits, and DLS remain editable.
+      </p>
+      <p v-if="plannedBattingOrder.length">
+        Planned batting order (context only): {{ plannedBattingOrder.join(' · ') }}
+      </p>
+    </aside>
+
     <p v-if="!canCreateSchoolMatch" class="notice" role="alert">
       Your active {{ terminology.kindLabel }} role or entitlement does not permit match setup.
     </p>
@@ -315,6 +449,7 @@ watch(teamBId, (teamId) => loadRoster('b', teamId));
       <button
         type="button"
         :aria-pressed="mode === 'school_vs_school'"
+        :disabled="Boolean(handoff)"
         data-testid="mode-school-vs-school"
         @click="setMode('school_vs_school')"
       >
@@ -323,6 +458,7 @@ watch(teamBId, (teamId) => loadRoster('b', teamId));
       <button
         type="button"
         :aria-pressed="mode === 'school_vs_external'"
+        :disabled="Boolean(handoff)"
         data-testid="mode-school-vs-external"
         @click="setMode('school_vs_external')"
       >
@@ -366,7 +502,12 @@ watch(teamBId, (teamId) => loadRoster('b', teamId));
             }}
           </legend>
           <label for="school-team-a">Saved {{ terminology.kindLabel }} Team</label>
-          <select id="school-team-a" v-model="teamAId" data-testid="school-team-a">
+          <select
+            id="school-team-a"
+            v-model="teamAId"
+            data-testid="school-team-a"
+            :disabled="Boolean(handoff)"
+          >
             <option value="">Choose Team A…</option>
             <option v-for="team in teams" :key="team.id" :value="team.id">{{ team.name }}</option>
           </select>
@@ -379,6 +520,7 @@ watch(teamBId, (teamId) => loadRoster('b', teamId));
                   :checked="selectedA.includes(player.id)"
                   :disabled="
                     !player.operationally_available ||
+                    handoff?.selected_side === 'team_a' ||
                     (selectedA.length >= 11 && !selectedA.includes(player.id))
                   "
                   @change="togglePlayer('a', player)"
@@ -396,14 +538,22 @@ watch(teamBId, (teamId) => loadRoster('b', teamId));
           </ul>
           <p v-if="teamA">Selected {{ selectedA.length }}/11</p>
           <label for="captain-a">Captain</label>
-          <select id="captain-a" v-model="captainA" :disabled="selectedA.length !== 11">
+          <select
+            id="captain-a"
+            v-model="captainA"
+            :disabled="selectedA.length !== 11 || handoff?.selected_side === 'team_a'"
+          >
             <option value="">Choose from XI…</option>
             <option v-for="player in selectedPlayers('a')" :key="player.id" :value="player.id">
               {{ player.player_name }}
             </option>
           </select>
           <label for="keeper-a">Wicketkeeper</label>
-          <select id="keeper-a" v-model="wicketkeeperA" :disabled="selectedA.length !== 11">
+          <select
+            id="keeper-a"
+            v-model="wicketkeeperA"
+            :disabled="selectedA.length !== 11 || handoff?.selected_side === 'team_a'"
+          >
             <option value="">Choose from XI…</option>
             <option v-for="player in selectedPlayers('a')" :key="player.id" :value="player.id">
               {{ player.player_name }}
@@ -414,7 +564,12 @@ watch(teamBId, (teamId) => loadRoster('b', teamId));
         <fieldset v-if="mode === 'school_vs_school'">
           <legend>Team B and playing XI</legend>
           <label for="school-team-b">Saved Team</label>
-          <select id="school-team-b" v-model="teamBId" data-testid="school-team-b">
+          <select
+            id="school-team-b"
+            v-model="teamBId"
+            data-testid="school-team-b"
+            :disabled="Boolean(handoff)"
+          >
             <option value="">Choose Team B…</option>
             <option v-for="team in teams" :key="team.id" :value="team.id">{{ team.name }}</option>
           </select>
@@ -427,6 +582,7 @@ watch(teamBId, (teamId) => loadRoster('b', teamId));
                   :checked="selectedB.includes(player.id)"
                   :disabled="
                     !player.operationally_available ||
+                    handoff?.selected_side === 'team_b' ||
                     (selectedB.length >= 11 && !selectedB.includes(player.id))
                   "
                   @change="togglePlayer('b', player)"
@@ -444,14 +600,22 @@ watch(teamBId, (teamId) => loadRoster('b', teamId));
           </ul>
           <p v-if="teamB">Selected {{ selectedB.length }}/11</p>
           <label for="captain-b">Captain</label>
-          <select id="captain-b" v-model="captainB" :disabled="selectedB.length !== 11">
+          <select
+            id="captain-b"
+            v-model="captainB"
+            :disabled="selectedB.length !== 11 || handoff?.selected_side === 'team_b'"
+          >
             <option value="">Choose from XI…</option>
             <option v-for="player in selectedPlayers('b')" :key="player.id" :value="player.id">
               {{ player.player_name }}
             </option>
           </select>
           <label for="keeper-b">Wicketkeeper</label>
-          <select id="keeper-b" v-model="wicketkeeperB" :disabled="selectedB.length !== 11">
+          <select
+            id="keeper-b"
+            v-model="wicketkeeperB"
+            :disabled="selectedB.length !== 11 || handoff?.selected_side === 'team_b'"
+          >
             <option value="">Choose from XI…</option>
             <option v-for="player in selectedPlayers('b')" :key="player.id" :value="player.id">
               {{ player.player_name }}
@@ -531,7 +695,9 @@ watch(teamBId, (teamId) => loadRoster('b', teamId));
           <label for="overs-per-day">Overs per day</label>
           <input id="overs-per-day" v-model.number="oversPerDay" type="number" min="1" max="120" />
         </template>
-        <label><input v-model="dlsEnabled" type="checkbox" /> Enable DLS</label>
+        <label
+          ><input v-model="dlsEnabled" type="checkbox" data-testid="dls-enabled" /> Enable DLS</label
+        >
         <label for="toss-winner">Toss winner</label>
         <select id="toss-winner" v-model="tossWinnerSide">
           <option value="team_a">{{ displayTeamAName }}</option>
@@ -580,6 +746,13 @@ watch(teamBId, (teamId) => loadRoster('b', teamId));
 .notice,
 .validation {
   border-color: #f2bb5f;
+}
+.handoff-notice {
+  margin: 1rem 0;
+  padding: 1rem;
+  border: 1px solid #70d7b0;
+  border-radius: 8px;
+  background: #1d2d2b;
 }
 .error {
   border-color: #e57b7b;

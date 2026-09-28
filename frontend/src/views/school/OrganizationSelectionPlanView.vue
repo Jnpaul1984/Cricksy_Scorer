@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 
 import { useSchoolContext } from '@/composables/useSchoolContext';
 import {
@@ -11,6 +11,7 @@ import {
   listOrganizationSelectionPublications,
   listSchoolFixtures,
   listSchoolTeams,
+  prepareOrganizationSelectionHandoff,
   publishOrganizationSelectionPlan,
   updateOrganizationSelectionPlan,
 } from '@/services/schoolAdminApi';
@@ -27,7 +28,8 @@ import { organizationOperationError } from '@/utils/organizationOperations';
 type AvailabilityFilter = OrganizationSelectionAvailabilityState | 'no_response' | 'all';
 
 const route = useRoute();
-const { organizationId, terminology, membership } = useSchoolContext();
+const router = useRouter();
+const { organizationId, organizationType, terminology, membership } = useSchoolContext();
 const fixtureId = computed(() => String(route.params.fixtureId || ''));
 const teamId = computed(() => String(route.params.teamId || ''));
 const canEdit = computed(() =>
@@ -52,6 +54,7 @@ const loading = ref(true);
 const creating = ref(false);
 const saving = ref(false);
 const publishing = ref(false);
+const handingOffVersion = ref<number | null>(null);
 const missing = ref(false);
 const error = ref('');
 const conflict = ref('');
@@ -359,6 +362,45 @@ async function beginNewDraft() {
   }
 }
 
+async function useInMatchSetup(publication: OrganizationSelectionPublication) {
+  if (!canEdit.value || handingOffVersion.value !== null) return;
+  const generation = loadGeneration;
+  const currentOrganizationId = organizationId.value;
+  const currentOrganizationType = organizationType.value;
+  handingOffVersion.value = publication.publication_version;
+  error.value = '';
+  conflict.value = '';
+  try {
+    const handoff = await prepareOrganizationSelectionHandoff(
+      currentOrganizationId,
+      publication.selection_plan_id,
+      publication.publication_version,
+    );
+    if (
+      generation !== loadGeneration ||
+      organizationId.value !== currentOrganizationId ||
+      organizationType.value !== currentOrganizationType
+    ) {
+      return;
+    }
+    await router.push({
+      name: `${currentOrganizationType}-match-setup`,
+      params: { organizationId: currentOrganizationId },
+      query: {
+        selectionPlanId: handoff.selection_plan_id,
+        publicationVersion: String(handoff.publication_version),
+        fixtureId: handoff.fixture_id,
+      },
+    });
+  } catch (reason) {
+    if (generation === loadGeneration) {
+      error.value = organizationOperationError(reason, 'selection handoff');
+    }
+  } finally {
+    if (generation === loadGeneration) handingOffVersion.value = null;
+  }
+}
+
 watch([organizationId, teamId, fixtureId], load, { immediate: true });
 </script>
 
@@ -583,6 +625,21 @@ watch([organizationId, teamId, fixtureId], load, { immediate: true });
                 :key="player.roster_membership_id"
               >{{ player.player_name }}<span v-if="player.bowling_role"> · {{ player.bowling_role }} bowling option</span></li>
             </ol>
+            <p>Published selection is planning. Match setup creates the authoritative Playing XI.</p>
+            <button
+              v-if="canEdit"
+              type="button"
+              class="handoff"
+              data-test="use-selection-in-match-setup"
+              :disabled="handingOffVersion !== null"
+              @click="useInMatchSetup(viewedPublication)"
+            >
+              {{
+                handingOffVersion === viewedPublication.publication_version
+                  ? 'Checking current eligibility…'
+                  : 'Use in match setup'
+              }}
+            </button>
           </article>
         </section>
       </template>
@@ -618,6 +675,7 @@ button.secondary { background: #9fb4dc; }
 button.danger { background: #e58b8b; }
 .save { width: 100%; margin-top: 1rem; }
 .publish { width: 100%; margin-top: 0.6rem; background: #f3ca72; }
+.handoff { margin-top: 0.7rem; background: #70d7b0; }
 .ordered-plan { display: grid; gap: 0.45rem; padding-left: 1.5rem; }
 .ordered-plan li { padding: 0.55rem; border: 1px solid #46516d; border-radius: 8px; }
 .planning-picker { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 1rem; }

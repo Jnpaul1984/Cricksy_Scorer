@@ -12,7 +12,7 @@ from backend.api.schemas.school_matches import (
     SchoolMatchCreate,
     SchoolMatchSideSelection,
 )
-from backend.services import organization_service
+from backend.services import organization_selection_plan_service, organization_service
 from backend.services.organization_entitlement_service import (
     FREE_CRICKET_ORGANIZATION_TYPES,
     require_organization_capability,
@@ -252,6 +252,41 @@ async def create_school_match(
         organization_id=organization_id,
         actor_user_id=actor_user_id,
     )
+    prepared_handoff: organization_selection_plan_service.PreparedSelectionHandoff | None = None
+    if payload.selection_handoff is not None:
+        prepared_handoff = await organization_selection_plan_service.prepare_selection_handoff(
+            db,
+            organization_id=organization_id,
+            plan_id=payload.selection_handoff.selection_plan_id,
+            publication_version=payload.selection_handoff.publication_version,
+            actor_user_id=actor_user_id,
+            lock_fixture=True,
+        )
+        handoff = prepared_handoff.response
+        if payload.selection_handoff.fixture_id != handoff.fixture_id:
+            raise _invalid("Selection handoff Fixture does not match the published selection")
+        if payload.mode != "school_vs_school":
+            raise _invalid("Selection handoff requires two normalized organization Teams")
+        if payload.team_a is None or payload.team_b is None:
+            raise _invalid("Selection handoff requires both Fixture Teams")
+        if (
+            payload.team_a.team_id != handoff.fixture_team_a_id
+            or payload.team_b.team_id != handoff.fixture_team_b_id
+        ):
+            raise _invalid("Match setup Teams do not match the Selection Fixture")
+        selected_payload = payload.team_a if handoff.selected_side == "team_a" else payload.team_b
+        selected_handoff = handoff.selected_team
+        if (
+            selected_payload.team_id != selected_handoff.team_id
+            or set(selected_payload.playing_xi_membership_ids)
+            != set(selected_handoff.playing_xi_membership_ids)
+            or selected_payload.captain_membership_id != selected_handoff.captain_membership_id
+            or selected_payload.wicketkeeper_membership_id
+            != selected_handoff.wicketkeeper_membership_id
+        ):
+            raise _invalid(
+                "Published XI, captain, and wicketkeeper must remain unchanged during handoff"
+            )
     side_a: EligibleSide | None = None
     side_b: EligibleSide | None = None
     if payload.mode == "school_vs_school":
@@ -335,6 +370,9 @@ async def create_school_match(
     )
     db.add(game)
     try:
+        await db.flush()
+        if prepared_handoff is not None:
+            prepared_handoff.fixture.game_id = game.id
         await db.commit()
     except Exception:
         await db.rollback()

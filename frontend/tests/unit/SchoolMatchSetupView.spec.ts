@@ -8,13 +8,20 @@ import {
 } from '@/composables/useOrganizationTerminology';
 import { schoolContextKey, type SchoolContext } from '@/composables/useSchoolContext';
 import * as schoolApi from '@/services/schoolAdminApi';
-import type { SchoolTeam, SchoolTeamRosterPlayer } from '@/types/schoolAdmin';
+import type {
+  FreeOrganizationType,
+  OrganizationSelectionHandoff,
+  SchoolTeam,
+  SchoolTeamRosterPlayer,
+} from '@/types/schoolAdmin';
 import SchoolMatchSetupView from '@/views/school/SchoolMatchSetupView.vue';
 
 const push = vi.fn();
+const matchRouteState = vi.hoisted(() => ({ query: {} as Record<string, string> }));
 
 vi.mock('@/services/schoolAdminApi');
 vi.mock('vue-router', () => ({
+  useRoute: () => matchRouteState,
   useRouter: () => ({ push }),
   RouterLink: { props: ['to'], template: '<a :href="String(to)"><slot /></a>' },
 }));
@@ -54,13 +61,14 @@ function roster(teamId: string): SchoolTeamRosterPlayer[] {
 function context(
   organizationId = ref('school-a'),
   canCreate: boolean | Ref<boolean> = true,
+  organizationType: Ref<FreeOrganizationType> = ref('school'),
 ): SchoolContext {
   const writes = computed(() => true);
   return {
     organizationId: computed(() => organizationId.value),
-    organizationType: computed(() => 'school'),
-    organizationBasePath: computed(() => organizationBasePath('school')),
-    terminology: computed(() => organizationTerminology('school')),
+    organizationType: computed(() => organizationType.value),
+    organizationBasePath: computed(() => organizationBasePath(organizationType.value)),
+    terminology: computed(() => organizationTerminology(organizationType.value)),
     organization: ref(null),
     membership: ref(null),
     entitlement: ref(null),
@@ -99,6 +107,7 @@ async function chooseTeams(wrapper: VueWrapper) {
 describe('Phase 7I School match setup', () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    matchRouteState.query = {};
     vi.mocked(schoolApi.listSchoolTeams).mockResolvedValue(teams);
     vi.mocked(schoolApi.listTeamRoster).mockImplementation(async (_organizationId, teamId) =>
       roster(teamId),
@@ -113,6 +122,98 @@ describe('Phase 7I School match setup', () => {
       team_a_player_profile_ids: roster('team-a').slice(0, 11).map((player) => player.player_profile_id),
       team_b_player_profile_ids: roster('team-b').slice(0, 11).map((player) => player.player_profile_id),
     });
+  });
+
+  it('revalidates an exact publication and prefills only its Fixture side for final review', async () => {
+    matchRouteState.query = {
+      selectionPlanId: 'plan-a',
+      publicationVersion: '3',
+      fixtureId: 'fixture-a',
+    };
+    vi.mocked(schoolApi.prepareOrganizationSelectionHandoff).mockResolvedValue({
+      organization_id: 'school-a',
+      selection_plan_id: 'plan-a',
+      publication_version: 3,
+      fixture_id: 'fixture-a',
+      fixture_team_a_id: 'team-a',
+      fixture_team_b_id: 'team-b',
+      selected_side: 'team_a',
+      selected_team: {
+        team_id: 'team-a',
+        playing_xi_membership_ids: roster('team-a').slice(0, 11).map((player) => player.id),
+        captain_membership_id: 'team-a-membership-0',
+        wicketkeeper_membership_id: 'team-a-membership-1',
+      },
+      planned_batting_order_membership_ids: roster('team-a')
+        .slice(0, 11)
+        .map((player) => player.id),
+    });
+    const wrapper = mountView();
+    await flushPromises();
+
+    expect(schoolApi.prepareOrganizationSelectionHandoff).toHaveBeenCalledWith(
+      'school-a',
+      'plan-a',
+      3,
+    );
+    expect(wrapper.get('[data-testid="selection-handoff-context"]').text()).toContain(
+      'Published selection version 3',
+    );
+    expect(wrapper.get('[data-testid="selection-handoff-context"]').text()).toContain(
+      'context only',
+    );
+    expect(wrapper.findAll('ul[aria-label="Team A roster"] input:checked')).toHaveLength(11);
+    expect(wrapper.findAll('ul[aria-label="Team B roster"] input:checked')).toHaveLength(0);
+    expect(wrapper.get('#captain-a').element).toHaveProperty('value', 'team-a-membership-0');
+    expect(wrapper.get('#keeper-a').element).toHaveProperty('value', 'team-a-membership-1');
+    expect(wrapper.get('[data-testid="mode-school-vs-external"]').attributes('disabled')).toBeDefined();
+  });
+
+  it('binds final creation to the exact publication while keeping toss and DLS editable', async () => {
+    matchRouteState.query = {
+      selectionPlanId: 'plan-a',
+      publicationVersion: '1',
+      fixtureId: 'fixture-a',
+    };
+    vi.mocked(schoolApi.prepareOrganizationSelectionHandoff).mockResolvedValue({
+      organization_id: 'school-a',
+      selection_plan_id: 'plan-a',
+      publication_version: 1,
+      fixture_id: 'fixture-a',
+      fixture_team_a_id: 'team-a',
+      fixture_team_b_id: 'team-b',
+      selected_side: 'team_a',
+      selected_team: {
+        team_id: 'team-a',
+        playing_xi_membership_ids: roster('team-a').slice(0, 11).map((player) => player.id),
+        captain_membership_id: 'team-a-membership-0',
+        wicketkeeper_membership_id: 'team-a-membership-1',
+      },
+      planned_batting_order_membership_ids: [],
+    });
+    const wrapper = mountView();
+    await flushPromises();
+    const sideB = wrapper.get('ul[aria-label="Team B roster"]');
+    for (const checkbox of sideB.findAll('input[type="checkbox"]').slice(0, 11)) {
+      await checkbox.trigger('change');
+    }
+    await wrapper.get('#captain-b').setValue('team-b-membership-0');
+    await wrapper.get('#keeper-b').setValue('team-b-membership-1');
+    await wrapper.get('[data-testid="dls-enabled"]').setValue(true);
+    await wrapper.get('[data-testid="create-school-match"]').trigger('submit');
+    await flushPromises();
+
+    expect(schoolApi.createSchoolMatch).toHaveBeenCalledWith(
+      'school-a',
+      expect.objectContaining({
+        selection_handoff: {
+          selection_plan_id: 'plan-a',
+          publication_version: 1,
+          fixture_id: 'fixture-a',
+        },
+        dls_enabled: true,
+      }),
+    );
   });
 
   it('loads route-scoped saved Teams and does not auto-select a playing XI', async () => {
@@ -291,6 +392,65 @@ describe('Phase 7I School match setup', () => {
     expect(wrapper.get('[data-testid="school-team-b"]').element).toHaveProperty('value', '');
     expect(wrapper.find('[data-testid="external-opponent-fields"]').exists()).toBe(false);
   });
+
+  it.each([
+    ['school', 'school', 'school-a', 'school-b'],
+    ['school', 'club', 'school-a', 'club-b'],
+    ['club', 'school', 'club-a', 'school-b'],
+  ] as const)(
+    'suppresses late handoff state across %s to %s context changes',
+    async (firstType, nextType, firstId, nextId) => {
+      matchRouteState.query = {
+        selectionPlanId: 'plan-a',
+        publicationVersion: '1',
+        fixtureId: 'fixture-a',
+      };
+      let resolveOld: (value: OrganizationSelectionHandoff) => void = () => undefined;
+      const oldHandoff = new Promise<OrganizationSelectionHandoff>((resolve) => {
+        resolveOld = resolve;
+      });
+      const response = (organizationId: string, publicationVersion: number) => ({
+        organization_id: organizationId,
+        selection_plan_id: 'plan-a',
+        publication_version: publicationVersion,
+        fixture_id: 'fixture-a',
+        fixture_team_a_id: 'team-a',
+        fixture_team_b_id: 'team-b',
+        selected_side: 'team_a' as const,
+        selected_team: {
+          team_id: 'team-a',
+          playing_xi_membership_ids: roster('team-a').slice(0, 11).map((player) => player.id),
+          captain_membership_id: 'team-a-membership-0',
+          wicketkeeper_membership_id: 'team-a-membership-1',
+        },
+        planned_batting_order_membership_ids: [],
+      });
+      vi.mocked(schoolApi.prepareOrganizationSelectionHandoff).mockImplementation(
+        (organizationId) =>
+          organizationId === firstId
+            ? oldHandoff
+            : Promise.resolve(response(organizationId, 2)),
+      );
+      const organizationId = ref(firstId);
+      const organizationType = ref<FreeOrganizationType>(firstType);
+      const wrapper = mountView(context(organizationId, true, organizationType));
+      await wrapper.vm.$nextTick();
+
+      organizationId.value = nextId;
+      organizationType.value = nextType;
+      await flushPromises();
+      expect(wrapper.get('[data-testid="selection-handoff-context"]').text()).toContain(
+        'Published selection version 2',
+      );
+
+      resolveOld(response(firstId, 1));
+      await flushPromises();
+      expect(wrapper.get('[data-testid="selection-handoff-context"]').text()).toContain(
+        'Published selection version 2',
+      );
+      expect(wrapper.text()).not.toContain('Published selection version 1');
+    },
+  );
 
   it('does not expose or call match setup for a viewer', async () => {
     const wrapper = mountView(context(ref('school-a'), false));

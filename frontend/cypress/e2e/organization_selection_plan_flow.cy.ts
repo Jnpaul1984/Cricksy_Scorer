@@ -17,6 +17,31 @@ function stubSelectionJourney(kind: OrganizationKind) {
     created_at: '2026-01-01T00:00:00Z',
     updated_at: '2026-01-01T00:00:00Z',
   };
+  const opponentTeam = { ...team, id: 'team-b', name: 'Second XI' };
+  const selectionIds = [
+    'player-available',
+    'player-unavailable',
+    'player-maybe',
+    'player-none',
+    ...Array.from({ length: 7 }, (_, index) => `player-extra-${index + 1}`),
+  ];
+  const matchRoster = (teamId: string) =>
+    Array.from({ length: 11 }, (_, index) => ({
+      id: `${teamId}-assignment-${index}`,
+      organization_id: organizationId,
+      team_id: teamId,
+      school_player_membership_id:
+        teamId === 'team-a' ? selectionIds[index] : `${teamId}-roster-${index}`,
+      player_profile_id: `${teamId}-profile-${index}`,
+      player_name: `${teamId} Player ${index + 1}`,
+      status: 'active',
+      school_player_status: 'active',
+      team_status: 'active',
+      operationally_available: true,
+      created_by_user_id: 'owner-a',
+      created_at: '',
+      updated_at: '',
+    }));
   const fixture = {
     fixture_id: 'fixture-a',
     competition_id: 'cup-a',
@@ -105,12 +130,17 @@ function stubSelectionJourney(kind: OrganizationKind) {
       'school_fixtures_results',
       'school_live_scorecards',
       'organization_selection_plans',
+      'school_match_playing_xi',
+      'school_persistent_teams',
+      'school_team_rosters',
     ],
     excluded_capabilities: [],
     created_at: '',
     updated_at: '',
   });
-  cy.intercept('GET', `**/api/organizations/${organizationId}/teams`, [team]);
+  cy.intercept('GET', `**/api/organizations/${organizationId}/teams`, [team, opponentTeam]);
+  cy.intercept('GET', `**/api/organizations/${organizationId}/teams/team-a/players`, matchRoster('team-a'));
+  cy.intercept('GET', `**/api/organizations/${organizationId}/teams/team-b/players`, matchRoster('team-b'));
   cy.intercept('GET', `**/api/organizations/${organizationId}/fixtures`, [fixture]);
   cy.intercept('GET', `**/api/organizations/${organizationId}/results`, []);
   cy.intercept('GET', `**/api/organizations/${organizationId}/selection-plans?*`, (req) => {
@@ -181,6 +211,55 @@ function stubSelectionJourney(kind: OrganizationKind) {
     revision = 3;
     req.reply({ statusCode: 200, body: plan() });
   }).as(`${kind}BeginDraft`);
+  cy.intercept(
+    'POST',
+    `**/api/organizations/${organizationId}/selection-plans/plan-a/publications/1/handoff`,
+    {
+      organization_id: organizationId,
+      selection_plan_id: 'plan-a',
+      publication_version: 1,
+      fixture_id: 'fixture-a',
+      fixture_team_a_id: 'team-a',
+      fixture_team_b_id: 'team-b',
+      selected_side: 'team_a',
+      selected_team: {
+        team_id: 'team-a',
+        playing_xi_membership_ids: matchRoster('team-a').map((player) => player.id),
+        captain_membership_id: 'team-a-assignment-0',
+        wicketkeeper_membership_id: 'team-a-assignment-1',
+      },
+      planned_batting_order_membership_ids: matchRoster('team-a').map((player) => player.id),
+    },
+  ).as(`${kind}SelectionHandoff`);
+  cy.intercept('POST', `**/api/organizations/${organizationId}/matches`, (req) => {
+    expect(req.body.selection_handoff).to.deep.equal({
+      selection_plan_id: 'plan-a',
+      publication_version: 1,
+      fixture_id: 'fixture-a',
+    });
+    expect(req.body.team_a.playing_xi_membership_ids).to.deep.equal(
+      matchRoster('team-a').map((player) => player.id),
+    );
+    expect(req.body.team_a.captain_membership_id).to.equal('team-a-assignment-0');
+    expect(req.body.team_a.wicketkeeper_membership_id).to.equal('team-a-assignment-1');
+    expect(req.body.toss_winner_side).to.equal('team_a');
+    expect(req.body.decision).to.equal('bat');
+    expect(req.body.match_type).to.equal('limited');
+    expect(req.body.dls_enabled).to.equal(false);
+    req.reply({
+      statusCode: 201,
+      body: {
+        game_id: `${kind}-handoff-game`,
+        organization_id: organizationId,
+        team_a_id: 'team-a',
+        team_b_id: 'team-b',
+        team_a_name: 'First XI',
+        team_b_name: 'Second XI',
+        team_a_player_profile_ids: matchRoster('team-a').map((player) => player.player_profile_id),
+        team_b_player_profile_ids: matchRoster('team-b').map((player) => player.player_profile_id),
+      },
+    });
+  }).as(`${kind}CreateHandoffMatch`);
   cy.intercept('PUT', '**/availability/**', (req) => {
     availabilityWrites += 1;
     req.reply({ statusCode: 500, body: { detail: 'Selection must not write Availability' } });
@@ -249,6 +328,44 @@ describe('shared School and Club draft-selection journey', () => {
       cy.get('[data-test=begin-selection-draft]').click();
       cy.wait(`@${kind}BeginDraft`);
       cy.contains('New draft started at revision 3').should('be.visible');
+    });
+
+    it(`${kind} hands one immutable publication into reviewed match setup and creates match truth`, () => {
+      const { organizationId, basePath } = stubSelectionJourney(kind);
+      if (kind === 'club') cy.viewport(390, 844);
+      const ids = [
+        'player-available',
+        'player-unavailable',
+        'player-maybe',
+        'player-none',
+        ...Array.from({ length: 7 }, (_, index) => `player-extra-${index + 1}`),
+      ];
+      cy.visitWithAuth(`${basePath}/${organizationId}/selection/fixture-a/team-a`);
+      cy.contains('button', 'Create draft selection').click();
+      ids.forEach((id) => cy.get(`[data-test=add-xi-${id}]`).click());
+      cy.get('[data-test=selection-captain]').select(ids[0]);
+      cy.get('[data-test=selection-wicketkeeper]').select(ids[1]);
+      ids.forEach((id) => cy.get(`[data-test=add-batting-${id}]`).click());
+      cy.get('[data-test=save-selection-plan]').click();
+      cy.wait(`@${kind}SaveSelection`);
+      cy.get('[data-test=publish-selection-plan]').click();
+      cy.wait(`@${kind}PublishSelection`);
+      cy.get('[data-test=use-selection-in-match-setup]').click();
+      cy.wait(`@${kind}SelectionHandoff`);
+      cy.location('pathname').should('eq', `${basePath}/${organizationId}/matches/new`);
+      cy.wait(`@${kind}SelectionHandoff`);
+      cy.get('[data-testid=selection-handoff-context]').should('contain', 'Published selection version 1');
+      cy.get('ul[aria-label="Team A roster"] input:checked').should('have.length', 11);
+      cy.get('ul[aria-label="Team B roster"] input').each(($input) => cy.wrap($input).check());
+      cy.get('#captain-b').select('team-b-assignment-0');
+      cy.get('#keeper-b').select('team-b-assignment-1');
+      cy.get('[data-testid=create-school-match]').click();
+      cy.wait(`@${kind}CreateHandoffMatch`);
+      cy.location('pathname').should('eq', `/game/${kind}-handoff-game/scoring`);
+
+      cy.visitWithAuth(`${basePath}/${organizationId}/selection/fixture-a/team-a`);
+      cy.contains('button', 'Version 1').click();
+      cy.get('[data-test=published-selection-snapshot]').should('contain', 'Version 1');
     });
   });
 });

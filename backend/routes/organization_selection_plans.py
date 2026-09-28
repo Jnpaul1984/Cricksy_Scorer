@@ -6,6 +6,7 @@ from typing import Annotated, NoReturn
 
 from backend.api.schemas.organization_selection_plans import (
     OrganizationSelectionCandidateResponse,
+    OrganizationSelectionHandoffResponse,
     OrganizationSelectionPlanCreate,
     OrganizationSelectionPlanResponse,
     OrganizationSelectionPlanUpdate,
@@ -223,6 +224,31 @@ async def get_selection_publication(
             publication_version=publication_version,
             actor_user_id=current_user.id,
         )
+    except SERVICE_ERRORS as exc:
+        _raise_service_error(exc)
+
+
+@router.post(
+    "/{organization_id}/selection-plans/{plan_id}/publications/{publication_version}/handoff",
+    response_model=OrganizationSelectionHandoffResponse,
+)
+async def prepare_selection_handoff(
+    organization_id: str,
+    plan_id: str,
+    publication_version: int,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> OrganizationSelectionHandoffResponse:
+    """Explicitly prepare one published version for the existing match-setup flow."""
+    try:
+        prepared = await organization_selection_plan_service.prepare_selection_handoff(
+            db,
+            organization_id=organization_id,
+            plan_id=plan_id,
+            publication_version=publication_version,
+            actor_user_id=current_user.id,
+        )
+        return prepared.response
     except SERVICE_ERRORS as exc:
         _raise_service_error(exc)
 

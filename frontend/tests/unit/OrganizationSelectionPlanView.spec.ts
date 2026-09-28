@@ -14,8 +14,12 @@ import type {
 import OrganizationSelectionPlanView from '@/views/school/OrganizationSelectionPlanView.vue';
 
 const routeState = vi.hoisted(() => ({ params: { teamId: 'team-a', fixtureId: 'fixture-a' } }));
+const selectionPush = vi.fn();
 
-vi.mock('vue-router', () => ({ useRoute: () => routeState }));
+vi.mock('vue-router', () => ({
+  useRoute: () => routeState,
+  useRouter: () => ({ push: selectionPush }),
+}));
 vi.mock('@/services/schoolAdminApi');
 
 const team = {
@@ -151,6 +155,65 @@ describe('shared organization selection plan workspace', () => {
         revision: basePlan.revision + 1,
       }),
     );
+  });
+
+  it('uses only a selected published version and routes its validated context to match setup', async () => {
+    const publication = {
+      id: 'publication-a',
+      organization_id: 'school-a',
+      selection_plan_id: 'plan-a',
+      team_id: 'team-a',
+      fixture_id: 'fixture-a',
+      plan_revision: 2,
+      publication_version: 1,
+      status: 'published' as const,
+      captain_roster_membership_id: 'player-a',
+      wicketkeeper_roster_membership_id: 'player-b',
+      players: [],
+      published_by_user_id: 'owner-a',
+      published_at: '2026-09-28T00:00:00Z',
+    };
+    vi.mocked(schoolApi.listOrganizationSelectionPublications).mockResolvedValue([publication]);
+    vi.mocked(schoolApi.prepareOrganizationSelectionHandoff).mockResolvedValue({
+      organization_id: 'school-a',
+      selection_plan_id: 'plan-a',
+      publication_version: 1,
+      fixture_id: 'fixture-a',
+      fixture_team_a_id: 'team-a',
+      fixture_team_b_id: 'team-b',
+      selected_side: 'team_a',
+      selected_team: {
+        team_id: 'team-a',
+        playing_xi_membership_ids: Array.from({ length: 11 }, (_, index) => `team-member-${index}`),
+        captain_membership_id: 'team-member-0',
+        wicketkeeper_membership_id: 'team-member-1',
+      },
+      planned_batting_order_membership_ids: [],
+    });
+    const wrapper = mountView('owner');
+    await flushPromises();
+    const versionButton = wrapper
+      .findAll('button')
+      .find((button) => button.text().includes('Version 1'));
+    expect(versionButton).toBeDefined();
+    await versionButton!.trigger('click');
+    await wrapper.get('[data-test="use-selection-in-match-setup"]').trigger('click');
+    await flushPromises();
+
+    expect(schoolApi.prepareOrganizationSelectionHandoff).toHaveBeenCalledWith(
+      'school-a',
+      'plan-a',
+      1,
+    );
+    expect(selectionPush).toHaveBeenCalledWith({
+      name: 'school-match-setup',
+      params: { organizationId: 'school-a' },
+      query: {
+        selectionPlanId: 'plan-a',
+        publicationVersion: '1',
+        fixtureId: 'fixture-a',
+      },
+    });
   });
 
   it('shows all four advisory states and never selects or mutates Availability automatically', async () => {
