@@ -2848,6 +2848,37 @@ class OrganizationSelectionPlanPlayer(Base):
             "selection_role IN ('xi', 'reserve')",
             name="ck_organization_selection_plan_players_role",
         ),
+        CheckConstraint(
+            "batting_position IS NULL OR batting_position > 0",
+            name="ck_organization_selection_plan_players_batting_position",
+        ),
+        CheckConstraint(
+            "bowling_priority IS NULL OR bowling_priority > 0",
+            name="ck_organization_selection_plan_players_bowling_priority",
+        ),
+        CheckConstraint(
+            "bowling_role IS NULL OR bowling_role IN ('primary', 'secondary')",
+            name="ck_organization_selection_plan_players_bowling_role",
+        ),
+        CheckConstraint(
+            "(bowling_priority IS NULL) = (bowling_role IS NULL)",
+            name="ck_organization_selection_plan_players_bowling_pair",
+        ),
+        CheckConstraint(
+            "selection_role = 'xi' OR (batting_position IS NULL AND bowling_priority IS NULL "
+            "AND bowling_role IS NULL)",
+            name="ck_organization_selection_plan_players_xi_planning",
+        ),
+        UniqueConstraint(
+            "selection_plan_id",
+            "batting_position",
+            name="uq_organization_selection_plan_players_batting_position",
+        ),
+        UniqueConstraint(
+            "selection_plan_id",
+            "bowling_priority",
+            name="uq_organization_selection_plan_players_bowling_priority",
+        ),
         ForeignKeyConstraint(
             ["selection_plan_id", "organization_id"],
             ["organization_selection_plans.id", "organization_selection_plans.organization_id"],
@@ -2872,6 +2903,159 @@ class OrganizationSelectionPlanPlayer(Base):
     school_player_membership_id: Mapped[str] = mapped_column(String, primary_key=True)
     organization_id: Mapped[str] = mapped_column(String, nullable=False)
     selection_role: Mapped[str] = mapped_column(String(16), nullable=False)
+    batting_position: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    bowling_priority: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    bowling_role: Mapped[str | None] = mapped_column(String(16), nullable=True)
+
+
+class OrganizationSelectionPublication(Base):
+    """Immutable private publication of one selection-plan revision."""
+
+    __tablename__ = "organization_selection_publications"
+    __table_args__ = (
+        UniqueConstraint(
+            "id", "organization_id", name="uq_organization_selection_publications_id_org"
+        ),
+        UniqueConstraint(
+            "selection_plan_id",
+            "publication_version",
+            name="uq_organization_selection_publications_plan_version",
+        ),
+        UniqueConstraint(
+            "selection_plan_id",
+            "plan_revision",
+            name="uq_organization_selection_publications_plan_revision",
+        ),
+        CheckConstraint(
+            "publication_version >= 1",
+            name="ck_organization_selection_publications_version",
+        ),
+        CheckConstraint(
+            "plan_revision >= 1",
+            name="ck_organization_selection_publications_revision",
+        ),
+        ForeignKeyConstraint(
+            ["selection_plan_id", "organization_id"],
+            ["organization_selection_plans.id", "organization_selection_plans.organization_id"],
+            name="fk_organization_selection_publications_plan_org",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["team_id", "organization_id"],
+            ["teams.id", "teams.organization_id"],
+            name="fk_organization_selection_publications_team_org",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["fixture_id", "fixture_tournament_id"],
+            ["fixtures.id", "fixtures.tournament_id"],
+            name="fk_organization_selection_publications_fixture_tournament",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["fixture_tournament_id", "organization_id"],
+            ["tournaments.id", "tournaments.organization_id"],
+            name="fk_organization_selection_publications_tournament_org",
+            ondelete="RESTRICT",
+        ),
+        Index(
+            "ix_organization_selection_publications_plan_version",
+            "organization_id",
+            "selection_plan_id",
+            "publication_version",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    organization_id: Mapped[str] = mapped_column(
+        String, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    selection_plan_id: Mapped[str] = mapped_column(String, nullable=False)
+    team_id: Mapped[str] = mapped_column(String, nullable=False)
+    fixture_id: Mapped[str] = mapped_column(String, nullable=False)
+    fixture_tournament_id: Mapped[str] = mapped_column(String, nullable=False)
+    plan_revision: Mapped[int] = mapped_column(Integer, nullable=False)
+    publication_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    captain_roster_membership_id: Mapped[str] = mapped_column(String, nullable=False)
+    wicketkeeper_roster_membership_id: Mapped[str] = mapped_column(String, nullable=False)
+    published_by_user_id: Mapped[str] = mapped_column(String, nullable=False)
+    published_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class OrganizationSelectionPublicationPlayer(Base):
+    """Immutable normalized player and plan detail in a publication snapshot."""
+
+    __tablename__ = "organization_selection_publication_players"
+    __table_args__ = (
+        CheckConstraint(
+            "selection_role IN ('xi', 'reserve')",
+            name="ck_organization_selection_publication_players_role",
+        ),
+        CheckConstraint(
+            "batting_position IS NULL OR batting_position > 0",
+            name="ck_organization_selection_publication_players_batting_position",
+        ),
+        CheckConstraint(
+            "bowling_priority IS NULL OR bowling_priority > 0",
+            name="ck_organization_selection_publication_players_bowling_priority",
+        ),
+        CheckConstraint(
+            "bowling_role IS NULL OR bowling_role IN ('primary', 'secondary')",
+            name="ck_organization_selection_publication_players_bowling_role",
+        ),
+        CheckConstraint(
+            "(bowling_priority IS NULL) = (bowling_role IS NULL)",
+            name="ck_organization_selection_publication_players_bowling_pair",
+        ),
+        CheckConstraint(
+            "selection_role = 'xi' OR (batting_position IS NULL AND bowling_priority IS NULL "
+            "AND bowling_role IS NULL)",
+            name="ck_organization_selection_publication_players_xi_planning",
+        ),
+        UniqueConstraint(
+            "publication_id",
+            "batting_position",
+            name="uq_organization_selection_publication_players_batting_position",
+        ),
+        UniqueConstraint(
+            "publication_id",
+            "bowling_priority",
+            name="uq_organization_selection_publication_players_bowling_priority",
+        ),
+        ForeignKeyConstraint(
+            ["publication_id", "organization_id"],
+            [
+                "organization_selection_publications.id",
+                "organization_selection_publications.organization_id",
+            ],
+            name="fk_organization_selection_publication_players_publication_org",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["school_player_membership_id", "organization_id"],
+            ["school_player_memberships.id", "school_player_memberships.organization_id"],
+            name="fk_organization_selection_publication_players_roster_org",
+            ondelete="RESTRICT",
+        ),
+        Index(
+            "ix_organization_selection_publication_players_role",
+            "organization_id",
+            "publication_id",
+            "selection_role",
+        ),
+    )
+
+    publication_id: Mapped[str] = mapped_column(String, primary_key=True)
+    school_player_membership_id: Mapped[str] = mapped_column(String, primary_key=True)
+    organization_id: Mapped[str] = mapped_column(String, nullable=False)
+    player_profile_id: Mapped[str] = mapped_column(String, nullable=False)
+    player_name: Mapped[str] = mapped_column(String, nullable=False)
+    selection_role: Mapped[str] = mapped_column(String(16), nullable=False)
+    batting_position: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    bowling_priority: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    bowling_role: Mapped[str | None] = mapped_column(String(16), nullable=True)
 
 
 class AiUsageLog(Base):

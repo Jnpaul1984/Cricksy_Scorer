@@ -4,17 +4,21 @@ import { useRoute } from 'vue-router';
 
 import { useSchoolContext } from '@/composables/useSchoolContext';
 import {
+  beginOrganizationSelectionDraft,
   createOrganizationSelectionPlan,
   getOrganizationSelectionCandidates,
   getOrganizationSelectionPlan,
+  listOrganizationSelectionPublications,
   listSchoolFixtures,
   listSchoolTeams,
+  publishOrganizationSelectionPlan,
   updateOrganizationSelectionPlan,
 } from '@/services/schoolAdminApi';
 import type {
   OrganizationSelectionAvailabilityState,
   OrganizationSelectionCandidate,
   OrganizationSelectionPlan,
+  OrganizationSelectionPublication,
   SchoolFixtureSummary,
   SchoolTeam,
 } from '@/types/schoolAdmin';
@@ -29,6 +33,7 @@ const teamId = computed(() => String(route.params.teamId || ''));
 const canEdit = computed(() =>
   ['owner', 'admin', 'coach'].includes(membership.value?.role || ''),
 );
+const canEditDraft = computed(() => canEdit.value && plan.value?.status === 'draft');
 
 const team = ref<SchoolTeam | null>(null);
 const fixture = ref<SchoolFixtureSummary | null>(null);
@@ -38,10 +43,15 @@ const xiIds = ref<string[]>([]);
 const reserveIds = ref<string[]>([]);
 const captainId = ref<string | null>(null);
 const wicketkeeperId = ref<string | null>(null);
+const battingOrderIds = ref<string[]>([]);
+const bowlingPlan = ref<Array<{ roster_membership_id: string; role: 'primary' | 'secondary' }>>([]);
+const publications = ref<OrganizationSelectionPublication[]>([]);
+const viewedPublication = ref<OrganizationSelectionPublication | null>(null);
 const availabilityFilter = ref<AvailabilityFilter>('all');
 const loading = ref(true);
 const creating = ref(false);
 const saving = ref(false);
+const publishing = ref(false);
 const missing = ref(false);
 const error = ref('');
 const conflict = ref('');
@@ -82,6 +92,8 @@ function syncDraft(serverPlan: OrganizationSelectionPlan) {
   reserveIds.value = [...serverPlan.reserve_roster_membership_ids];
   captainId.value = serverPlan.captain_roster_membership_id;
   wicketkeeperId.value = serverPlan.wicketkeeper_roster_membership_id;
+  battingOrderIds.value = [...serverPlan.batting_order_roster_membership_ids];
+  bowlingPlan.value = serverPlan.bowling_plan.map((entry) => ({ ...entry }));
 }
 
 function clearWorkspace() {
@@ -93,6 +105,10 @@ function clearWorkspace() {
   reserveIds.value = [];
   captainId.value = null;
   wicketkeeperId.value = null;
+  battingOrderIds.value = [];
+  bowlingPlan.value = [];
+  publications.value = [];
+  viewedPublication.value = null;
   availabilityFilter.value = 'all';
   missing.value = false;
   error.value = '';
@@ -141,6 +157,19 @@ async function load() {
       const response = await getOrganizationSelectionCandidates(currentOrganizationId, existing.id);
       if (generation !== loadGeneration) return;
       candidates.value = response.candidates;
+      const publicationList = await listOrganizationSelectionPublications(
+        currentOrganizationId,
+        existing.id,
+      );
+      if (
+        generation !== loadGeneration ||
+        organizationId.value !== currentOrganizationId ||
+        teamId.value !== currentTeamId ||
+        fixtureId.value !== currentFixtureId
+      ) {
+        return;
+      }
+      publications.value = publicationList;
     } catch (reason) {
       if (generation !== loadGeneration) return;
       if ((reason as { status?: number })?.status === 404) {
@@ -185,13 +214,13 @@ async function createDraft() {
 }
 
 function addToXi(id: string) {
-  if (!canEdit.value || xiIds.value.includes(id) || xiIds.value.length >= 11) return;
+  if (!canEditDraft.value || xiIds.value.includes(id) || xiIds.value.length >= 11) return;
   reserveIds.value = reserveIds.value.filter((current) => current !== id);
   xiIds.value = [...xiIds.value, id];
 }
 
 function addToReserves(id: string) {
-  if (!canEdit.value || reserveIds.value.includes(id)) return;
+  if (!canEditDraft.value || reserveIds.value.includes(id)) return;
   xiIds.value = xiIds.value.filter((current) => current !== id);
   if (captainId.value === id) captainId.value = null;
   if (wicketkeeperId.value === id) wicketkeeperId.value = null;
@@ -199,14 +228,40 @@ function addToReserves(id: string) {
 }
 
 function removeFromXi(id: string) {
-  if (!canEdit.value) return;
+  if (!canEditDraft.value) return;
   xiIds.value = xiIds.value.filter((current) => current !== id);
   if (captainId.value === id) captainId.value = null;
   if (wicketkeeperId.value === id) wicketkeeperId.value = null;
+  battingOrderIds.value = battingOrderIds.value.filter((current) => current !== id);
+  bowlingPlan.value = bowlingPlan.value.filter((entry) => entry.roster_membership_id !== id);
+}
+
+function addToBattingOrder(id: string) {
+  if (!canEditDraft.value || battingOrderIds.value.includes(id)) return;
+  battingOrderIds.value = [...battingOrderIds.value, id];
+}
+
+function moveBatting(id: string, delta: number) {
+  const index = battingOrderIds.value.indexOf(id);
+  const destination = index + delta;
+  if (!canEditDraft.value || index < 0 || destination < 0 || destination >= battingOrderIds.value.length) return;
+  const reordered = [...battingOrderIds.value];
+  [reordered[index], reordered[destination]] = [reordered[destination], reordered[index]];
+  battingOrderIds.value = reordered;
+}
+
+function addBowler(id: string) {
+  if (!canEditDraft.value || bowlingPlan.value.some((entry) => entry.roster_membership_id === id)) return;
+  bowlingPlan.value = [...bowlingPlan.value, { roster_membership_id: id, role: 'secondary' }];
+}
+
+function removeBowler(id: string) {
+  if (!canEditDraft.value) return;
+  bowlingPlan.value = bowlingPlan.value.filter((entry) => entry.roster_membership_id !== id);
 }
 
 function removeFromReserves(id: string) {
-  if (!canEdit.value) return;
+  if (!canEditDraft.value) return;
   reserveIds.value = reserveIds.value.filter((current) => current !== id);
 }
 
@@ -226,7 +281,7 @@ async function reloadAfterConflict() {
 }
 
 async function saveDraft() {
-  if (!canEdit.value || !plan.value || saving.value) return;
+  if (!canEditDraft.value || !plan.value || saving.value) return;
   saving.value = true;
   error.value = '';
   conflict.value = '';
@@ -239,6 +294,8 @@ async function saveDraft() {
       reserve_roster_membership_ids: reserveIds.value,
       captain_roster_membership_id: captainId.value,
       wicketkeeper_roster_membership_id: wicketkeeperId.value,
+      batting_order_roster_membership_ids: battingOrderIds.value,
+      bowling_plan: bowlingPlan.value,
     });
     if (generation !== loadGeneration) return;
     syncDraft(updated);
@@ -256,6 +313,49 @@ async function saveDraft() {
     }
   } finally {
     saving.value = false;
+  }
+}
+
+async function publishPlan() {
+  if (!canEdit.value || !plan.value || publishing.value || plan.value.status !== 'draft') return;
+  const generation = loadGeneration;
+  publishing.value = true;
+  error.value = '';
+  try {
+    const publication = await publishOrganizationSelectionPlan(
+      organizationId.value,
+      plan.value.id,
+      plan.value.revision,
+    );
+    if (generation !== loadGeneration) return;
+    publications.value = [publication, ...publications.value.filter((item) => item.id !== publication.id)];
+    viewedPublication.value = publication;
+    const latest = await getOrganizationSelectionPlan(organizationId.value, teamId.value, fixtureId.value);
+    if (generation !== loadGeneration) return;
+    syncDraft(latest);
+    success.value = `Published private selection version ${publication.publication_version}.`;
+  } catch (reason) {
+    if (generation === loadGeneration) error.value = organizationOperationError(reason, 'selection plan');
+  } finally {
+    if (generation === loadGeneration) publishing.value = false;
+  }
+}
+
+async function beginNewDraft() {
+  if (!canEdit.value || !plan.value || plan.value.status !== 'published') return;
+  const generation = loadGeneration;
+  try {
+    const draft = await beginOrganizationSelectionDraft(
+      organizationId.value,
+      plan.value.id,
+      plan.value.revision,
+    );
+    if (generation !== loadGeneration) return;
+    syncDraft(draft);
+    viewedPublication.value = null;
+    success.value = `New draft started at revision ${draft.revision}.`;
+  } catch (reason) {
+    if (generation === loadGeneration) error.value = organizationOperationError(reason, 'selection plan');
   }
 }
 
@@ -294,7 +394,10 @@ watch([organizationId, teamId, fixtureId], load, { immediate: true });
       </div>
 
       <template v-else-if="plan">
-        <p class="revision">Revision {{ plan.revision }} · {{ canEdit ? 'Editable draft' : 'Read-only draft' }}</p>
+        <p class="revision">
+          Revision {{ plan.revision }} ·
+          {{ plan.status === 'published' ? `Published version ${plan.latest_publication_version}` : canEdit ? 'Editable draft' : 'Read-only draft' }}
+        </p>
         <p v-if="conflict" class="notice warning" role="alert">{{ conflict }}</p>
         <p v-if="success" class="notice success" role="status">{{ success }}</p>
 
@@ -323,7 +426,7 @@ watch([organizationId, teamId, fixtureId], load, { immediate: true });
                     >{{ availabilityLabel(candidate.availability_state) }}</span
                   >
                 </div>
-                <div v-if="canEdit" class="actions">
+                <div v-if="canEditDraft" class="actions">
                   <button
                     type="button"
                     :data-test="`add-xi-${candidate.roster_membership_id}`"
@@ -352,7 +455,7 @@ watch([organizationId, teamId, fixtureId], load, { immediate: true });
             <ul v-else class="player-list">
               <li v-for="id in xiIds" :key="id">
                 <strong>{{ playerName(id) }}</strong>
-                <div v-if="canEdit" class="actions">
+                <div v-if="canEditDraft" class="actions">
                   <button type="button" class="secondary" @click="addToReserves(id)">Move to reserves</button>
                   <button type="button" class="danger" @click="removeFromXi(id)">Remove</button>
                 </div>
@@ -362,14 +465,14 @@ watch([organizationId, teamId, fixtureId], load, { immediate: true });
             <div class="role-grid">
               <label>
                 Captain
-                <select v-model="captainId" :disabled="!canEdit" data-test="selection-captain">
+                <select v-model="captainId" :disabled="!canEditDraft" data-test="selection-captain">
                   <option :value="null">Not set</option>
                   <option v-for="id in xiIds" :key="id" :value="id">{{ playerName(id) }}</option>
                 </select>
               </label>
               <label>
                 Wicketkeeper
-                <select v-model="wicketkeeperId" :disabled="!canEdit" data-test="selection-wicketkeeper">
+                <select v-model="wicketkeeperId" :disabled="!canEditDraft" data-test="selection-wicketkeeper">
                   <option :value="null">Not set</option>
                   <option v-for="id in xiIds" :key="id" :value="id">{{ playerName(id) }}</option>
                 </select>
@@ -381,15 +484,61 @@ watch([organizationId, teamId, fixtureId], load, { immediate: true });
             <ul v-else class="player-list">
               <li v-for="id in reserveIds" :key="id">
                 <strong>{{ playerName(id) }}</strong>
-                <div v-if="canEdit" class="actions">
+                <div v-if="canEditDraft" class="actions">
                   <button type="button" :disabled="xiIds.length >= 11" @click="addToXi(id)">Move to XI</button>
                   <button type="button" class="danger" @click="removeFromReserves(id)">Remove</button>
                 </div>
               </li>
             </ul>
 
+            <h3>Planned batting order</h3>
+            <p v-if="!battingOrderIds.length">Optional while drafting; if supplied at publish it must include all XI.</p>
+            <ol v-else class="ordered-plan" data-test="batting-order">
+              <li v-for="(id, index) in battingOrderIds" :key="id">
+                <strong>{{ playerName(id) }}</strong>
+                <div v-if="canEditDraft" class="actions">
+                  <button type="button" class="secondary" :disabled="index === 0" @click="moveBatting(id, -1)">Up</button>
+                  <button type="button" class="secondary" :disabled="index === battingOrderIds.length - 1" @click="moveBatting(id, 1)">Down</button>
+                  <button type="button" class="danger" @click="battingOrderIds = battingOrderIds.filter((item) => item !== id)">Remove</button>
+                </div>
+              </li>
+            </ol>
+            <div v-if="canEditDraft" class="planning-picker">
+              <button
+                v-for="id in xiIds.filter((item) => !battingOrderIds.includes(item))"
+                :key="`bat-${id}`"
+                type="button"
+                class="secondary"
+                :data-test="`add-batting-${id}`"
+                @click="addToBattingOrder(id)"
+              >Add {{ playerName(id) }}</button>
+            </div>
+
+            <h3>Bowling options</h3>
+            <p v-if="!bowlingPlan.length">No bowling options planned.</p>
+            <ol v-else class="ordered-plan" data-test="bowling-plan">
+              <li v-for="entry in bowlingPlan" :key="entry.roster_membership_id">
+                <strong>{{ playerName(entry.roster_membership_id) }}</strong>
+                <select v-model="entry.role" :disabled="!canEditDraft">
+                  <option value="primary">Primary</option>
+                  <option value="secondary">Secondary</option>
+                </select>
+                <button v-if="canEditDraft" type="button" class="danger" @click="removeBowler(entry.roster_membership_id)">Remove</button>
+              </li>
+            </ol>
+            <div v-if="canEditDraft" class="planning-picker">
+              <button
+                v-for="id in xiIds.filter((item) => !bowlingPlan.some((entry) => entry.roster_membership_id === item))"
+                :key="`bowl-${id}`"
+                type="button"
+                class="secondary"
+                :data-test="`add-bowler-${id}`"
+                @click="addBowler(id)"
+              >Add {{ playerName(id) }}</button>
+            </div>
+
             <button
-              v-if="canEdit"
+              v-if="canEditDraft"
               type="button"
               class="save"
               data-test="save-selection-plan"
@@ -398,8 +547,44 @@ watch([organizationId, teamId, fixtureId], load, { immediate: true });
             >
               {{ saving ? 'Saving…' : 'Save draft' }}
             </button>
+            <button
+              v-if="canEditDraft"
+              type="button"
+              class="publish"
+              data-test="publish-selection-plan"
+              :disabled="publishing"
+              @click="publishPlan"
+            >{{ publishing ? 'Publishing…' : 'Publish private selection' }}</button>
+            <button
+              v-if="canEdit && plan.status === 'published'"
+              type="button"
+              data-test="begin-selection-draft"
+              @click="beginNewDraft"
+            >Begin new draft</button>
           </section>
         </div>
+
+        <section class="history-panel" aria-labelledby="selection-history-heading">
+          <h3 id="selection-history-heading">Published selection history</h3>
+          <p v-if="!publications.length">No published versions yet.</p>
+          <ul v-else class="history-list">
+            <li v-for="publication in publications" :key="publication.id">
+              <button type="button" class="secondary" @click="viewedPublication = publication">
+                Version {{ publication.publication_version }} · revision {{ publication.plan_revision }}
+              </button>
+            </li>
+          </ul>
+          <article v-if="viewedPublication" data-test="published-selection-snapshot">
+            <h4>Version {{ viewedPublication.publication_version }}</h4>
+            <p>Published {{ new Date(viewedPublication.published_at).toLocaleString() }}</p>
+            <ol>
+              <li
+                v-for="player in viewedPublication.players.filter((item) => item.selection_role === 'xi').sort((a, b) => (a.batting_position || 99) - (b.batting_position || 99))"
+                :key="player.roster_membership_id"
+              >{{ player.player_name }}<span v-if="player.bowling_role"> · {{ player.bowling_role }} bowling option</span></li>
+            </ol>
+          </article>
+        </section>
       </template>
     </template>
   </section>
@@ -432,9 +617,17 @@ button:disabled { cursor: not-allowed; opacity: 0.5; }
 button.secondary { background: #9fb4dc; }
 button.danger { background: #e58b8b; }
 .save { width: 100%; margin-top: 1rem; }
+.publish { width: 100%; margin-top: 0.6rem; background: #f3ca72; }
+.ordered-plan { display: grid; gap: 0.45rem; padding-left: 1.5rem; }
+.ordered-plan li { padding: 0.55rem; border: 1px solid #46516d; border-radius: 8px; }
+.planning-picker { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 1rem; }
+.history-panel { margin-top: 1rem; padding: 1rem; border: 1px solid #39445f; border-radius: 10px; background: #20283d; }
+.history-list { display: flex; flex-wrap: wrap; gap: 0.5rem; padding: 0; list-style: none; }
 @media (max-width: 760px) {
   .workspace-grid, .role-grid { grid-template-columns: 1fr; }
   .player-list li { align-items: stretch; flex-direction: column; }
   .actions button { flex: 1 1 9rem; }
 }
 </style>
+  listOrganizationSelectionPublications,
+  publishOrganizationSelectionPlan,

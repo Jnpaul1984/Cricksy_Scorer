@@ -39,6 +39,7 @@ import type {
   OrganizationPlayerAttendance,
   OrganizationSelectionCandidateResponse,
   OrganizationSelectionPlan,
+  OrganizationSelectionPublication,
   OrganizationSelectionPlanUpdate,
 } from '@/types/schoolAdmin';
 
@@ -379,6 +380,42 @@ export const updateOrganizationSelectionPlan = (
   apiRequest<OrganizationSelectionPlan>(
     orgPath(organizationId, `/selection-plans/${encodeURIComponent(planId)}`),
     { method: 'PATCH', body: JSON.stringify(payload) },
+  );
+export const publishOrganizationSelectionPlan = (
+  organizationId: string,
+  planId: string,
+  expectedRevision: number,
+) =>
+  apiRequest<OrganizationSelectionPublication>(
+    orgPath(organizationId, `/selection-plans/${encodeURIComponent(planId)}/publish`),
+    { method: 'POST', body: JSON.stringify({ expected_revision: expectedRevision }) },
+  );
+export const beginOrganizationSelectionDraft = (
+  organizationId: string,
+  planId: string,
+  expectedRevision: number,
+) =>
+  apiRequest<OrganizationSelectionPlan>(
+    orgPath(organizationId, `/selection-plans/${encodeURIComponent(planId)}/draft`),
+    { method: 'POST', body: JSON.stringify({ expected_revision: expectedRevision }) },
+  );
+export const listOrganizationSelectionPublications = (
+  organizationId: string,
+  planId: string,
+) =>
+  apiRequest<OrganizationSelectionPublication[]>(
+    orgPath(organizationId, `/selection-plans/${encodeURIComponent(planId)}/publications`),
+  );
+export const getOrganizationSelectionPublication = (
+  organizationId: string,
+  planId: string,
+  publicationVersion: number,
+) =>
+  apiRequest<OrganizationSelectionPublication>(
+    orgPath(
+      organizationId,
+      `/selection-plans/${encodeURIComponent(planId)}/publications/${publicationVersion}`,
+    ),
   );
 
 export const listSchoolCompetitions = (organizationId: string) =>

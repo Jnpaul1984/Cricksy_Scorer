@@ -9,6 +9,8 @@ from backend.api.schemas.organization_selection_plans import (
     OrganizationSelectionPlanCreate,
     OrganizationSelectionPlanResponse,
     OrganizationSelectionPlanUpdate,
+    OrganizationSelectionPublicationResponse,
+    OrganizationSelectionRevisionRequest,
 )
 from backend.security import get_current_active_user
 from backend.services import (
@@ -129,6 +131,97 @@ async def update_selection_plan(
             plan_id=plan_id,
             actor_user_id=current_user.id,
             payload=payload,
+        )
+    except SERVICE_ERRORS as exc:
+        _raise_service_error(exc)
+
+
+@router.post(
+    "/{organization_id}/selection-plans/{plan_id}/publish",
+    response_model=OrganizationSelectionPublicationResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def publish_selection_plan(
+    organization_id: str,
+    plan_id: str,
+    payload: OrganizationSelectionRevisionRequest,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> OrganizationSelectionPublicationResponse:
+    try:
+        return await organization_selection_plan_service.publish_selection_plan(
+            db,
+            organization_id=organization_id,
+            plan_id=plan_id,
+            actor_user_id=current_user.id,
+            payload=payload,
+        )
+    except SERVICE_ERRORS as exc:
+        _raise_service_error(exc)
+
+
+@router.post(
+    "/{organization_id}/selection-plans/{plan_id}/draft",
+    response_model=OrganizationSelectionPlanResponse,
+)
+async def begin_selection_plan_draft(
+    organization_id: str,
+    plan_id: str,
+    payload: OrganizationSelectionRevisionRequest,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> OrganizationSelectionPlanResponse:
+    try:
+        return await organization_selection_plan_service.begin_selection_plan_draft(
+            db,
+            organization_id=organization_id,
+            plan_id=plan_id,
+            actor_user_id=current_user.id,
+            payload=payload,
+        )
+    except SERVICE_ERRORS as exc:
+        _raise_service_error(exc)
+
+
+@router.get(
+    "/{organization_id}/selection-plans/{plan_id}/publications",
+    response_model=list[OrganizationSelectionPublicationResponse],
+)
+async def list_selection_publications(
+    organization_id: str,
+    plan_id: str,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> list[OrganizationSelectionPublicationResponse]:
+    try:
+        return await organization_selection_plan_service.list_selection_publications(
+            db,
+            organization_id=organization_id,
+            plan_id=plan_id,
+            actor_user_id=current_user.id,
+        )
+    except SERVICE_ERRORS as exc:
+        _raise_service_error(exc)
+
+
+@router.get(
+    "/{organization_id}/selection-plans/{plan_id}/publications/{publication_version}",
+    response_model=OrganizationSelectionPublicationResponse,
+)
+async def get_selection_publication(
+    organization_id: str,
+    plan_id: str,
+    publication_version: int,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> OrganizationSelectionPublicationResponse:
+    try:
+        return await organization_selection_plan_service.get_selection_publication(
+            db,
+            organization_id=organization_id,
+            plan_id=plan_id,
+            publication_version=publication_version,
+            actor_user_id=current_user.id,
         )
     except SERVICE_ERRORS as exc:
         _raise_service_error(exc)

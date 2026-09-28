@@ -256,6 +256,9 @@ export interface OrganizationSelectionPlan {
   reserve_roster_membership_ids: string[];
   captain_roster_membership_id: string | null;
   wicketkeeper_roster_membership_id: string | null;
+  batting_order_roster_membership_ids: string[];
+  bowling_plan: OrganizationBowlingPlanEntry[];
+  latest_publication_version: number | null;
   created_by_user_id: string;
   updated_by_user_id: string;
   created_at: string;
@@ -283,6 +286,39 @@ export interface OrganizationSelectionPlanUpdate {
   reserve_roster_membership_ids: string[];
   captain_roster_membership_id: string | null;
   wicketkeeper_roster_membership_id: string | null;
+  batting_order_roster_membership_ids: string[];
+  bowling_plan: OrganizationBowlingPlanEntry[];
+}
+
+export interface OrganizationBowlingPlanEntry {
+  roster_membership_id: string;
+  role: 'primary' | 'secondary';
+}
+
+export interface OrganizationSelectionPublishedPlayer {
+  roster_membership_id: string;
+  player_profile_id: string;
+  player_name: string;
+  selection_role: 'xi' | 'reserve';
+  batting_position: number | null;
+  bowling_priority: number | null;
+  bowling_role: 'primary' | 'secondary' | null;
+}
+
+export interface OrganizationSelectionPublication {
+  id: string;
+  organization_id: string;
+  selection_plan_id: string;
+  team_id: string;
+  fixture_id: string;
+  plan_revision: number;
+  publication_version: number;
+  status: 'published';
+  captain_roster_membership_id: string;
+  wicketkeeper_roster_membership_id: string;
+  players: OrganizationSelectionPublishedPlayer[];
+  published_by_user_id: string;
+  published_at: string;
 }
 
 export type OrganizationEventType = 'training' | 'other';
