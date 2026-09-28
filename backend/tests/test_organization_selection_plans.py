@@ -21,6 +21,7 @@ from backend.services.organization_selection_plan_service import (
 from backend.sql_app.database import get_session_local
 from backend.sql_app.models import (
     Fixture,
+    OrganizationAvailabilityTarget,
     OrganizationSelectionPlan,
     OrganizationSelectionPlanPlayer,
     PlayerProfile,
@@ -211,6 +212,7 @@ async def test_shared_school_club_draft_creation_candidates_and_no_user_identity
             "player_profile_id": player["player_profile_id"],
             "player_name": "Roster Only Player",
             "eligible": True,
+            "availability_state": None,
         }
     ]
     assert "Not Authority" not in candidates.text
@@ -218,6 +220,126 @@ async def test_shared_school_club_draft_creation_candidates_and_no_user_identity
     async with session_maker() as session:
         assert await session.scalar(select(func.count(User.id))) == 1
         assert await session.get(PlayerProfile, player["player_profile_id"]) is not None
+
+
+@pytest.mark.parametrize("organization_type", ["school", "club"])
+async def test_candidates_compose_fixture_availability_without_materializing_reads(
+    school_client: TestClient,
+    organization_type: str,
+) -> None:
+    owner = register_user(
+        school_client,
+        f"selection-availability-{organization_type}@example.com",
+    )
+    organization = (
+        create_school(school_client, owner, "Availability Selection School")
+        if organization_type == "school"
+        else create_club(school_client, owner, "Availability Selection Club")
+    )
+    team = _team(school_client, owner, organization["id"], "Availability XI")
+    opponent = _team(school_client, owner, organization["id"], "Availability Opponent")
+    players = [
+        _player(school_client, owner, organization["id"], name)
+        for name in ("Available Player", "Unavailable Player", "Maybe Player", "No Response Player")
+    ]
+    assignments = [
+        _assign(school_client, owner, organization["id"], team["id"], player["id"])
+        for player in players
+    ]
+    fixture = _fixture(
+        school_client,
+        owner,
+        organization["id"],
+        team["id"],
+        opponent["id"],
+        name=f"{organization_type.title()} Availability Cup",
+    )
+    plan = _create_plan(
+        school_client,
+        owner,
+        organization["id"],
+        team["id"],
+        fixture["id"],
+    ).json()
+    candidates_url = (
+        f"/api/organizations/{organization['id']}/selection-plans/{plan['id']}/candidates"
+    )
+
+    first_read = school_client.get(candidates_url, headers=owner.headers)
+    assert first_read.status_code == 200, first_read.text
+    assert {candidate["availability_state"] for candidate in first_read.json()["candidates"]} == {
+        None
+    }
+    session_maker = school_client.session_maker  # type: ignore[attr-defined]
+    async with session_maker() as session:
+        assert (
+            await session.scalar(
+                select(func.count(OrganizationAvailabilityTarget.id)).where(
+                    OrganizationAvailabilityTarget.organization_id == organization["id"]
+                )
+            )
+            == 0
+        )
+
+    for player, state in zip(players[:3], ("available", "unavailable", "maybe"), strict=True):
+        recorded = school_client.put(
+            f"/api/organizations/{organization['id']}/availability/fixture/{fixture['id']}"
+            f"/players/{player['id']}",
+            json={"state": state},
+            headers=owner.headers,
+        )
+        assert recorded.status_code == 200, recorded.text
+
+    composed = school_client.get(candidates_url, headers=owner.headers)
+    assert composed.status_code == 200, composed.text
+    assert {
+        candidate["player_name"]: candidate["availability_state"]
+        for candidate in composed.json()["candidates"]
+    } == {
+        "Available Player": "available",
+        "Unavailable Player": "unavailable",
+        "Maybe Player": "maybe",
+        "No Response Player": None,
+    }
+
+    deactivate = school_client.delete(
+        f"/api/organizations/{organization['id']}/teams/{team['id']}"
+        f"/players/{assignments[0]['id']}",
+        headers=owner.headers,
+    )
+    assert deactivate.status_code == 204, deactivate.text
+    after_inactive = school_client.get(candidates_url, headers=owner.headers)
+    assert after_inactive.status_code == 200, after_inactive.text
+    assert "Available Player" not in {
+        candidate["player_name"] for candidate in after_inactive.json()["candidates"]
+    }
+
+    advisory_update = _update_plan(
+        school_client,
+        owner,
+        organization["id"],
+        plan["id"],
+        {
+            "expected_revision": 1,
+            "xi_roster_membership_ids": [players[1]["id"], players[2]["id"]],
+            "reserve_roster_membership_ids": [players[3]["id"]],
+        },
+    )
+    assert advisory_update.status_code == 200, advisory_update.text
+    assert advisory_update.json()["revision"] == 2
+
+    ineligible_update = _update_plan(
+        school_client,
+        owner,
+        organization["id"],
+        plan["id"],
+        {
+            "expected_revision": 2,
+            "xi_roster_membership_ids": [players[0]["id"]],
+            "reserve_roster_membership_ids": [],
+        },
+    )
+    assert ineligible_update.status_code == 422
 
 
 async def test_read_only_roles_discover_existing_plan_by_team_fixture_context(

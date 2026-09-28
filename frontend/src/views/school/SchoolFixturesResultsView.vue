@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 
 import { useSchoolContext } from '@/composables/useSchoolContext';
 import { getErrorMessage } from '@/services/api';
@@ -14,8 +14,17 @@ import type {
   SchoolPublicationState,
 } from '@/types/schoolAdmin';
 
-const { organizationId, terminology, canViewFixturesResults, canPublishScorecards } =
-  useSchoolContext();
+const {
+  organizationId,
+  organizationBasePath,
+  terminology,
+  entitlement,
+  canViewFixturesResults,
+  canPublishScorecards,
+} = useSchoolContext();
+const canViewSelectionPlans = computed(() =>
+  (entitlement.value?.capabilities || []).includes('organization_selection_plans'),
+);
 const fixtures = ref<SchoolFixtureSummary[]>([]);
 const results = ref<SchoolMatchResult[]>([]);
 const loading = ref(true);
@@ -89,6 +98,20 @@ watch(organizationId, load, { immediate: true });
             Linked match: {{ fixture.game_id }} · {{ fixture.game_status || 'not started' }}
           </p>
           <p v-if="fixture.result">Official result: {{ fixture.result }}</p>
+          <div
+            v-if="canViewSelectionPlans && fixture.fixture_status === 'scheduled'"
+            class="actions"
+            aria-label="Draft selection plans"
+          >
+            <RouterLink
+              :to="`${organizationBasePath}/${organizationId}/selection/${fixture.fixture_id}/${fixture.team_a_id}`"
+              >Plan {{ fixture.team_a_name }}</RouterLink
+            >
+            <RouterLink
+              :to="`${organizationBasePath}/${organizationId}/selection/${fixture.fixture_id}/${fixture.team_b_id}`"
+              >Plan {{ fixture.team_b_name }}</RouterLink
+            >
+          </div>
           <RouterLink
             v-if="fixture.game_id && fixture.public_scorecard_available"
             :to="`/school-scorecards/${fixture.game_id}`"

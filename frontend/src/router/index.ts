@@ -55,6 +55,11 @@ const organizationAdminChildren = (namePrefix: 'school' | 'club'): RouteRecordRa
     component: () => import('@/views/school/SchoolFixturesResultsView.vue'),
   },
   {
+    path: 'selection/:fixtureId/:teamId',
+    name: `${namePrefix}-selection-plan`,
+    component: () => import('@/views/school/OrganizationSelectionPlanView.vue'),
+  },
+  {
     path: 'competitions',
     name: `${namePrefix}-competitions`,
     component: () => import('@/views/school/SchoolCompetitionsView.vue'),

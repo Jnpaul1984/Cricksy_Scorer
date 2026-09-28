@@ -37,6 +37,9 @@ import type {
   FreeOrganizationType,
   OrganizationPlayerAvailability,
   OrganizationPlayerAttendance,
+  OrganizationSelectionCandidateResponse,
+  OrganizationSelectionPlan,
+  OrganizationSelectionPlanUpdate,
 } from '@/types/schoolAdmin';
 
 const orgPath = (organizationId: string, suffix = '') =>
@@ -341,6 +344,42 @@ export const listSchoolResults = (organizationId: string) =>
   apiRequest<SchoolMatchResult[]>(orgPath(organizationId, '/results'));
 export const listSchoolFixtures = (organizationId: string) =>
   apiRequest<SchoolFixtureSummary[]>(orgPath(organizationId, '/fixtures'));
+
+export const getOrganizationSelectionPlan = (
+  organizationId: string,
+  teamId: string,
+  fixtureId: string,
+) => {
+  const params = new URLSearchParams({ team_id: teamId, fixture_id: fixtureId });
+  return apiRequest<OrganizationSelectionPlan>(
+    orgPath(organizationId, `/selection-plans?${params.toString()}`),
+  );
+};
+export const createOrganizationSelectionPlan = (
+  organizationId: string,
+  teamId: string,
+  fixtureId: string,
+) =>
+  apiRequest<OrganizationSelectionPlan>(orgPath(organizationId, '/selection-plans'), {
+    method: 'POST',
+    body: JSON.stringify({ team_id: teamId, fixture_id: fixtureId }),
+  });
+export const getOrganizationSelectionCandidates = (
+  organizationId: string,
+  planId: string,
+) =>
+  apiRequest<OrganizationSelectionCandidateResponse>(
+    orgPath(organizationId, `/selection-plans/${encodeURIComponent(planId)}/candidates`),
+  );
+export const updateOrganizationSelectionPlan = (
+  organizationId: string,
+  planId: string,
+  payload: OrganizationSelectionPlanUpdate,
+) =>
+  apiRequest<OrganizationSelectionPlan>(
+    orgPath(organizationId, `/selection-plans/${encodeURIComponent(planId)}`),
+    { method: 'PATCH', body: JSON.stringify(payload) },
+  );
 
 export const listSchoolCompetitions = (organizationId: string) =>
   apiRequest<SchoolCompetition[]>(orgPath(organizationId, '/competitions'));
