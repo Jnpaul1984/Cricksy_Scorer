@@ -40,6 +40,7 @@ FREE_ORGANIZATION_CAPABILITIES = frozenset(
         "organization_availability",
         "organization_attendance",
         "organization_selection_plans",
+        "organization_notifications",
     }
 )
 FREE_ORGANIZATION_EXCLUDED_CAPABILITIES = frozenset(
