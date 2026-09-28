@@ -243,6 +243,48 @@ export interface SchoolFixtureSummary {
   public_scorecard_available: boolean;
 }
 
+export type OrganizationSelectionAvailabilityState = 'available' | 'unavailable' | 'maybe';
+
+export interface OrganizationSelectionPlan {
+  id: string;
+  organization_id: string;
+  team_id: string;
+  fixture_id: string;
+  status: 'draft' | 'published';
+  revision: number;
+  xi_roster_membership_ids: string[];
+  reserve_roster_membership_ids: string[];
+  captain_roster_membership_id: string | null;
+  wicketkeeper_roster_membership_id: string | null;
+  created_by_user_id: string;
+  updated_by_user_id: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface OrganizationSelectionCandidate {
+  roster_membership_id: string;
+  player_profile_id: string;
+  player_name: string;
+  eligible: boolean;
+  availability_state: OrganizationSelectionAvailabilityState | null;
+}
+
+export interface OrganizationSelectionCandidateResponse {
+  organization_id: string;
+  team_id: string;
+  fixture_id: string;
+  candidates: OrganizationSelectionCandidate[];
+}
+
+export interface OrganizationSelectionPlanUpdate {
+  expected_revision: number;
+  xi_roster_membership_ids: string[];
+  reserve_roster_membership_ids: string[];
+  captain_roster_membership_id: string | null;
+  wicketkeeper_roster_membership_id: string | null;
+}
+
 export type OrganizationEventType = 'training' | 'other';
 export type OrganizationEventStatus = 'scheduled' | 'cancelled';
 export type OrganizationEventParticipantScope = 'organization' | 'teams' | 'selected_players';

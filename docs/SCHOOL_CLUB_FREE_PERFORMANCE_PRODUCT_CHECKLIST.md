@@ -151,7 +151,7 @@ Checklist cells cite these exact current-code anchors. A citation is evidence of
 | FREE-SEL-002 | Current playing XI | Free | BUILT | LOW | E-MATCH | Preserve match-local XI. | Match setup | No | C-DB |
 | FREE-SEL-003 | Captain | Free | BUILT | LOW | E-MATCH | Preserve XI validation. | Playing XI | No | C-DB |
 | FREE-SEL-004 | Wicketkeeper | Free | BUILT | LOW | E-MATCH | Preserve XI validation. | Playing XI | No | C-DB |
-| FREE-SEL-005 | Availability integrated into selection | Free | NEW | LOW | E-MATCH has no availability input. | Add advisory signal only. | FREE-AVL-001 | No | C-DB |
+| FREE-SEL-005 | Availability integrated into selection | Free | BUILT | LOW | E-SEL composes active normalized Team-roster candidates with the existing fixture Availability target/current state; `OrganizationSelectionPlanView.vue` presents Available, Unavailable, Maybe and No response without mutating Availability or blocking deliberate draft choices. | Preserve Availability as a read-only advisory signal and keep retained ineligible-player history outside the selectable candidate roster. | FREE-AVL-001, Selection plan | No | C-DB |
 | FREE-SEL-006 | Reserves/substitutes | Free | BUILT | LOW | E-SEL persists normalized, mutually exclusive draft XI and reserve memberships. | Preserve draft-only semantics until governed publication/handoff. | Selection plan | No | C-DB |
 | FREE-SEL-007 | Basic batting-order planning | Free | NEW | LOW | Scoring scorecards are live truth; no draft order. | Add separate planned order. | Selection plan | No | C-DB |
 | FREE-SEL-008 | Basic bowling-role/order planning | Free | NEW | LOW | No pre-match bowling plan. | Add separate planned role/order. | Selection plan | No | C-DB |

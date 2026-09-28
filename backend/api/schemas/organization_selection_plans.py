@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field, model_validator
 from pydantic_core import PydanticCustomError
 
 SelectionPlanStatus = Literal["draft", "published"]
+SelectionAvailabilityState = Literal["available", "unavailable", "maybe"]
 
 
 class OrganizationSelectionPlanCreate(BaseModel):
@@ -76,6 +77,7 @@ class OrganizationSelectionCandidate(BaseModel):
     player_profile_id: str
     player_name: str
     eligible: bool
+    availability_state: SelectionAvailabilityState | None
 
 
 class OrganizationSelectionCandidateResponse(BaseModel):

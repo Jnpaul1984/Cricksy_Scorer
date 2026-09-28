@@ -18,6 +18,8 @@ from backend.services.organization_entitlement_service import require_organizati
 from backend.sql_app.models import (
     Fixture,
     Organization,
+    OrganizationAvailabilityTarget,
+    OrganizationPlayerAvailability,
     OrganizationSelectionPlan,
     OrganizationSelectionPlanPlayer,
     PlayerProfile,
@@ -530,6 +532,30 @@ async def selection_candidates(
             )
         ).all()
     )
+    membership_ids = [membership.id for membership, _ in rows]
+    availability_by_membership: dict[str, str] = {}
+    if membership_ids:
+        target_id = await db.scalar(
+            select(OrganizationAvailabilityTarget.id).where(
+                OrganizationAvailabilityTarget.organization_id == organization_id,
+                OrganizationAvailabilityTarget.target_type == "fixture",
+                OrganizationAvailabilityTarget.fixture_id == plan.fixture_id,
+            )
+        )
+        if target_id is not None:
+            availability_rows = await db.execute(
+                select(
+                    OrganizationPlayerAvailability.school_player_membership_id,
+                    OrganizationPlayerAvailability.state,
+                ).where(
+                    OrganizationPlayerAvailability.organization_id == organization_id,
+                    OrganizationPlayerAvailability.target_id == target_id,
+                    OrganizationPlayerAvailability.school_player_membership_id.in_(membership_ids),
+                )
+            )
+            for membership_id, state in availability_rows.tuples():
+                availability_by_membership[membership_id] = state
+
     return OrganizationSelectionCandidateResponse(
         organization_id=organization_id,
         team_id=plan.team_id,
@@ -540,6 +566,7 @@ async def selection_candidates(
                 player_profile_id=membership.player_profile_id,
                 player_name=profile.player_name,
                 eligible=True,
+                availability_state=availability_by_membership.get(membership.id),  # type: ignore[arg-type]
             )
             for membership, profile in rows
         ],
