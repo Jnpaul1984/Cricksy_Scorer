@@ -44,6 +44,7 @@ const preferencesLoading = ref(true);
 const error = ref('');
 const preferenceError = ref('');
 const notice = ref('');
+const accessFailed = ref(false);
 const markingIds = ref<Set<string>>(new Set());
 const updatingCategories = ref<Set<OrganizationNotificationCategory>>(new Set());
 let contextGeneration = 0;
@@ -79,13 +80,25 @@ function clearProtectedState() {
   items.value = [];
   preferences.value = [];
   total.value = 0;
+  loading.value = false;
+  loadingMore.value = false;
+  preferencesLoading.value = false;
   markingIds.value = new Set();
   updatingCategories.value = new Set();
   shell?.clearPrivateState();
 }
 
+function settleAccessFailure(reason: unknown) {
+  accessFailed.value = true;
+  clearProtectedState();
+  notice.value = '';
+  preferenceError.value = '';
+  error.value = organizationOperationError(reason, 'notification inbox');
+}
+
 function resetWorkspace() {
   clearProtectedState();
+  accessFailed.value = false;
   error.value = '';
   preferenceError.value = '';
   notice.value = '';
@@ -97,12 +110,10 @@ function resetWorkspace() {
   });
 }
 
-async function loadInbox(reset = true) {
+async function loadInbox(reset = true): Promise<boolean> {
   if (!canView.value) {
     clearProtectedState();
-    loading.value = false;
-    loadingMore.value = false;
-    return;
+    return false;
   }
   const context = contextGeneration;
   const request = ++inboxRequestGeneration;
@@ -130,13 +141,18 @@ async function loadInbox(reset = true) {
       organizationId.value !== currentOrganizationId ||
       organizationType.value !== currentOrganizationType
     )
-      return;
+      return false;
     items.value = reset ? response.items : [...items.value, ...response.items];
     total.value = response.total;
+    return true;
   } catch (reason) {
-    if (context !== contextGeneration || request !== inboxRequestGeneration) return;
-    if (isAccessFailure(reason)) clearProtectedState();
+    if (context !== contextGeneration || request !== inboxRequestGeneration) return false;
+    if (isAccessFailure(reason)) {
+      settleAccessFailure(reason);
+      return false;
+    }
     error.value = organizationOperationError(reason, 'notification inbox');
+    return false;
   } finally {
     if (context === contextGeneration && request === inboxRequestGeneration) {
       loading.value = false;
@@ -145,11 +161,11 @@ async function loadInbox(reset = true) {
   }
 }
 
-async function loadPreferences() {
+async function loadPreferences(): Promise<boolean> {
   if (!canView.value) {
     preferences.value = [];
     preferencesLoading.value = false;
-    return;
+    return false;
   }
   const context = contextGeneration;
   const request = ++preferenceRequestGeneration;
@@ -165,12 +181,17 @@ async function loadPreferences() {
       organizationId.value !== currentOrganizationId ||
       organizationType.value !== currentOrganizationType
     )
-      return;
+      return false;
     preferences.value = response.items;
+    return true;
   } catch (reason) {
-    if (context !== contextGeneration || request !== preferenceRequestGeneration) return;
-    if (isAccessFailure(reason)) clearProtectedState();
+    if (context !== contextGeneration || request !== preferenceRequestGeneration) return false;
+    if (isAccessFailure(reason)) {
+      settleAccessFailure(reason);
+      return false;
+    }
     preferenceError.value = organizationOperationError(reason, 'notification preferences');
+    return false;
   } finally {
     if (context === contextGeneration && request === preferenceRequestGeneration) {
       preferencesLoading.value = false;
@@ -180,8 +201,15 @@ async function loadPreferences() {
 
 async function refresh() {
   const context = contextGeneration;
-  await Promise.all([loadInbox(true), loadPreferences(), shell?.refreshUnreadCount()]);
-  if (context === contextGeneration) notice.value = 'Notification inbox refreshed.';
+  accessFailed.value = false;
+  notice.value = '';
+  const [inboxLoaded, preferencesLoaded] = await Promise.all([
+    loadInbox(true),
+    loadPreferences(),
+    shell?.refreshUnreadCount(),
+  ]);
+  if (context === contextGeneration && inboxLoaded && preferencesLoaded && !accessFailed.value)
+    notice.value = 'Notification inbox refreshed.';
 }
 
 async function markRead(item: OrganizationNotification) {
@@ -212,8 +240,8 @@ async function markRead(item: OrganizationNotification) {
     await shell?.refreshUnreadCount();
   } catch (reason) {
     if (context !== contextGeneration) return;
-    if (isAccessFailure(reason)) clearProtectedState();
-    error.value = organizationOperationError(reason, 'notification');
+    if (isAccessFailure(reason)) settleAccessFailure(reason);
+    else error.value = organizationOperationError(reason, 'notification');
   } finally {
     if (context === contextGeneration) {
       const next = new Set(markingIds.value);
@@ -251,8 +279,8 @@ async function changePreference(value: OrganizationNotificationCategory, enabled
     notice.value = `${categoryLabel(value)} preference updated for future deliveries.`;
   } catch (reason) {
     if (context !== contextGeneration) return;
-    if (isAccessFailure(reason)) clearProtectedState();
-    preferenceError.value = organizationOperationError(reason, 'notification preference');
+    if (isAccessFailure(reason)) settleAccessFailure(reason);
+    else preferenceError.value = organizationOperationError(reason, 'notification preference');
   } finally {
     if (context === contextGeneration) {
       const next = new Set(updatingCategories.value);
@@ -300,6 +328,7 @@ watch(
     </header>
 
     <p v-if="!canView" class="notice">Notifications are not enabled for this organization.</p>
+    <p v-else-if="accessFailed" class="error" role="alert">{{ error }}</p>
     <template v-else>
       <div class="toolbar" aria-label="Notification inbox controls">
         <label>

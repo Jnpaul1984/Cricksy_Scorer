@@ -126,10 +126,13 @@ function mountView(
   organizationType = ref<FreeOrganizationType>('school'),
   role: SchoolMembershipRole = 'owner',
 ) {
+  const unreadCount = ref(2);
   const shell: OrganizationNotificationShellContext = {
-    unreadCount: ref(2),
+    unreadCount,
     refreshUnreadCount: vi.fn().mockResolvedValue(undefined),
-    clearPrivateState: vi.fn(),
+    clearPrivateState: vi.fn(() => {
+      unreadCount.value = 0;
+    }),
   };
   return {
     shell,
@@ -341,6 +344,151 @@ describe('shared organization notification inbox', () => {
       expect(wrapper.find('[data-test=notification-one]').exists()).toBe(false);
       expect(shell.clearPrivateState).toHaveBeenCalled();
       expect(wrapper.get('[role=alert]').text()).not.toContain('access revoked');
+    },
+  );
+
+  it.each([403, 404])(
+    'settles an inbox refresh after a controlled %s access failure without a success notice',
+    async (status) => {
+      vi.mocked(schoolApi.listOrganizationNotifications)
+        .mockResolvedValueOnce({ items: [notification('one')], total: 1, limit: 20, offset: 0 })
+        .mockRejectedValueOnce(Object.assign(new Error('private backend detail'), { status }));
+      const { wrapper, shell } = mountView();
+      await flushPromises();
+
+      await wrapper.get('[data-test=refresh-notifications]').trigger('click');
+      await flushPromises();
+
+      expect(wrapper.find('[data-test=notification-one]').exists()).toBe(false);
+      expect(wrapper.find('[data-test=preference-event]').exists()).toBe(false);
+      expect(shell.unreadCount.value).toBe(0);
+      expect(shell.clearPrivateState).toHaveBeenCalled();
+      expect(wrapper.text()).not.toContain('Loading notifications…');
+      expect(wrapper.text()).not.toContain('Loading notification preferences…');
+      expect(wrapper.text()).not.toContain('Notification inbox refreshed.');
+      expect(wrapper.get('[role=alert]').text()).not.toContain('private backend detail');
+      expect(wrapper.get('[role=alert]').text()).toMatch(/permission|not found/i);
+      const state = wrapper.vm as unknown as {
+        loading: boolean;
+        loadingMore: boolean;
+        preferencesLoading: boolean;
+      };
+      expect(state.loading).toBe(false);
+      expect(state.loadingMore).toBe(false);
+      expect(state.preferencesLoading).toBe(false);
+    },
+  );
+
+  it.each([403, 404])(
+    'settles a preference refresh after a controlled %s access failure without stale defaults',
+    async (status) => {
+      vi.mocked(schoolApi.listOrganizationNotificationPreferences)
+        .mockResolvedValueOnce({ items: categories.map((value) => preference(value)) })
+        .mockRejectedValueOnce(Object.assign(new Error('private preference detail'), { status }));
+      const { wrapper, shell } = mountView();
+      await flushPromises();
+
+      await wrapper.get('[data-test=refresh-notifications]').trigger('click');
+      await flushPromises();
+
+      expect(wrapper.find('[data-test=notification-one]').exists()).toBe(false);
+      expect(wrapper.findAll('.preference-row')).toHaveLength(0);
+      expect(shell.unreadCount.value).toBe(0);
+      expect(wrapper.text()).not.toContain('Loading notifications…');
+      expect(wrapper.text()).not.toContain('Loading notification preferences…');
+      expect(wrapper.text()).not.toContain('Notification inbox refreshed.');
+      expect(wrapper.get('[role=alert]').text()).not.toContain('private preference detail');
+      expect(wrapper.get('[role=alert]').text()).toMatch(/permission|not found/i);
+      const state = wrapper.vm as unknown as {
+        loading: boolean;
+        loadingMore: boolean;
+        preferencesLoading: boolean;
+      };
+      expect(state.loading).toBe(false);
+      expect(state.loadingMore).toBe(false);
+      expect(state.preferencesLoading).toBe(false);
+    },
+  );
+
+  it('settles an in-progress load-more request when access is revoked', async () => {
+    let rejectNextPage: (reason: unknown) => void = () => undefined;
+    const nextPage = new Promise<
+      Awaited<ReturnType<typeof schoolApi.listOrganizationNotifications>>
+    >((_resolve, reject) => {
+      rejectNextPage = reject;
+    });
+    vi.mocked(schoolApi.listOrganizationNotifications)
+      .mockResolvedValueOnce({ items: [notification('one')], total: 2, limit: 20, offset: 0 })
+      .mockReturnValueOnce(nextPage);
+    const { wrapper } = mountView();
+    await flushPromises();
+
+    await wrapper.get('[data-test=load-more-notifications]').trigger('click');
+    await wrapper.vm.$nextTick();
+    expect((wrapper.vm as unknown as { loadingMore: boolean }).loadingMore).toBe(true);
+
+    rejectNextPage(Object.assign(new Error('membership revoked'), { status: 403 }));
+    await flushPromises();
+
+    const state = wrapper.vm as unknown as {
+      loading: boolean;
+      loadingMore: boolean;
+      preferencesLoading: boolean;
+    };
+    expect(state.loading).toBe(false);
+    expect(state.loadingMore).toBe(false);
+    expect(state.preferencesLoading).toBe(false);
+    expect(wrapper.find('[data-test=notification-one]').exists()).toBe(false);
+    expect(wrapper.get('[role=alert]').text()).toContain('do not have permission');
+  });
+
+  it.each(['inbox', 'preferences'] as const)(
+    'does not restore private data from a late stale %s response after access failure',
+    async (lateResponse) => {
+      let resolveInbox: (
+        value: Awaited<ReturnType<typeof schoolApi.listOrganizationNotifications>>,
+      ) => void = () => undefined;
+      let resolvePreferences: (
+        value: Awaited<ReturnType<typeof schoolApi.listOrganizationNotificationPreferences>>,
+      ) => void = () => undefined;
+      const pendingInbox = new Promise<
+        Awaited<ReturnType<typeof schoolApi.listOrganizationNotifications>>
+      >((resolve) => {
+        resolveInbox = resolve;
+      });
+      const pendingPreferences = new Promise<
+        Awaited<ReturnType<typeof schoolApi.listOrganizationNotificationPreferences>>
+      >((resolve) => {
+        resolvePreferences = resolve;
+      });
+      const accessFailure = Object.assign(new Error('membership revoked'), { status: 403 });
+      vi.mocked(schoolApi.listOrganizationNotifications)
+        .mockResolvedValueOnce({ items: [notification('one')], total: 1, limit: 20, offset: 0 })
+        [lateResponse === 'inbox' ? 'mockReturnValueOnce' : 'mockRejectedValueOnce'](
+          lateResponse === 'inbox' ? pendingInbox : accessFailure,
+        );
+      vi.mocked(schoolApi.listOrganizationNotificationPreferences)
+        .mockResolvedValueOnce({ items: categories.map((value) => preference(value)) })
+        [lateResponse === 'preferences' ? 'mockReturnValueOnce' : 'mockRejectedValueOnce'](
+          lateResponse === 'preferences' ? pendingPreferences : accessFailure,
+        );
+      const { wrapper } = mountView();
+      await flushPromises();
+
+      await wrapper.get('[data-test=refresh-notifications]').trigger('click');
+      await flushPromises();
+      if (lateResponse === 'inbox') {
+        resolveInbox({ items: [notification('late')], total: 1, limit: 20, offset: 0 });
+      } else {
+        resolvePreferences({ items: categories.map((value) => preference(value, true)) });
+      }
+      await flushPromises();
+
+      expect(wrapper.find('[data-test=notification-one]').exists()).toBe(false);
+      expect(wrapper.find('[data-test=notification-late]').exists()).toBe(false);
+      expect(wrapper.findAll('.preference-row')).toHaveLength(0);
+      expect(wrapper.text()).not.toContain('Notification inbox refreshed.');
+      expect(wrapper.get('[role=alert]').text()).toContain('do not have permission');
     },
   );
 

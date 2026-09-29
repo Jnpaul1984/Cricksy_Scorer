@@ -200,8 +200,14 @@ describe('Block 3D shared organization notification inbox', () => {
 
       cy.then(() => revoke());
       cy.get('[data-test=refresh-notifications]').click();
+      cy.wait(`@${kind}Inbox`);
+      cy.wait(`@${kind}Preferences`);
       cy.get('[data-test=notification-notification-a]').should('not.exist');
       cy.get('[data-test=notification-unread-count]').should('not.exist');
+      cy.get('[data-test=preference-event]').should('not.exist');
+      cy.contains('Loading notifications…').should('not.exist');
+      cy.contains('Loading notification preferences…').should('not.exist');
+      cy.contains('Notification inbox refreshed.').should('not.exist');
       cy.contains('membership revoked').should('not.exist');
       cy.get('[role=alert]').should('contain.text', 'do not have permission');
     });
