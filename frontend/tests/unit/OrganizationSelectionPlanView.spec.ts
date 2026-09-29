@@ -128,9 +128,15 @@ function context(
   };
 }
 
-function mountView(role: SchoolMembershipRole, organizationId: Ref<string> = ref('school-a')) {
+function mountView(
+  role: SchoolMembershipRole,
+  organizationId: Ref<string> = ref('school-a'),
+  organizationType: Ref<FreeOrganizationType> = ref('school'),
+) {
   return mount(OrganizationSelectionPlanView, {
-    global: { provide: { [schoolContextKey as symbol]: context(role, organizationId) } },
+    global: {
+      provide: { [schoolContextKey as symbol]: context(role, organizationId, organizationType) },
+    },
   });
 }
 
@@ -216,6 +222,58 @@ describe('shared organization selection plan workspace', () => {
         fixtureId: 'fixture-a',
       },
     });
+  });
+
+  it('distinguishes staff delivery from unresolved XI and reserve recipients', async () => {
+    const publication = {
+      id: 'publication-a',
+      organization_id: 'school-a',
+      selection_plan_id: 'plan-a',
+      team_id: 'team-a',
+      fixture_id: 'fixture-a',
+      plan_revision: 2,
+      publication_version: 1,
+      status: 'published' as const,
+      captain_roster_membership_id: 'player-a',
+      wicketkeeper_roster_membership_id: 'player-b',
+      players: [],
+      published_by_user_id: 'owner-a',
+      published_at: '2026-09-28T00:00:00Z',
+    };
+    vi.mocked(schoolApi.listOrganizationSelectionPublications).mockResolvedValue([publication]);
+    vi.mocked(schoolApi.notifyOrganizationSelectionPublication).mockResolvedValue({
+      source_type: 'selection_publication',
+      source_id: 'publication-a',
+      source_version: '1',
+      selection_plan_id: 'plan-a',
+      publication_version: 1,
+      safe_user_recipient_count: 2,
+      delivered_count: 2,
+      suppressed_by_preference_count: 0,
+      unresolved_roster_recipient_count: 13,
+      xi_roster_count: 11,
+      reserve_roster_count: 2,
+      unresolved_xi_count: 11,
+      unresolved_reserve_count: 2,
+    });
+    const wrapper = mountView('owner');
+    await flushPromises();
+    const versionButton = wrapper
+      .findAll('button')
+      .find((button) => button.text().includes('Version 1'));
+    await versionButton!.trigger('click');
+    await wrapper.get('[data-test="notify-selection"]').trigger('click');
+    await flushPromises();
+
+    expect(schoolApi.notifyOrganizationSelectionPublication).toHaveBeenCalledWith(
+      'school-a',
+      'plan-a',
+      1,
+    );
+    expect(wrapper.text()).toContain('sent to 2 staff Users');
+    expect(wrapper.text()).toContain('11 XI');
+    expect(wrapper.text()).toContain('2 reserve roster recipients are not directly reachable');
+    expect(wrapper.text()).not.toContain('13 players notified');
   });
 
   it('shows all four advisory states and never selects or mutates Availability automatically', async () => {
@@ -357,6 +415,63 @@ describe('shared organization selection plan workspace', () => {
     await flushPromises();
     expect(wrapper.text()).not.toContain('Available Player');
     expect(wrapper.text()).toContain('Revision 3');
+  });
+
+  it('suppresses a late selection notification across a Club to School switch', async () => {
+    const publication = {
+      id: 'publication-a',
+      organization_id: 'club-a',
+      selection_plan_id: 'plan-a',
+      team_id: 'team-a',
+      fixture_id: 'fixture-a',
+      plan_revision: 2,
+      publication_version: 1,
+      status: 'published' as const,
+      captain_roster_membership_id: 'player-a',
+      wicketkeeper_roster_membership_id: 'player-b',
+      players: [],
+      published_by_user_id: 'owner-a',
+      published_at: '2026-09-28T00:00:00Z',
+    };
+    vi.mocked(schoolApi.listOrganizationSelectionPublications).mockResolvedValue([publication]);
+    let resolveNotification: (
+      value: Awaited<ReturnType<typeof schoolApi.notifyOrganizationSelectionPublication>>,
+    ) => void = () => undefined;
+    vi.mocked(schoolApi.notifyOrganizationSelectionPublication).mockReturnValue(
+      new Promise((resolve) => {
+        resolveNotification = resolve;
+      }),
+    );
+    const organizationId = ref('club-a');
+    const organizationType = ref<FreeOrganizationType>('club');
+    const wrapper = mountView('owner', organizationId, organizationType);
+    await flushPromises();
+    const versionButton = wrapper
+      .findAll('button')
+      .find((button) => button.text().includes('Version 1'));
+    await versionButton!.trigger('click');
+    await wrapper.get('[data-test="notify-selection"]').trigger('click');
+    organizationId.value = 'school-b';
+    organizationType.value = 'school';
+    await flushPromises();
+    resolveNotification({
+      source_type: 'selection_publication',
+      source_id: publication.id,
+      source_version: '1',
+      selection_plan_id: publication.selection_plan_id,
+      publication_version: 1,
+      safe_user_recipient_count: 1,
+      delivered_count: 1,
+      suppressed_by_preference_count: 0,
+      unresolved_roster_recipient_count: 13,
+      xi_roster_count: 11,
+      reserve_roster_count: 2,
+      unresolved_xi_count: 11,
+      unresolved_reserve_count: 2,
+    });
+    await flushPromises();
+
+    expect(wrapper.text()).not.toContain('Selection notification sent to 1 staff User');
   });
 
   it('sanitizes 5xx details and presents controlled validation failures', async () => {

@@ -14,16 +14,20 @@ import OrganizationEventsView from '@/views/school/OrganizationEventsView.vue';
 vi.mock('@/services/schoolAdminApi');
 
 function context(
-  organizationType: FreeOrganizationType,
+  organizationType: FreeOrganizationType | Ref<FreeOrganizationType>,
   role: SchoolMembershipRole,
-  organizationId: Ref<string> = ref(`${organizationType}-a`),
+  organizationId: Ref<string> = ref(
+    `${typeof organizationType === 'string' ? organizationType : organizationType.value}-a`,
+  ),
 ): SchoolContext {
+  const organizationTypeRef =
+    typeof organizationType === 'string' ? ref(organizationType) : organizationType;
   const canManage = computed(() => ['owner', 'admin', 'coach'].includes(role));
   return {
     organizationId: computed(() => organizationId.value),
-    organizationType: computed(() => organizationType),
-    organizationBasePath: computed(() => organizationBasePath(organizationType)),
-    terminology: computed(() => organizationTerminology(organizationType)),
+    organizationType: computed(() => organizationTypeRef.value),
+    organizationBasePath: computed(() => organizationBasePath(organizationTypeRef.value)),
+    terminology: computed(() => organizationTerminology(organizationTypeRef.value)),
     organization: ref(null),
     membership: ref(null),
     entitlement: ref(null),
@@ -48,15 +52,19 @@ function context(
 }
 
 function mountView(
-  organizationType: FreeOrganizationType,
+  organizationType: FreeOrganizationType | Ref<FreeOrganizationType>,
   role: SchoolMembershipRole,
-  organizationId: Ref<string> = ref(`${organizationType}-a`),
+  organizationId: Ref<string> = ref(
+    `${typeof organizationType === 'string' ? organizationType : organizationType.value}-a`,
+  ),
 ) {
   const providedContext = context(organizationType, role, organizationId);
+  const currentOrganizationType =
+    typeof organizationType === 'string' ? organizationType : organizationType.value;
   providedContext.entitlement.value = {
     id: 'entitlement-a',
-    organization_id: `${organizationType}-a`,
-    plan_key: organizationType === 'club' ? 'club_free' : 'school_free',
+    organization_id: organizationId.value,
+    plan_key: currentOrganizationType === 'club' ? 'club_free' : 'school_free',
     status: 'active',
     source: 'system',
     effective_from: '',
@@ -320,6 +328,80 @@ describe('shared organization events view', () => {
     expect(wrapper.get('[role="status"]').text()).toContain('Event deleted.');
   });
 
+  it('reports safe User delivery and unresolved roster recipients honestly', async () => {
+    const event = {
+      id: 'notify-event',
+      organization_id: 'school-a',
+      event_type: 'training' as const,
+      title: 'Selection training',
+      description: null,
+      start_at: '2099-04-01T14:00:00Z',
+      end_at: null,
+      location: 'Main Ground',
+      participant_scope: 'selected_players' as const,
+      team_ids: [],
+      roster_membership_ids: ['roster-a'],
+      status: 'scheduled' as const,
+      created_by_user_id: 'owner-a',
+      updated_by_user_id: 'owner-a',
+      cancelled_by_user_id: null,
+      cancelled_at: null,
+      created_at: '',
+      updated_at: '2099-01-01T00:00:00Z',
+    };
+    vi.mocked(schoolApi.listOrganizationEvents).mockResolvedValue({
+      items: [event],
+      total: 1,
+      limit: 100,
+      offset: 0,
+    });
+    vi.mocked(schoolApi.getOrganizationCalendar).mockResolvedValue({
+      items: [
+        {
+          source_type: 'organization_event',
+          source_id: event.id,
+          title: event.title,
+          start_at: event.start_at,
+          end_at: null,
+          location: event.location,
+          status: 'scheduled',
+          event_type: 'training',
+          participant_scope: 'selected_players',
+          team_ids: [],
+          game_id: null,
+          competition_id: null,
+        },
+      ],
+      total: 1,
+      limit: 100,
+      offset: 0,
+    });
+    vi.mocked(schoolApi.notifyOrganizationEvent).mockResolvedValue({
+      source_type: 'organization_event',
+      source_id: event.id,
+      source_version: event.updated_at,
+      notification_type: 'update',
+      safe_user_recipient_count: 0,
+      delivered_count: 0,
+      suppressed_by_preference_count: 0,
+      unresolved_roster_recipient_count: 1,
+    });
+    const wrapper = mountView('school', 'coach');
+    await flushPromises();
+    await wrapper.get('[data-test="notify-event-update-notify-event"]').trigger('click');
+    await flushPromises();
+
+    expect(schoolApi.notifyOrganizationEvent).toHaveBeenCalledWith(
+      'school-a',
+      'notify-event',
+      'update',
+    );
+    expect(wrapper.text()).toContain('Sent to 0 safe in-app Users');
+    expect(wrapper.text()).toContain('1 roster participant');
+    expect(wrapper.text()).toContain('not directly reachable in-app');
+    expect(wrapper.text()).not.toContain('1 player notified');
+  });
+
   it('suppresses a stale calendar response after an organization switch', async () => {
     let resolveOld: (
       value: Awaited<ReturnType<typeof schoolApi.getOrganizationCalendar>>,
@@ -366,4 +448,91 @@ describe('shared organization events view', () => {
       limit: 100,
     });
   });
+
+  it.each([
+    ['school', 'school'],
+    ['club', 'club'],
+  ] as const)(
+    'suppresses a late notification result across a %s to %s organization switch',
+    async (fromType, toType) => {
+      const event = {
+        id: 'notify-event',
+        organization_id: `${fromType}-a`,
+        event_type: 'training' as const,
+        title: 'Training',
+        description: null,
+        start_at: '2099-04-01T14:00:00Z',
+        end_at: null,
+        location: 'Main Ground',
+        participant_scope: 'organization' as const,
+        team_ids: [],
+        roster_membership_ids: [],
+        status: 'scheduled' as const,
+        created_by_user_id: 'owner-a',
+        updated_by_user_id: 'owner-a',
+        cancelled_by_user_id: null,
+        cancelled_at: null,
+        created_at: '',
+        updated_at: '2099-01-01T00:00:00Z',
+      };
+      vi.mocked(schoolApi.listOrganizationEvents).mockResolvedValue({
+        items: [event],
+        total: 1,
+        limit: 100,
+        offset: 0,
+      });
+      vi.mocked(schoolApi.getOrganizationCalendar).mockResolvedValue({
+        items: [
+          {
+            source_type: 'organization_event',
+            source_id: event.id,
+            title: event.title,
+            start_at: event.start_at,
+            end_at: null,
+            location: event.location,
+            status: 'scheduled',
+            event_type: 'training',
+            participant_scope: 'organization',
+            team_ids: [],
+            game_id: null,
+            competition_id: null,
+          },
+        ],
+        total: 1,
+        limit: 100,
+        offset: 0,
+      });
+      let resolveNotification: (
+        value: Awaited<ReturnType<typeof schoolApi.notifyOrganizationEvent>>,
+      ) => void = () => undefined;
+      vi.mocked(schoolApi.notifyOrganizationEvent).mockReturnValue(
+        new Promise((resolve) => {
+          resolveNotification = resolve;
+        }),
+      );
+      const organizationId = ref(`${fromType}-a`);
+      const organizationType = ref<FreeOrganizationType>(fromType);
+      const wrapper = mountView(organizationType, 'owner', organizationId);
+      await flushPromises();
+      await wrapper.get('[data-test="notify-event-update-notify-event"]').trigger('click');
+      organizationId.value = `${toType}-b`;
+      organizationType.value = toType;
+      await flushPromises();
+      resolveNotification({
+        source_type: 'organization_event',
+        source_id: event.id,
+        source_version: event.updated_at,
+        notification_type: 'update',
+        safe_user_recipient_count: 1,
+        delivered_count: 1,
+        suppressed_by_preference_count: 0,
+        unresolved_roster_recipient_count: 0,
+      });
+      await flushPromises();
+
+      expect(wrapper.find('[data-test="event-notification-result-notify-event"]').exists()).toBe(
+        false,
+      );
+    },
+  );
 });

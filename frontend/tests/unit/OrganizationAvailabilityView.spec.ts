@@ -8,7 +8,7 @@ import {
 } from '@/composables/useOrganizationTerminology';
 import { schoolContextKey, type SchoolContext } from '@/composables/useSchoolContext';
 import * as schoolApi from '@/services/schoolAdminApi';
-import type { SchoolMembershipRole } from '@/types/schoolAdmin';
+import type { FreeOrganizationType, SchoolMembershipRole } from '@/types/schoolAdmin';
 import OrganizationAvailabilityView from '@/views/school/OrganizationAvailabilityView.vue';
 
 const mocks = vi.hoisted(() => ({
@@ -24,13 +24,14 @@ vi.mock('vue-router', () => ({
 function context(
   role: SchoolMembershipRole,
   organizationId: Ref<string> = ref('school-a'),
+  organizationType: Ref<FreeOrganizationType> = ref('school'),
 ): SchoolContext {
   const writable = computed(() => ['owner', 'admin', 'coach'].includes(role));
   return {
     organizationId: computed(() => organizationId.value),
-    organizationType: computed(() => 'school'),
-    organizationBasePath: computed(() => organizationBasePath('school')),
-    terminology: computed(() => organizationTerminology('school')),
+    organizationType: computed(() => organizationType.value),
+    organizationBasePath: computed(() => organizationBasePath(organizationType.value)),
+    terminology: computed(() => organizationTerminology(organizationType.value)),
     organization: ref(null),
     membership: ref({
       id: 'membership-a',
@@ -114,9 +115,15 @@ const summary = {
   offset: 0,
 };
 
-function mountView(role: SchoolMembershipRole, organizationId: Ref<string> = ref('school-a')) {
+function mountView(
+  role: SchoolMembershipRole,
+  organizationId: Ref<string> = ref('school-a'),
+  organizationType: Ref<FreeOrganizationType> = ref('school'),
+) {
   return mount(OrganizationAvailabilityView, {
-    global: { provide: { [schoolContextKey as symbol]: context(role, organizationId) } },
+    global: {
+      provide: { [schoolContextKey as symbol]: context(role, organizationId, organizationType) },
+    },
   });
 }
 
@@ -168,7 +175,36 @@ describe('shared organization availability view', () => {
     expect(wrapper.text()).toContain('Available');
     expect(wrapper.find('[data-test="availability-deadline"]').exists()).toBe(false);
     expect(wrapper.find('[data-test="set-available-player-a"]').exists()).toBe(false);
+    expect(wrapper.find('[data-test="send-availability-reminder"]').exists()).toBe(false);
     expect(schoolApi.getOrganizationAvailability).toHaveBeenCalled();
+  });
+
+  it('sends a bounded staff reminder without implying player delivery or mutation', async () => {
+    vi.mocked(schoolApi.sendOrganizationAvailabilityReminder).mockResolvedValue({
+      source_type: 'availability_target',
+      source_id: 'target-a',
+      source_version: 'version-a',
+      target_type: 'event',
+      no_response_count: 1,
+      safe_user_recipient_count: 2,
+      delivered_count: 2,
+      suppressed_by_preference_count: 0,
+      unresolved_roster_recipient_count: 1,
+    });
+    const wrapper = mountView('coach');
+    await flushPromises();
+    await wrapper.get('[data-test="send-availability-reminder"]').trigger('click');
+    await flushPromises();
+
+    expect(schoolApi.sendOrganizationAvailabilityReminder).toHaveBeenCalledWith(
+      'school-a',
+      'event',
+      'event-a',
+    );
+    expect(wrapper.text()).toContain('Reminder sent to 2 staff Users');
+    expect(wrapper.text()).toContain('1 roster response is still outstanding');
+    expect(wrapper.text()).toContain('not directly reachable in-app');
+    expect(schoolApi.recordOrganizationPlayerAvailability).not.toHaveBeenCalled();
   });
 
   it('applies state and Team filters to the shared API', async () => {
@@ -229,5 +265,38 @@ describe('shared organization availability view', () => {
       'event-a',
       { state: undefined, teamId: undefined, limit: 500 },
     );
+  });
+
+  it('suppresses a late reminder result across a School to Club switch', async () => {
+    let resolveReminder: (
+      value: Awaited<ReturnType<typeof schoolApi.sendOrganizationAvailabilityReminder>>,
+    ) => void = () => undefined;
+    vi.mocked(schoolApi.sendOrganizationAvailabilityReminder).mockReturnValue(
+      new Promise((resolve) => {
+        resolveReminder = resolve;
+      }),
+    );
+    const organizationId = ref('school-a');
+    const organizationType = ref<FreeOrganizationType>('school');
+    const wrapper = mountView('owner', organizationId, organizationType);
+    await flushPromises();
+    await wrapper.get('[data-test="send-availability-reminder"]').trigger('click');
+    organizationId.value = 'club-b';
+    organizationType.value = 'club';
+    await flushPromises();
+    resolveReminder({
+      source_type: 'availability_target',
+      source_id: 'target-a',
+      source_version: 'version-a',
+      target_type: 'event',
+      no_response_count: 1,
+      safe_user_recipient_count: 1,
+      delivered_count: 1,
+      suppressed_by_preference_count: 0,
+      unresolved_roster_recipient_count: 1,
+    });
+    await flushPromises();
+
+    expect(wrapper.text()).not.toContain('Reminder sent to 1 staff User');
   });
 });

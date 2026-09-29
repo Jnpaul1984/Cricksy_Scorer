@@ -13,11 +13,15 @@ from backend.api.schemas.organization_selection_plans import (
     OrganizationSelectionPublicationResponse,
     OrganizationSelectionRevisionRequest,
 )
+from backend.api.schemas.organization_workflow_notifications import (
+    OrganizationSelectionNotificationResult,
+)
 from backend.security import get_current_active_user
 from backend.services import (
     organization_entitlement_service,
     organization_selection_plan_service,
     organization_service,
+    organization_workflow_notification_service,
 )
 from backend.sql_app.database import get_db
 from backend.sql_app.models import User
@@ -30,6 +34,7 @@ SERVICE_ERRORS = (
     organization_selection_plan_service.OrganizationSelectionPlanServiceError,
     organization_service.OrganizationServiceError,
     organization_entitlement_service.OrganizationCapabilityError,
+    organization_workflow_notification_service.OrganizationWorkflowNotificationServiceError,
 )
 
 
@@ -38,12 +43,24 @@ def _raise_service_error(
         organization_selection_plan_service.OrganizationSelectionPlanServiceError
         | organization_service.OrganizationServiceError
         | organization_entitlement_service.OrganizationCapabilityError
+        | organization_workflow_notification_service.OrganizationWorkflowNotificationServiceError
     ),
 ) -> NoReturn:
     if isinstance(exc, organization_entitlement_service.OrganizationCapabilityError):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=f"Organization capability not enabled: {exc.capability}",
+        ) from exc
+    if (
+        isinstance(
+            exc,
+            organization_workflow_notification_service.OrganizationWorkflowNotificationServiceError,
+        )
+        and exc.status_code >= 500
+    ):
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail="Workflow notification service encountered a problem",
         ) from exc
     raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
 
@@ -218,6 +235,29 @@ async def get_selection_publication(
 ) -> OrganizationSelectionPublicationResponse:
     try:
         return await organization_selection_plan_service.get_selection_publication(
+            db,
+            organization_id=organization_id,
+            plan_id=plan_id,
+            publication_version=publication_version,
+            actor_user_id=current_user.id,
+        )
+    except SERVICE_ERRORS as exc:
+        _raise_service_error(exc)
+
+
+@router.post(
+    "/{organization_id}/selection-plans/{plan_id}/publications/{publication_version}/notifications",
+    response_model=OrganizationSelectionNotificationResult,
+)
+async def notify_selection_publication(
+    organization_id: str,
+    plan_id: str,
+    publication_version: int,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> OrganizationSelectionNotificationResult:
+    try:
+        return await organization_workflow_notification_service.notify_selection_publication(
             db,
             organization_id=organization_id,
             plan_id=plan_id,

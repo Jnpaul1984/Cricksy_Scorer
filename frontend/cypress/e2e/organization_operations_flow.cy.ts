@@ -91,7 +91,12 @@ function stubOperations(
     source: 'system',
     effective_from: createdAt,
     effective_until: null,
-    capabilities: ['organization_events', 'organization_availability', 'organization_attendance'],
+    capabilities: [
+      'organization_events',
+      'organization_availability',
+      'organization_attendance',
+      'organization_notifications',
+    ],
     excluded_capabilities: [],
     created_at: createdAt,
     updated_at: createdAt,
@@ -145,6 +150,22 @@ function stubOperations(
       req.reply(event);
     },
   ).as(`${kind}CancelEvent`);
+  cy.intercept(
+    'POST',
+    `**/api/organizations/${organizationId}/events/${event.id}/notifications`,
+    (req) => {
+      req.reply({
+        source_type: 'organization_event',
+        source_id: event.id,
+        source_version: event.updated_at,
+        notification_type: req.body.notification_type,
+        safe_user_recipient_count: 2,
+        delivered_count: 1,
+        suppressed_by_preference_count: 1,
+        unresolved_roster_recipient_count: players.length,
+      });
+    },
+  ).as(`${kind}NotifyEvent`);
   cy.intercept('DELETE', `**/api/organizations/${organizationId}/events/${event.id}`, {
     statusCode: 409,
     body: { detail: 'Event cannot be deleted while retained operational history exists' },
@@ -197,6 +218,21 @@ function stubOperations(
       req.reply({ statusCode: 200, body: {} });
     },
   );
+  cy.intercept(
+    'POST',
+    `**/api/organizations/${organizationId}/availability/event/${event.id}/reminders`,
+    {
+      source_type: 'availability_target',
+      source_id: 'availability-target-a',
+      source_version: 'availability-version-a',
+      target_type: 'event',
+      no_response_count: 1,
+      safe_user_recipient_count: 2,
+      delivered_count: 1,
+      suppressed_by_preference_count: 1,
+      unresolved_roster_recipient_count: 1,
+    },
+  ).as(`${kind}AvailabilityReminder`);
   cy.intercept(
     'GET',
     `**/api/organizations/${organizationId}/attendance/events/${event.id}*`,
@@ -260,6 +296,14 @@ describe('Block 1 shared organization operations', () => {
       cy.wait(`@${kind}CreateEvent`);
       cy.contains('h4', 'Started training').should('be.visible');
       cy.contains('Participants').should('be.visible');
+      cy.get('[data-test=notify-event-update-event-training]').click();
+      cy.wait(`@${kind}NotifyEvent`)
+        .its('request.body')
+        .should('deep.equal', { notification_type: 'update' });
+      cy.get('[data-test=event-notification-result-event-training]')
+        .should('contain.text', 'Sent to 1 safe in-app User')
+        .and('contain.text', '1 suppressed by preference')
+        .and('contain.text', '4 roster participants are not directly reachable in-app');
       cy.contains('a', 'Availability').click();
       cy.get('[data-test=set-available-player-1]').click();
       cy.get('[data-test=set-unavailable-player-2]').click();
@@ -270,6 +314,10 @@ describe('Block 1 shared organization operations', () => {
         cy.contains('Maybe').parent().should('contain.text', '1');
         cy.contains('No response').parent().should('contain.text', '1');
       });
+      cy.get('[data-test=send-availability-reminder]').click();
+      cy.wait(`@${kind}AvailabilityReminder`);
+      cy.contains('Reminder sent to 1 staff User').should('be.visible');
+      cy.contains('1 roster response is still outstanding').should('be.visible');
       cy.contains('a', 'Calendar').click();
       cy.contains('a', 'Attendance').click();
       cy.get('[data-test=set-present-player-1]').click();
@@ -286,6 +334,10 @@ describe('Block 1 shared organization operations', () => {
       cy.window().then((win) => cy.stub(win, 'confirm').returns(true));
       cy.contains('button', 'Cancel').click();
       cy.wait(`@${kind}CancelEvent`);
+      cy.get('[data-test=notify-event-cancellation-event-training]').click();
+      cy.wait(`@${kind}NotifyEvent`)
+        .its('request.body')
+        .should('deep.equal', { notification_type: 'cancellation' });
       cy.contains('a', 'Attendance').click();
       cy.contains('Existing attendance remains visible').should('be.visible');
       cy.get('[data-test^=set-present]').should('not.exist');

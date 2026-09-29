@@ -11,12 +11,14 @@ import {
   listOrganizationEvents,
   listSchoolPlayers,
   listSchoolTeams,
+  notifyOrganizationEvent,
   updateOrganizationEvent,
 } from '@/services/schoolAdminApi';
 import type {
   OrganizationCalendarItem,
   OrganizationEvent,
   OrganizationEventInput,
+  OrganizationEventNotificationResult,
   OrganizationEventParticipantScope,
   OrganizationEventType,
   SchoolRosterPlayer,
@@ -40,6 +42,11 @@ const loading = ref(true);
 const saving = ref(false);
 const error = ref('');
 const notice = ref('');
+const notificationResult = ref<{
+  eventId: string;
+  result: OrganizationEventNotificationResult;
+} | null>(null);
+const notifyingEventId = ref<string | null>(null);
 const editingId = ref<string | null>(null);
 let loadGeneration = 0;
 
@@ -217,6 +224,29 @@ async function remove(event: OrganizationEvent) {
   }
 }
 
+async function notify(event: OrganizationEvent, notificationType: 'update' | 'cancellation') {
+  const generation = loadGeneration;
+  const currentOrganizationId = organizationId.value;
+  notifyingEventId.value = event.id;
+  notificationResult.value = null;
+  error.value = '';
+  try {
+    const result = await notifyOrganizationEvent(
+      currentOrganizationId,
+      event.id,
+      notificationType,
+    );
+    if (generation !== loadGeneration || organizationId.value !== currentOrganizationId) return;
+    notificationResult.value = { eventId: event.id, result };
+  } catch (reason) {
+    if (generation === loadGeneration && organizationId.value === currentOrganizationId) {
+      error.value = organizationOperationError(reason, 'event notification');
+    }
+  } finally {
+    if (generation === loadGeneration) notifyingEventId.value = null;
+  }
+}
+
 function audience(item: OrganizationCalendarItem): string {
   if (item.source_type === 'fixture') {
     const names = item.team_ids.map((id) => teams.value.find((team) => team.id === id)?.name || id);
@@ -248,6 +278,8 @@ watch(
     ++loadGeneration;
     resetForm();
     notice.value = '';
+    notificationResult.value = null;
+    notifyingEventId.value = null;
     void load();
   },
   { immediate: true },
@@ -404,7 +436,26 @@ watch(
             >
               Cancel
             </button>
+            <button
+              type="button"
+              class="secondary"
+              :disabled="notifyingEventId !== null"
+              :data-test="`notify-event-update-${item.source_id}`"
+              @click="notify(eventFor(item)!, 'update')"
+            >
+              {{ notifyingEventId === item.source_id ? 'Sending…' : 'Notify update' }}
+            </button>
           </template>
+          <button
+            v-if="canManageEvents && eventFor(item)?.status === 'cancelled'"
+            type="button"
+            class="secondary"
+            :disabled="notifyingEventId !== null"
+            :data-test="`notify-event-cancellation-${item.source_id}`"
+            @click="notify(eventFor(item)!, 'cancellation')"
+          >
+            {{ notifyingEventId === item.source_id ? 'Sending…' : 'Notify cancellation' }}
+          </button>
           <button
             v-if="canManageEvents && eventFor(item)"
             type="button"
@@ -416,6 +467,22 @@ watch(
             Delete
           </button>
         </div>
+        <p
+          v-if="notificationResult?.eventId === item.source_id"
+          class="dispatch-result"
+          role="status"
+          :data-test="`event-notification-result-${item.source_id}`"
+        >
+          Sent to {{ notificationResult.result.delivered_count }} safe in-app User{{
+            notificationResult.result.delivered_count === 1 ? '' : 's'
+          }}.
+          {{ notificationResult.result.suppressed_by_preference_count }} suppressed by preference.
+          {{ notificationResult.result.unresolved_roster_recipient_count }} roster participant{{
+            notificationResult.result.unresolved_roster_recipient_count === 1 ? '' : 's'
+          }} {{
+            notificationResult.result.unresolved_roster_recipient_count === 1 ? 'is' : 'are'
+          }} not directly reachable in-app.
+        </p>
       </article>
     </section>
   </section>
@@ -523,6 +590,11 @@ label {
 }
 .danger {
   background: #9f3a4a;
+}
+.dispatch-result {
+  flex-basis: 100%;
+  margin: 0.5rem 0 0;
+  color: #cbd5ee;
 }
 .error {
   border-color: #d56b6b;

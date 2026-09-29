@@ -133,6 +133,7 @@ function stubSelectionJourney(kind: OrganizationKind) {
       'school_match_playing_xi',
       'school_persistent_teams',
       'school_team_rosters',
+      'organization_notifications',
     ],
     excluded_capabilities: [],
     created_at: '',
@@ -231,6 +232,25 @@ function stubSelectionJourney(kind: OrganizationKind) {
       planned_batting_order_membership_ids: matchRoster('team-a').map((player) => player.id),
     },
   ).as(`${kind}SelectionHandoff`);
+  cy.intercept(
+    'POST',
+    `**/api/organizations/${organizationId}/selection-plans/plan-a/publications/1/notifications`,
+    {
+      source_type: 'selection_publication',
+      source_id: 'publication-a',
+      source_version: '1',
+      selection_plan_id: 'plan-a',
+      publication_version: 1,
+      safe_user_recipient_count: 2,
+      delivered_count: 1,
+      suppressed_by_preference_count: 1,
+      unresolved_roster_recipient_count: 11,
+      xi_roster_count: 11,
+      reserve_roster_count: 0,
+      unresolved_xi_count: 11,
+      unresolved_reserve_count: 0,
+    },
+  ).as(`${kind}NotifySelection`);
   cy.intercept('POST', `**/api/organizations/${organizationId}/matches`, (req) => {
     expect(req.body.selection_handoff).to.deep.equal({
       selection_plan_id: 'plan-a',
@@ -325,6 +345,12 @@ describe('shared School and Club draft-selection journey', () => {
       cy.contains('Published selection history').should('be.visible');
       cy.contains('button', 'Version 1').click();
       cy.get('[data-test=published-selection-snapshot]').should('be.visible');
+      cy.get('[data-test=notify-selection]').click();
+      cy.wait(`@${kind}NotifySelection`);
+      cy.contains('Selection notification sent to 1 staff User').should('be.visible');
+      cy.contains('11 XI and 0 reserve roster recipients are not directly reachable').should(
+        'be.visible',
+      );
       cy.get('[data-test=begin-selection-draft]').click();
       cy.wait(`@${kind}BeginDraft`);
       cy.contains('New draft started at revision 3').should('be.visible');

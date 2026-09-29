@@ -46,6 +46,9 @@ import type {
   OrganizationSelectionPlan,
   OrganizationSelectionPublication,
   OrganizationSelectionPlanUpdate,
+  OrganizationAvailabilityReminderResult,
+  OrganizationEventNotificationResult,
+  OrganizationSelectionNotificationResult,
 } from '@/types/schoolAdmin';
 
 const orgPath = (organizationId: string, suffix = '') =>
@@ -168,6 +171,15 @@ export const cancelOrganizationEvent = (organizationId: string, eventId: string)
     orgPath(organizationId, `/events/${encodeURIComponent(eventId)}/cancel`),
     { method: 'POST' },
   );
+export const notifyOrganizationEvent = (
+  organizationId: string,
+  eventId: string,
+  notificationType: 'update' | 'cancellation',
+) =>
+  apiRequest<OrganizationEventNotificationResult>(
+    orgPath(organizationId, `/events/${encodeURIComponent(eventId)}/notifications`),
+    { method: 'POST', body: JSON.stringify({ notification_type: notificationType }) },
+  );
 export const deleteOrganizationEvent = (organizationId: string, eventId: string) =>
   apiRequest<void>(orgPath(organizationId, `/events/${encodeURIComponent(eventId)}`), {
     method: 'DELETE',
@@ -241,6 +253,19 @@ export const recordOrganizationPlayerAvailability = (
       `/availability/${targetType}/${encodeURIComponent(targetId)}/players/${encodeURIComponent(rosterMembershipId)}`,
     ),
     { method: 'PUT', body: JSON.stringify({ state }) },
+  );
+
+export const sendOrganizationAvailabilityReminder = (
+  organizationId: string,
+  targetType: OrganizationAvailabilityTargetType,
+  targetId: string,
+) =>
+  apiRequest<OrganizationAvailabilityReminderResult>(
+    orgPath(
+      organizationId,
+      `/availability/${targetType}/${encodeURIComponent(targetId)}/reminders`,
+    ),
+    { method: 'POST' },
   );
 
 export const getOrganizationAttendance = (
@@ -472,6 +497,19 @@ export const getOrganizationSelectionPublication = (
       organizationId,
       `/selection-plans/${encodeURIComponent(planId)}/publications/${publicationVersion}`,
     ),
+  );
+
+export const notifyOrganizationSelectionPublication = (
+  organizationId: string,
+  planId: string,
+  publicationVersion: number,
+) =>
+  apiRequest<OrganizationSelectionNotificationResult>(
+    orgPath(
+      organizationId,
+      `/selection-plans/${encodeURIComponent(planId)}/publications/${publicationVersion}/notifications`,
+    ),
+    { method: 'POST' },
   );
 
 export const prepareOrganizationSelectionHandoff = (
