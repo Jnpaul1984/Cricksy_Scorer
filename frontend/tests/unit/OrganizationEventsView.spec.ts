@@ -42,6 +42,8 @@ function context(
     canPublishScorecards: computed(() => role !== 'viewer'),
     canViewEvents: computed(() => true),
     canManageEvents: canManage,
+    canViewAnnouncements: computed(() => true),
+    canManageAnnouncements: canManage,
   };
 }
 

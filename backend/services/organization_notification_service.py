@@ -142,8 +142,9 @@ async def create_notification(
     *,
     organization_id: str,
     payload: OrganizationNotificationCreate,
+    commit: bool = True,
 ) -> NotificationCreationResult:
-    """Create one future-delivery notification without exposing a client send route."""
+    """Create one deterministic notification, optionally inside a caller transaction."""
     _validate_category_source(payload)
     await _authorize(
         db,
@@ -182,7 +183,10 @@ async def create_notification(
         )
         db.add(outcome)
         try:
-            await db.commit()
+            if commit:
+                await db.commit()
+            else:
+                await db.flush()
         except IntegrityError:
             await db.rollback()
             existing_outcome = await _existing_logical_outcome(
@@ -207,7 +211,9 @@ async def create_notification(
                 500, "Notification could not be created"
             ) from None
         logger.info(
-            "organization.notification_suppressed",
+            "organization.notification_suppressed"
+            if commit
+            else "organization.notification_suppression_staged",
             organization_id=organization_id,
             recipient_user_id=payload.recipient_user_id,
             category=payload.category,
@@ -243,7 +249,10 @@ async def create_notification(
                 notification_id=notification.id,
             )
         )
-        await db.commit()
+        if commit:
+            await db.commit()
+        else:
+            await db.flush()
     except IntegrityError:
         await db.rollback()
         existing_outcome = await _existing_logical_outcome(
@@ -279,9 +288,10 @@ async def create_notification(
             500, "Notification could not be created"
         ) from None
 
-    await db.refresh(notification)
+    if commit:
+        await db.refresh(notification)
     logger.info(
-        "organization.notification_created",
+        "organization.notification_created" if commit else "organization.notification_staged",
         organization_id=organization_id,
         notification_id=notification.id,
         recipient_user_id=payload.recipient_user_id,

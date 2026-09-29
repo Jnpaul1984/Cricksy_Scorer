@@ -32,6 +32,8 @@ export interface SchoolContext {
   canPublishScorecards: ComputedRef<boolean>;
   canViewEvents: ComputedRef<boolean>;
   canManageEvents: ComputedRef<boolean>;
+  canViewAnnouncements: ComputedRef<boolean>;
+  canManageAnnouncements: ComputedRef<boolean>;
 }
 
 export const schoolContextKey: InjectionKey<SchoolContext> = Symbol('school-context');

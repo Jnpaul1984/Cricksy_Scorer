@@ -70,6 +70,8 @@ function context(
     canPublishScorecards: computed(() => role !== 'viewer'),
     canViewEvents: computed(() => true),
     canManageEvents: writable,
+    canViewAnnouncements: computed(() => true),
+    canManageAnnouncements: writable,
   };
 }
 

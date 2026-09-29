@@ -63,6 +63,71 @@ export interface SchoolTeamInput {
   coach_name?: string | null;
 }
 
+export type OrganizationAnnouncementAudience = 'organization' | 'team' | 'staff';
+export type OrganizationAnnouncementStatus = 'draft' | 'published';
+
+export interface OrganizationAnnouncementDraft {
+  id: string;
+  organization_id: string;
+  title: string;
+  body: string;
+  audience_type: OrganizationAnnouncementAudience;
+  team_id: string | null;
+  status: OrganizationAnnouncementStatus;
+  revision: number;
+  last_published_version: number;
+  created_by_user_id: string | null;
+  updated_by_user_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface OrganizationAnnouncementInput {
+  title: string;
+  body: string;
+  audience_type: OrganizationAnnouncementAudience;
+  team_id: string | null;
+}
+
+export interface OrganizationAnnouncementPublication {
+  id: string;
+  announcement_id: string;
+  organization_id: string;
+  publication_version: number;
+  announcement_revision: number;
+  title: string;
+  body: string;
+  audience_type: OrganizationAnnouncementAudience;
+  team_id: string | null;
+  published_by_user_id: string | null;
+  published_at: string;
+  eligible_recipient_count: number;
+  delivered_count: number;
+  suppressed_by_preference_count: number;
+  unresolved_recipient_count: number;
+}
+
+export interface OrganizationAnnouncementFeedItem {
+  announcement_id: string;
+  organization_id: string;
+  title: string;
+  body: string;
+  audience_type: OrganizationAnnouncementAudience;
+  team_id: string | null;
+  status: OrganizationAnnouncementStatus;
+  revision: number;
+  publication_version: number | null;
+  published_by_user_id: string | null;
+  published_at: string | null;
+  eligible_recipient_count: number | null;
+  delivered_count: number | null;
+  suppressed_by_preference_count: number | null;
+  unresolved_recipient_count: number | null;
+  created_by_user_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface SchoolRosterPlayer {
   id: string;
   organization_id: string;
