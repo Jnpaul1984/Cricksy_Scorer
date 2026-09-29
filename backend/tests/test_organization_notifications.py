@@ -15,6 +15,7 @@ from backend.sql_app.database import get_session_local
 from backend.sql_app.models import (
     Organization,
     OrganizationNotification,
+    OrganizationNotificationDeliveryOutcome,
     User,
 )
 from backend.tests.school_test_helpers import (
@@ -321,6 +322,51 @@ async def test_preferences_are_recipient_owned_future_only_and_default_enabled(
     )
     assert suppressed.notification is None
     assert suppressed.suppressed_by_preference is True
+    session_maker = school_client.session_maker  # type: ignore[attr-defined]
+    async with session_maker() as session:
+        assert (
+            await session.scalar(
+                select(func.count(OrganizationNotificationDeliveryOutcome.id)).where(
+                    OrganizationNotificationDeliveryOutcome.organization_id == organization["id"],
+                    OrganizationNotificationDeliveryOutcome.recipient_user_id == other.id,
+                    OrganizationNotificationDeliveryOutcome.idempotency_key
+                    == f"{organization_type}-future",
+                    OrganizationNotificationDeliveryOutcome.outcome == "suppressed_by_preference",
+                )
+            )
+            == 1
+        )
+        assert (
+            await session.scalar(
+                select(func.count(OrganizationNotification.id)).where(
+                    OrganizationNotification.organization_id == organization["id"],
+                    OrganizationNotification.recipient_user_id == other.id,
+                    OrganizationNotification.idempotency_key == f"{organization_type}-future",
+                )
+            )
+            == 0
+        )
+    enabled = school_client.patch(
+        f"/api/organizations/{organization['id']}/notifications/preferences/event",
+        json={"enabled": True},
+        headers=other.headers,
+    )
+    assert enabled.status_code == 200, enabled.text
+    retried_suppression = await _create(
+        school_client,
+        organization["id"],
+        _payload(other, key=f"{organization_type}-future", actor=owner),
+    )
+    assert retried_suppression.notification is None
+    assert retried_suppression.created is False
+    assert retried_suppression.suppressed_by_preference is True
+    new_delivery = await _create(
+        school_client,
+        organization["id"],
+        _payload(other, key=f"{organization_type}-after-enable", actor=owner),
+    )
+    assert new_delivery.notification is not None
+    assert new_delivery.created is True
     retry_existing = await _create(
         school_client,
         organization["id"],
@@ -332,7 +378,11 @@ async def test_preferences_are_recipient_owned_future_only_and_default_enabled(
         f"/api/organizations/{organization['id']}/notifications",
         headers=other.headers,
     )
-    assert inbox.json()["total"] == 1
+    assert inbox.json()["total"] == 2
+    assert {item["idempotency_key"] for item in inbox.json()["items"]} == {
+        f"{organization_type}-existing",
+        f"{organization_type}-after-enable",
+    }
     owner_preferences = school_client.get(
         f"/api/organizations/{organization['id']}/notifications/preferences",
         headers=owner.headers,
@@ -421,7 +471,7 @@ async def test_internal_creation_is_deterministic_bounded_private_and_has_no_sen
     async def authorize_without_database(*args: Any, **kwargs: Any) -> None:
         return None
 
-    async def no_existing_notification(*args: Any, **kwargs: Any) -> None:
+    async def no_existing_outcome(*args: Any, **kwargs: Any) -> None:
         return None
 
     async def preference_enabled(*args: Any, **kwargs: Any) -> bool:
@@ -433,6 +483,9 @@ async def test_internal_creation_is_deterministic_bounded_private_and_has_no_sen
         def add(self, value: Any) -> None:
             return None
 
+        async def flush(self) -> None:
+            return None
+
         async def commit(self) -> None:
             raise RuntimeError(payload.summary)
 
@@ -442,8 +495,8 @@ async def test_internal_creation_is_deterministic_bounded_private_and_has_no_sen
     monkeypatch.setattr(organization_notification_service, "_authorize", authorize_without_database)
     monkeypatch.setattr(
         organization_notification_service,
-        "_existing_logical_notification",
-        no_existing_notification,
+        "_existing_logical_outcome",
+        no_existing_outcome,
     )
     monkeypatch.setattr(
         organization_notification_service,
@@ -486,24 +539,81 @@ async def test_postgres_concurrent_logical_creation_and_tenant_constraints(
     session_maker = get_session_local()
     start = asyncio.Event()
 
-    async def create_once() -> tuple[bool, int]:
+    async def create_once(
+        creation_payload: OrganizationNotificationCreate,
+        gate: asyncio.Event,
+    ) -> tuple[bool, bool, int]:
         async with session_maker() as session:
-            await start.wait()
+            await gate.wait()
             result = await organization_notification_service.create_notification(
                 session,
                 organization_id=organization["id"],
-                payload=payload,
+                payload=creation_payload,
             )
             user_count = await session.scalar(select(func.count(User.id)))
-            return result.created, int(user_count or 0)
+            return result.created, result.suppressed_by_preference, int(user_count or 0)
 
-    tasks = [asyncio.create_task(create_once()) for _ in range(2)]
+    tasks = [asyncio.create_task(create_once(payload, start)) for _ in range(2)]
     start.set()
     results = await asyncio.gather(*tasks)
-    assert sorted(created for created, _ in results) == [False, True]
-    assert all(user_count == 2 for _, user_count in results)
+    assert sorted(created for created, _, _ in results) == [False, True]
+    assert all(not suppressed for _, suppressed, _ in results)
+    assert all(user_count == 2 for _, _, user_count in results)
+
+    disabled = school_client.patch(
+        f"/api/organizations/{organization['id']}/notifications/preferences/event",
+        json={"enabled": False},
+        headers=owner.headers,
+    )
+    assert disabled.status_code == 200, disabled.text
+    suppressed_payload = _payload(owner, key="concurrent-suppressed", actor=owner)
+    suppression_start = asyncio.Event()
+    suppression_tasks = [
+        asyncio.create_task(create_once(suppressed_payload, suppression_start)) for _ in range(2)
+    ]
+    suppression_start.set()
+    suppression_results = await asyncio.gather(*suppression_tasks)
+    assert all(not created for created, _, _ in suppression_results)
+    assert all(suppressed for _, suppressed, _ in suppression_results)
+    assert all(user_count == 2 for _, _, user_count in suppression_results)
+
+    enabled = school_client.patch(
+        f"/api/organizations/{organization['id']}/notifications/preferences/event",
+        json={"enabled": True},
+        headers=owner.headers,
+    )
+    assert enabled.status_code == 200, enabled.text
+    retried_suppression = await _create(school_client, organization["id"], suppressed_payload)
+    assert retried_suppression.notification is None
+    assert retried_suppression.suppressed_by_preference is True
+    new_delivery = await _create(
+        school_client,
+        organization["id"],
+        _payload(owner, key="after-concurrent-suppression", actor=owner),
+    )
+    assert new_delivery.created is True
+    assert new_delivery.notification is not None
+
     async with session_maker() as session:
-        assert await session.scalar(select(func.count(OrganizationNotification.id))) == 1
+        assert await session.scalar(select(func.count(OrganizationNotification.id))) == 2
+        assert (
+            await session.scalar(
+                select(func.count(OrganizationNotificationDeliveryOutcome.id)).where(
+                    OrganizationNotificationDeliveryOutcome.idempotency_key
+                    == "concurrent-suppressed"
+                )
+            )
+            == 1
+        )
+        assert (
+            await session.scalar(
+                select(func.count(OrganizationNotification.id)).where(
+                    OrganizationNotification.idempotency_key == "concurrent-suppressed"
+                )
+            )
+            == 0
+        )
+        assert await session.scalar(select(func.count(User.id))) == 2
         invalid = OrganizationNotification(
             organization_id=foreign_org["id"],
             recipient_user_id=owner.id,
@@ -530,7 +640,8 @@ async def test_postgres_concurrent_logical_creation_and_tenant_constraints(
                     text(
                         "SELECT conname FROM pg_constraint "
                         "WHERE conrelid IN ('organization_notifications'::regclass, "
-                        "'organization_notification_preferences'::regclass)"
+                        "'organization_notification_preferences'::regclass, "
+                        "'organization_notification_delivery_outcomes'::regclass)"
                     )
                 )
             ).all()
@@ -543,13 +654,18 @@ async def test_postgres_concurrent_logical_creation_and_tenant_constraints(
             "ck_organization_notifications_source_identity",
             "fk_organization_notification_preferences_membership",
             "uq_organization_notification_preferences_user_category",
+            "fk_org_notification_delivery_outcomes_membership",
+            "fk_org_notification_delivery_outcomes_notification",
+            "uq_org_notification_delivery_outcomes_logical",
+            "ck_org_notification_delivery_outcomes_binding",
         } <= constraints
         indexes = set(
             (
                 await session.scalars(
                     text(
                         "SELECT indexname FROM pg_indexes WHERE tablename IN "
-                        "('organization_notifications', 'organization_notification_preferences')"
+                        "('organization_notifications', 'organization_notification_preferences', "
+                        "'organization_notification_delivery_outcomes')"
                     )
                 )
             ).all()
@@ -559,4 +675,25 @@ async def test_postgres_concurrent_logical_creation_and_tenant_constraints(
             "ix_organization_notifications_unread",
             "ix_organization_notifications_category",
             "ix_organization_notification_preferences_user",
+            "ix_org_notification_delivery_outcomes_recipient",
         } <= indexes
+        outcome_columns = set(
+            (
+                await session.scalars(
+                    text(
+                        "SELECT column_name FROM information_schema.columns "
+                        "WHERE table_schema = 'public' AND "
+                        "table_name = 'organization_notification_delivery_outcomes'"
+                    )
+                )
+            ).all()
+        )
+        assert {
+            "organization_id",
+            "recipient_user_id",
+            "category",
+            "idempotency_key",
+            "outcome",
+            "notification_id",
+        } <= outcome_columns
+        assert {"title", "summary"}.isdisjoint(outcome_columns)

@@ -127,6 +127,76 @@ def upgrade() -> None:
     )
 
     op.create_table(
+        "organization_notification_delivery_outcomes",
+        sa.Column("id", sa.String(), nullable=False),
+        sa.Column("organization_id", sa.String(), nullable=False),
+        sa.Column("recipient_user_id", sa.String(), nullable=False),
+        sa.Column("category", sa.String(length=32), nullable=False),
+        sa.Column("idempotency_key", sa.String(length=255), nullable=False),
+        sa.Column("outcome", sa.String(length=32), nullable=False),
+        sa.Column("notification_id", sa.String(), nullable=True),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.CheckConstraint(
+            f"category IN ({_CATEGORIES})",
+            name="ck_org_notification_delivery_outcomes_category",
+        ),
+        sa.CheckConstraint(
+            "outcome IN ('delivered', 'suppressed_by_preference')",
+            name="ck_org_notification_delivery_outcomes_state",
+        ),
+        sa.CheckConstraint(
+            "(outcome = 'delivered' AND notification_id IS NOT NULL) OR "
+            "(outcome = 'suppressed_by_preference' AND notification_id IS NULL)",
+            name="ck_org_notification_delivery_outcomes_binding",
+        ),
+        sa.ForeignKeyConstraint(
+            ["organization_id"],
+            ["organizations.id"],
+            name="fk_org_notification_delivery_outcomes_org",
+            ondelete="CASCADE",
+        ),
+        sa.ForeignKeyConstraint(
+            ["recipient_user_id"],
+            ["users.id"],
+            name="fk_org_notification_delivery_outcomes_user",
+            ondelete="CASCADE",
+        ),
+        sa.ForeignKeyConstraint(
+            ["organization_id", "recipient_user_id"],
+            ["organization_memberships.organization_id", "organization_memberships.user_id"],
+            name="fk_org_notification_delivery_outcomes_membership",
+            ondelete="CASCADE",
+        ),
+        sa.ForeignKeyConstraint(
+            ["notification_id"],
+            ["organization_notifications.id"],
+            name="fk_org_notification_delivery_outcomes_notification",
+            ondelete="CASCADE",
+        ),
+        sa.PrimaryKeyConstraint("id", name="pk_organization_notification_delivery_outcomes"),
+        sa.UniqueConstraint(
+            "organization_id",
+            "recipient_user_id",
+            "idempotency_key",
+            name="uq_org_notification_delivery_outcomes_logical",
+        ),
+        sa.UniqueConstraint(
+            "notification_id",
+            name="uq_org_notification_delivery_outcomes_notification",
+        ),
+    )
+    op.create_index(
+        "ix_org_notification_delivery_outcomes_recipient",
+        "organization_notification_delivery_outcomes",
+        ["organization_id", "recipient_user_id", "created_at", "id"],
+    )
+
+    op.create_table(
         "organization_notification_preferences",
         sa.Column("id", sa.String(), nullable=False),
         sa.Column("organization_id", sa.String(), nullable=False),
@@ -188,6 +258,11 @@ def downgrade() -> None:
         table_name="organization_notification_preferences",
     )
     op.drop_table("organization_notification_preferences")
+    op.drop_index(
+        "ix_org_notification_delivery_outcomes_recipient",
+        table_name="organization_notification_delivery_outcomes",
+    )
+    op.drop_table("organization_notification_delivery_outcomes")
     op.drop_index(
         "ix_organization_notifications_category",
         table_name="organization_notifications",

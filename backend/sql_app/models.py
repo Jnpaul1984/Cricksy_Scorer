@@ -2848,6 +2848,76 @@ class OrganizationNotification(Base):
     read_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+class OrganizationNotificationDeliveryOutcome(Base):
+    """Durable result for one logical notification delivery attempt."""
+
+    __tablename__ = "organization_notification_delivery_outcomes"
+    __table_args__ = (
+        UniqueConstraint(
+            "organization_id",
+            "recipient_user_id",
+            "idempotency_key",
+            name="uq_org_notification_delivery_outcomes_logical",
+        ),
+        UniqueConstraint(
+            "notification_id",
+            name="uq_org_notification_delivery_outcomes_notification",
+        ),
+        CheckConstraint(
+            "category IN ('organization_announcement', 'team_announcement', 'event', "
+            "'selection', 'availability_reminder')",
+            name="ck_org_notification_delivery_outcomes_category",
+        ),
+        CheckConstraint(
+            "outcome IN ('delivered', 'suppressed_by_preference')",
+            name="ck_org_notification_delivery_outcomes_state",
+        ),
+        CheckConstraint(
+            "(outcome = 'delivered' AND notification_id IS NOT NULL) OR "
+            "(outcome = 'suppressed_by_preference' AND notification_id IS NULL)",
+            name="ck_org_notification_delivery_outcomes_binding",
+        ),
+        ForeignKeyConstraint(
+            ["organization_id", "recipient_user_id"],
+            ["organization_memberships.organization_id", "organization_memberships.user_id"],
+            name="fk_org_notification_delivery_outcomes_membership",
+            ondelete="CASCADE",
+        ),
+        Index(
+            "ix_org_notification_delivery_outcomes_recipient",
+            "organization_id",
+            "recipient_user_id",
+            "created_at",
+            "id",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(
+        String, primary_key=True, default=lambda: str(uuid.uuid4()), nullable=False
+    )
+    organization_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    recipient_user_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    category: Mapped[str] = mapped_column(String(32), nullable=False)
+    idempotency_key: Mapped[str] = mapped_column(String(255), nullable=False)
+    outcome: Mapped[str] = mapped_column(String(32), nullable=False)
+    notification_id: Mapped[str | None] = mapped_column(
+        String,
+        ForeignKey("organization_notifications.id", ondelete="CASCADE"),
+        nullable=True,
+    )
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
 class OrganizationNotificationPreference(Base):
     """One User's future-delivery preference for one organization category."""
 

@@ -9,7 +9,11 @@ import structlog
 from backend.api.schemas.organization_notifications import OrganizationNotificationCreate
 from backend.services import organization_service
 from backend.services.organization_entitlement_service import require_organization_capability
-from backend.sql_app.models import OrganizationNotification, OrganizationNotificationPreference
+from backend.sql_app.models import (
+    OrganizationNotification,
+    OrganizationNotificationDeliveryOutcome,
+    OrganizationNotificationPreference,
+)
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -79,20 +83,41 @@ def _validate_category_source(payload: OrganizationNotificationCreate) -> None:
         raise _invalid("System-origin notifications must not supply actor_user_id")
 
 
-async def _existing_logical_notification(
+async def _existing_logical_outcome(
     db: AsyncSession,
     *,
     organization_id: str,
     recipient_user_id: str,
     idempotency_key: str,
-) -> OrganizationNotification | None:
+) -> OrganizationNotificationDeliveryOutcome | None:
     return await db.scalar(
-        select(OrganizationNotification).where(
-            OrganizationNotification.organization_id == organization_id,
-            OrganizationNotification.recipient_user_id == recipient_user_id,
-            OrganizationNotification.idempotency_key == idempotency_key,
+        select(OrganizationNotificationDeliveryOutcome).where(
+            OrganizationNotificationDeliveryOutcome.organization_id == organization_id,
+            OrganizationNotificationDeliveryOutcome.recipient_user_id == recipient_user_id,
+            OrganizationNotificationDeliveryOutcome.idempotency_key == idempotency_key,
         )
     )
+
+
+async def _result_for_outcome(
+    db: AsyncSession,
+    *,
+    outcome: OrganizationNotificationDeliveryOutcome,
+) -> NotificationCreationResult:
+    if outcome.outcome == "suppressed_by_preference":
+        return NotificationCreationResult(None, created=False, suppressed_by_preference=True)
+    if outcome.notification_id is None:
+        raise OrganizationNotificationServiceError(500, "Notification could not be created")
+    notification = await db.scalar(
+        select(OrganizationNotification).where(
+            OrganizationNotification.id == outcome.notification_id,
+            OrganizationNotification.organization_id == outcome.organization_id,
+            OrganizationNotification.recipient_user_id == outcome.recipient_user_id,
+        )
+    )
+    if notification is None:
+        raise OrganizationNotificationServiceError(500, "Notification could not be created")
+    return NotificationCreationResult(notification, created=False, suppressed_by_preference=False)
 
 
 async def _preference_enabled(
@@ -132,14 +157,14 @@ async def create_notification(
             user_id=payload.actor_user_id,
         )
 
-    existing = await _existing_logical_notification(
+    existing_outcome = await _existing_logical_outcome(
         db,
         organization_id=organization_id,
         recipient_user_id=payload.recipient_user_id,
         idempotency_key=payload.idempotency_key,
     )
-    if existing is not None:
-        return NotificationCreationResult(existing, created=False, suppressed_by_preference=False)
+    if existing_outcome is not None:
+        return await _result_for_outcome(db, outcome=existing_outcome)
 
     if not await _preference_enabled(
         db,
@@ -147,6 +172,40 @@ async def create_notification(
         user_id=payload.recipient_user_id,
         category=payload.category,
     ):
+        outcome = OrganizationNotificationDeliveryOutcome(
+            organization_id=organization_id,
+            recipient_user_id=payload.recipient_user_id,
+            category=payload.category,
+            idempotency_key=payload.idempotency_key,
+            outcome="suppressed_by_preference",
+            notification_id=None,
+        )
+        db.add(outcome)
+        try:
+            await db.commit()
+        except IntegrityError:
+            await db.rollback()
+            existing_outcome = await _existing_logical_outcome(
+                db,
+                organization_id=organization_id,
+                recipient_user_id=payload.recipient_user_id,
+                idempotency_key=payload.idempotency_key,
+            )
+            if existing_outcome is None:
+                raise _invalid("Notification conflicts with its organization contract") from None
+            return await _result_for_outcome(db, outcome=existing_outcome)
+        except Exception:
+            await db.rollback()
+            logger.error(
+                "organization.notification_suppression_failed",
+                organization_id=organization_id,
+                recipient_user_id=payload.recipient_user_id,
+                category=payload.category,
+                idempotency_key=payload.idempotency_key,
+            )
+            raise OrganizationNotificationServiceError(
+                500, "Notification could not be created"
+            ) from None
         logger.info(
             "organization.notification_suppressed",
             organization_id=organization_id,
@@ -173,17 +232,29 @@ async def create_notification(
     )
     db.add(notification)
     try:
+        await db.flush()
+        db.add(
+            OrganizationNotificationDeliveryOutcome(
+                organization_id=organization_id,
+                recipient_user_id=payload.recipient_user_id,
+                category=payload.category,
+                idempotency_key=payload.idempotency_key,
+                outcome="delivered",
+                notification_id=notification.id,
+            )
+        )
         await db.commit()
     except IntegrityError:
         await db.rollback()
-        existing = await _existing_logical_notification(
+        existing_outcome = await _existing_logical_outcome(
             db,
             organization_id=organization_id,
             recipient_user_id=payload.recipient_user_id,
             idempotency_key=payload.idempotency_key,
         )
-        if existing is None:
+        if existing_outcome is None:
             raise _invalid("Notification conflicts with its organization contract") from None
+        result = await _result_for_outcome(db, outcome=existing_outcome)
         logger.info(
             "organization.notification_duplicate_suppressed",
             organization_id=organization_id,
@@ -191,7 +262,7 @@ async def create_notification(
             category=payload.category,
             idempotency_key=payload.idempotency_key,
         )
-        return NotificationCreationResult(existing, created=False, suppressed_by_preference=False)
+        return result
     except Exception:
         await db.rollback()
         # Database exception text can include bound title/summary parameters.
