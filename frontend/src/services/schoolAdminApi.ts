@@ -1,6 +1,10 @@
 import { apiRequest } from '@/services/api';
 import type {
   OrganizationCalendar,
+  OrganizationAnnouncementDraft,
+  OrganizationAnnouncementFeedItem,
+  OrganizationAnnouncementInput,
+  OrganizationAnnouncementPublication,
   OrganizationAvailabilityFilter,
   OrganizationAvailabilityState,
   OrganizationAvailabilitySummary,
@@ -70,6 +74,57 @@ export const getMySchoolMembership = (organizationId: string) =>
   apiRequest<SchoolMembership>(orgPath(organizationId, '/me'));
 export const getSchoolEntitlement = (organizationId: string) =>
   apiRequest<SchoolEntitlement>(orgPath(organizationId, '/entitlements'));
+
+export const listOrganizationAnnouncements = (
+  organizationId: string,
+  options: { limit?: number; offset?: number } = {},
+) => {
+  const params = new URLSearchParams();
+  if (options.limit !== undefined) params.set('limit', String(options.limit));
+  if (options.offset !== undefined) params.set('offset', String(options.offset));
+  const query = params.toString();
+  return apiRequest<{
+    items: OrganizationAnnouncementFeedItem[];
+    total: number;
+    limit: number;
+    offset: number;
+  }>(orgPath(organizationId, `/announcements${query ? `?${query}` : ''}`));
+};
+export const createOrganizationAnnouncement = (
+  organizationId: string,
+  payload: OrganizationAnnouncementInput,
+) =>
+  apiRequest<OrganizationAnnouncementDraft>(orgPath(organizationId, '/announcements'), {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+export const updateOrganizationAnnouncement = (
+  organizationId: string,
+  announcementId: string,
+  payload: Partial<OrganizationAnnouncementInput> & { expected_revision: number },
+) =>
+  apiRequest<OrganizationAnnouncementDraft>(
+    orgPath(organizationId, `/announcements/${encodeURIComponent(announcementId)}`),
+    { method: 'PATCH', body: JSON.stringify(payload) },
+  );
+export const createOrganizationAnnouncementRevision = (
+  organizationId: string,
+  announcementId: string,
+  expectedRevision: number,
+) =>
+  apiRequest<OrganizationAnnouncementDraft>(
+    orgPath(organizationId, `/announcements/${encodeURIComponent(announcementId)}/revisions`),
+    { method: 'POST', body: JSON.stringify({ expected_revision: expectedRevision }) },
+  );
+export const publishOrganizationAnnouncement = (
+  organizationId: string,
+  announcementId: string,
+  expectedRevision: number,
+) =>
+  apiRequest<OrganizationAnnouncementPublication>(
+    orgPath(organizationId, `/announcements/${encodeURIComponent(announcementId)}/publish`),
+    { method: 'POST', body: JSON.stringify({ expected_revision: expectedRevision }) },
+  );
 
 export const listOrganizationEvents = (
   organizationId: string,

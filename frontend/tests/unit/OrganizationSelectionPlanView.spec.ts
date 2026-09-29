@@ -123,6 +123,8 @@ function context(
     canPublishScorecards: computed(() => role !== 'viewer'),
     canViewEvents: computed(() => true),
     canManageEvents: editable,
+    canViewAnnouncements: computed(() => true),
+    canManageAnnouncements: editable,
   };
 }
 

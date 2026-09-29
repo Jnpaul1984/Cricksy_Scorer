@@ -96,6 +96,8 @@ function context(role: SchoolMembershipRole, organizationId = ref('school-a')): 
     canPublishScorecards: computed(() => ['owner', 'admin', 'coach', 'scorer'].includes(role)),
     canViewEvents: computed(() => true),
     canManageEvents: writes,
+    canViewAnnouncements: computed(() => true),
+    canManageAnnouncements: writes,
   };
 }
 

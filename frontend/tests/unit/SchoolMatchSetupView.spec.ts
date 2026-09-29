@@ -89,6 +89,8 @@ function context(
     canPublishScorecards: writes,
     canViewEvents: computed(() => true),
     canManageEvents: writes,
+    canViewAnnouncements: computed(() => true),
+    canManageAnnouncements: writes,
   };
 }
 

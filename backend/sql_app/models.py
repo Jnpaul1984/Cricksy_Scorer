@@ -2975,6 +2975,204 @@ class OrganizationNotificationPreference(Base):
     )
 
 
+class OrganizationAnnouncement(Base):
+    """Mutable announcement draft whose published snapshots remain immutable."""
+
+    __tablename__ = "organization_announcements"
+    __table_args__ = (
+        UniqueConstraint(
+            "id",
+            "organization_id",
+            name="uq_organization_announcements_id_organization",
+        ),
+        CheckConstraint(
+            "audience_type IN ('organization', 'team', 'staff')",
+            name="ck_organization_announcements_audience",
+        ),
+        CheckConstraint(
+            "status IN ('draft', 'published')",
+            name="ck_organization_announcements_status",
+        ),
+        CheckConstraint(
+            "(audience_type = 'team' AND team_id IS NOT NULL) OR "
+            "(audience_type <> 'team' AND team_id IS NULL)",
+            name="ck_organization_announcements_team_audience",
+        ),
+        CheckConstraint(
+            "revision >= 1 AND last_published_version >= 0",
+            name="ck_organization_announcements_versions",
+        ),
+        CheckConstraint(
+            "status <> 'published' OR last_published_version >= 1",
+            name="ck_organization_announcements_published_version",
+        ),
+        CheckConstraint(
+            "length(title) BETWEEN 1 AND 255",
+            name="ck_organization_announcements_title_length",
+        ),
+        CheckConstraint(
+            "length(body) BETWEEN 1 AND 6000",
+            name="ck_organization_announcements_body_length",
+        ),
+        ForeignKeyConstraint(
+            ["team_id", "organization_id"],
+            ["teams.id", "teams.organization_id"],
+            name="fk_organization_announcements_team_organization",
+            ondelete="RESTRICT",
+        ),
+        Index(
+            "ix_organization_announcements_feed",
+            "organization_id",
+            "status",
+            "updated_at",
+            "id",
+        ),
+        Index(
+            "ix_organization_announcements_team",
+            "organization_id",
+            "team_id",
+            "status",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(
+        String, primary_key=True, default=lambda: str(uuid.uuid4()), nullable=False
+    )
+    organization_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    audience_type: Mapped[str] = mapped_column(String(24), nullable=False)
+    team_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(16), default="draft", server_default="draft", nullable=False
+    )
+    revision: Mapped[int] = mapped_column(Integer, default=1, server_default="1", nullable=False)
+    last_published_version: Mapped[int] = mapped_column(
+        Integer, default=0, server_default="0", nullable=False
+    )
+    created_by_user_id: Mapped[str | None] = mapped_column(
+        String,
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    updated_by_user_id: Mapped[str | None] = mapped_column(
+        String,
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+
+class OrganizationAnnouncementPublication(Base):
+    """Immutable published content and bounded delivery accounting."""
+
+    __tablename__ = "organization_announcement_publications"
+    __table_args__ = (
+        UniqueConstraint(
+            "announcement_id",
+            "publication_version",
+            name="uq_organization_announcement_publication_version",
+        ),
+        CheckConstraint(
+            "publication_version >= 1",
+            name="ck_organization_announcement_publications_version",
+        ),
+        CheckConstraint(
+            "audience_type IN ('organization', 'team', 'staff')",
+            name="ck_organization_announcement_publications_audience",
+        ),
+        CheckConstraint(
+            "(audience_type = 'team' AND team_id IS NOT NULL) OR "
+            "(audience_type <> 'team' AND team_id IS NULL)",
+            name="ck_organization_announcement_publications_team_audience",
+        ),
+        CheckConstraint(
+            "length(title) BETWEEN 1 AND 255",
+            name="ck_organization_announcement_publications_title_length",
+        ),
+        CheckConstraint(
+            "length(body) BETWEEN 1 AND 6000",
+            name="ck_organization_announcement_publications_body_length",
+        ),
+        CheckConstraint(
+            "eligible_recipient_count >= 0 AND delivered_count >= 0 AND "
+            "suppressed_by_preference_count >= 0 AND unresolved_recipient_count >= 0",
+            name="ck_organization_announcement_publications_counts_nonnegative",
+        ),
+        CheckConstraint(
+            "eligible_recipient_count = delivered_count + "
+            "suppressed_by_preference_count + unresolved_recipient_count",
+            name="ck_organization_announcement_publications_counts_total",
+        ),
+        ForeignKeyConstraint(
+            ["announcement_id", "organization_id"],
+            ["organization_announcements.id", "organization_announcements.organization_id"],
+            name="fk_organization_announcement_publications_announcement",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["team_id", "organization_id"],
+            ["teams.id", "teams.organization_id"],
+            name="fk_organization_announcement_publications_team_organization",
+            ondelete="RESTRICT",
+        ),
+        Index(
+            "ix_organization_announcement_publications_feed",
+            "organization_id",
+            "published_at",
+            "id",
+        ),
+        Index(
+            "ix_organization_announcement_publications_team",
+            "organization_id",
+            "team_id",
+            "published_at",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(
+        String, primary_key=True, default=lambda: str(uuid.uuid4()), nullable=False
+    )
+    announcement_id: Mapped[str] = mapped_column(String, nullable=False)
+    organization_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    publication_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    announcement_revision: Mapped[int] = mapped_column(Integer, nullable=False)
+    audience_type: Mapped[str] = mapped_column(String(24), nullable=False)
+    team_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    published_by_user_id: Mapped[str | None] = mapped_column(
+        String,
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    published_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    eligible_recipient_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    delivered_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    suppressed_by_preference_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    unresolved_recipient_count: Mapped[int] = mapped_column(
+        Integer, default=0, server_default="0", nullable=False
+    )
+
+
 class OrganizationSelectionPlan(Base):
     """One current private draft selection plan for an organization Team and Fixture."""
 

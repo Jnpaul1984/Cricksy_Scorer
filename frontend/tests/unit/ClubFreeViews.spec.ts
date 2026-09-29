@@ -115,6 +115,8 @@ function clubContext(): SchoolContext {
     canPublishScorecards: allowed,
     canViewEvents: allowed,
     canManageEvents: allowed,
+    canViewAnnouncements: allowed,
+    canManageAnnouncements: allowed,
   };
 }
 

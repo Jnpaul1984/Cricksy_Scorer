@@ -27,6 +27,7 @@ const SUITES = {
     'cypress/e2e/club_free_flow.cy.ts',
     'cypress/e2e/organization_operations_flow.cy.ts',
     'cypress/e2e/organization_selection_plan_flow.cy.ts',
+    'cypress/e2e/organization_announcements_flow.cy.ts',
   ].join(','),
   scoring: [
     'cypress/e2e/scoring_gate_smoke.cy.ts',

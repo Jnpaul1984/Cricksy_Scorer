@@ -42,6 +42,8 @@ function context(role: SchoolMembershipRole, organizationId = ref('school-a')): 
     canPublishScorecards: broad,
     canViewEvents: computed(() => true),
     canManageEvents: edit,
+    canViewAnnouncements: computed(() => true),
+    canManageAnnouncements: edit,
   };
 }
 
