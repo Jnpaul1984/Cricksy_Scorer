@@ -2741,6 +2741,240 @@ class OrganizationPlayerAttendanceHistory(Base):
     recorded_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
+class OrganizationNotification(Base):
+    """One immutable, private in-app notification for a real organization User."""
+
+    __tablename__ = "organization_notifications"
+    __table_args__ = (
+        UniqueConstraint(
+            "organization_id",
+            "recipient_user_id",
+            "idempotency_key",
+            name="uq_organization_notifications_logical_delivery",
+        ),
+        CheckConstraint(
+            "category IN ('organization_announcement', 'team_announcement', 'event', "
+            "'selection', 'availability_reminder')",
+            name="ck_organization_notifications_category",
+        ),
+        CheckConstraint(
+            "source_type IN ('organization_announcement', 'team_announcement', "
+            "'organization_event', 'selection_publication', 'availability_target')",
+            name="ck_organization_notifications_source_type",
+        ),
+        CheckConstraint(
+            "(category = 'organization_announcement' AND source_type = "
+            "'organization_announcement') OR "
+            "(category = 'team_announcement' AND source_type = 'team_announcement') OR "
+            "(category = 'event' AND source_type = 'organization_event') OR "
+            "(category = 'selection' AND source_type = 'selection_publication') OR "
+            "(category = 'availability_reminder' AND source_type = 'availability_target')",
+            name="ck_organization_notifications_category_source",
+        ),
+        CheckConstraint(
+            "source_id IS NOT NULL OR source_key IS NOT NULL",
+            name="ck_organization_notifications_source_identity",
+        ),
+        CheckConstraint(
+            "(origin = 'actor' AND actor_user_id IS NOT NULL) OR "
+            "(origin = 'system' AND actor_user_id IS NULL)",
+            name="ck_organization_notifications_origin_actor",
+        ),
+        CheckConstraint(
+            "read_at IS NULL OR read_at >= created_at",
+            name="ck_organization_notifications_read_time",
+        ),
+        ForeignKeyConstraint(
+            ["organization_id", "recipient_user_id"],
+            ["organization_memberships.organization_id", "organization_memberships.user_id"],
+            name="fk_organization_notifications_recipient_membership",
+            ondelete="CASCADE",
+        ),
+        Index(
+            "ix_organization_notifications_inbox",
+            "organization_id",
+            "recipient_user_id",
+            "created_at",
+            "id",
+        ),
+        Index(
+            "ix_organization_notifications_unread",
+            "organization_id",
+            "recipient_user_id",
+            "created_at",
+            "id",
+            postgresql_where=text("read_at IS NULL"),
+        ),
+        Index(
+            "ix_organization_notifications_category",
+            "organization_id",
+            "recipient_user_id",
+            "category",
+            "created_at",
+            "id",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(
+        String, primary_key=True, default=lambda: str(uuid.uuid4()), nullable=False
+    )
+    organization_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    recipient_user_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    category: Mapped[str] = mapped_column(String(32), nullable=False)
+    source_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    source_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    source_version: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    source_key: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    idempotency_key: Mapped[str] = mapped_column(String(255), nullable=False)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    summary: Mapped[str] = mapped_column(String(1000), nullable=False)
+    origin: Mapped[str] = mapped_column(String(16), nullable=False)
+    actor_user_id: Mapped[str | None] = mapped_column(
+        String,
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    read_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class OrganizationNotificationDeliveryOutcome(Base):
+    """Durable result for one logical notification delivery attempt."""
+
+    __tablename__ = "organization_notification_delivery_outcomes"
+    __table_args__ = (
+        UniqueConstraint(
+            "organization_id",
+            "recipient_user_id",
+            "idempotency_key",
+            name="uq_org_notification_delivery_outcomes_logical",
+        ),
+        UniqueConstraint(
+            "notification_id",
+            name="uq_org_notification_delivery_outcomes_notification",
+        ),
+        CheckConstraint(
+            "category IN ('organization_announcement', 'team_announcement', 'event', "
+            "'selection', 'availability_reminder')",
+            name="ck_org_notification_delivery_outcomes_category",
+        ),
+        CheckConstraint(
+            "outcome IN ('delivered', 'suppressed_by_preference')",
+            name="ck_org_notification_delivery_outcomes_state",
+        ),
+        CheckConstraint(
+            "(outcome = 'delivered' AND notification_id IS NOT NULL) OR "
+            "(outcome = 'suppressed_by_preference' AND notification_id IS NULL)",
+            name="ck_org_notification_delivery_outcomes_binding",
+        ),
+        ForeignKeyConstraint(
+            ["organization_id", "recipient_user_id"],
+            ["organization_memberships.organization_id", "organization_memberships.user_id"],
+            name="fk_org_notification_delivery_outcomes_membership",
+            ondelete="CASCADE",
+        ),
+        Index(
+            "ix_org_notification_delivery_outcomes_recipient",
+            "organization_id",
+            "recipient_user_id",
+            "created_at",
+            "id",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(
+        String, primary_key=True, default=lambda: str(uuid.uuid4()), nullable=False
+    )
+    organization_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    recipient_user_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    category: Mapped[str] = mapped_column(String(32), nullable=False)
+    idempotency_key: Mapped[str] = mapped_column(String(255), nullable=False)
+    outcome: Mapped[str] = mapped_column(String(32), nullable=False)
+    notification_id: Mapped[str | None] = mapped_column(
+        String,
+        ForeignKey("organization_notifications.id", ondelete="CASCADE"),
+        nullable=True,
+    )
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class OrganizationNotificationPreference(Base):
+    """One User's future-delivery preference for one organization category."""
+
+    __tablename__ = "organization_notification_preferences"
+    __table_args__ = (
+        UniqueConstraint(
+            "organization_id",
+            "user_id",
+            "category",
+            name="uq_organization_notification_preferences_user_category",
+        ),
+        CheckConstraint(
+            "category IN ('organization_announcement', 'team_announcement', 'event', "
+            "'selection', 'availability_reminder')",
+            name="ck_organization_notification_preferences_category",
+        ),
+        ForeignKeyConstraint(
+            ["organization_id", "user_id"],
+            ["organization_memberships.organization_id", "organization_memberships.user_id"],
+            name="fk_organization_notification_preferences_membership",
+            ondelete="CASCADE",
+        ),
+        Index(
+            "ix_organization_notification_preferences_user",
+            "organization_id",
+            "user_id",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(
+        String, primary_key=True, default=lambda: str(uuid.uuid4()), nullable=False
+    )
+    organization_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    user_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    category: Mapped[str] = mapped_column(String(32), nullable=False)
+    enabled: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default="true", nullable=False
+    )
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+
 class OrganizationSelectionPlan(Base):
     """One current private draft selection plan for an organization Team and Fixture."""
 

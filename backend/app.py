@@ -51,6 +51,7 @@ from backend.routes.moment_markers import router as moment_markers_router
 from backend.routes.organization_attendance import router as organization_attendance_router
 from backend.routes.organization_availability import router as organization_availability_router
 from backend.routes.organization_events import router as organization_events_router
+from backend.routes.organization_notifications import router as organization_notifications_router
 from backend.routes.organization_selection_plans import (
     router as organization_selection_plans_router,
 )
@@ -511,6 +512,7 @@ def create_app(
     fastapi_app.include_router(organization_availability_router)
     fastapi_app.include_router(organization_attendance_router)
     fastapi_app.include_router(organization_selection_plans_router)
+    fastapi_app.include_router(organization_notifications_router)
     fastapi_app.include_router(school_matches_router)
     fastapi_app.include_router(school_competitions_router)
     fastapi_app.include_router(school_statistics_router)
