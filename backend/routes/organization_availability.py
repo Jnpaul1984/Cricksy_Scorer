@@ -14,11 +14,15 @@ from backend.api.schemas.organization_availability import (
     OrganizationPlayerAvailabilityResponse,
     OrganizationPlayerAvailabilityUpdate,
 )
+from backend.api.schemas.organization_workflow_notifications import (
+    OrganizationAvailabilityReminderResult,
+)
 from backend.security import get_current_active_user
 from backend.services import (
     organization_availability_service,
     organization_entitlement_service,
     organization_service,
+    organization_workflow_notification_service,
 )
 from backend.sql_app.database import get_db
 from backend.sql_app.models import User
@@ -31,6 +35,7 @@ SERVICE_ERRORS = (
     organization_availability_service.OrganizationAvailabilityServiceError,
     organization_service.OrganizationServiceError,
     organization_entitlement_service.OrganizationCapabilityError,
+    organization_workflow_notification_service.OrganizationWorkflowNotificationServiceError,
 )
 
 
@@ -39,12 +44,24 @@ def _raise_service_error(
         organization_availability_service.OrganizationAvailabilityServiceError
         | organization_service.OrganizationServiceError
         | organization_entitlement_service.OrganizationCapabilityError
+        | organization_workflow_notification_service.OrganizationWorkflowNotificationServiceError
     ),
 ) -> NoReturn:
     if isinstance(exc, organization_entitlement_service.OrganizationCapabilityError):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=f"Organization capability not enabled: {exc.capability}",
+        ) from exc
+    if (
+        isinstance(
+            exc,
+            organization_workflow_notification_service.OrganizationWorkflowNotificationServiceError,
+        )
+        and exc.status_code >= 500
+    ):
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail="Workflow notification service encountered a problem",
         ) from exc
     raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
 
@@ -100,6 +117,29 @@ async def update_availability_target(
             target_id=target_id,
             actor_user_id=current_user.id,
             response_deadline=payload.response_deadline,
+        )
+    except SERVICE_ERRORS as exc:
+        _raise_service_error(exc)
+
+
+@router.post(
+    "/{organization_id}/availability/{target_type}/{target_id}/reminders",
+    response_model=OrganizationAvailabilityReminderResult,
+)
+async def send_availability_reminder(
+    organization_id: str,
+    target_type: AvailabilityTargetType,
+    target_id: str,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> OrganizationAvailabilityReminderResult:
+    try:
+        return await organization_workflow_notification_service.send_availability_reminder(
+            db,
+            organization_id=organization_id,
+            target_type=target_type,
+            target_id=target_id,
+            actor_user_id=current_user.id,
         )
     except SERVICE_ERRORS as exc:
         _raise_service_error(exc)

@@ -12,11 +12,16 @@ from backend.api.schemas.organization_events import (
     OrganizationEventResponse,
     OrganizationEventUpdate,
 )
+from backend.api.schemas.organization_workflow_notifications import (
+    OrganizationEventNotificationRequest,
+    OrganizationEventNotificationResult,
+)
 from backend.security import get_current_active_user
 from backend.services import (
     organization_entitlement_service,
     organization_event_service,
     organization_service,
+    organization_workflow_notification_service,
 )
 from backend.sql_app.database import get_db
 from backend.sql_app.models import User
@@ -29,6 +34,7 @@ SERVICE_ERRORS = (
     organization_event_service.OrganizationEventServiceError,
     organization_service.OrganizationServiceError,
     organization_entitlement_service.OrganizationCapabilityError,
+    organization_workflow_notification_service.OrganizationWorkflowNotificationServiceError,
 )
 
 
@@ -37,12 +43,24 @@ def _raise_service_error(
         organization_event_service.OrganizationEventServiceError
         | organization_service.OrganizationServiceError
         | organization_entitlement_service.OrganizationCapabilityError
+        | organization_workflow_notification_service.OrganizationWorkflowNotificationServiceError
     ),
 ) -> NoReturn:
     if isinstance(exc, organization_entitlement_service.OrganizationCapabilityError):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=f"Organization capability not enabled: {exc.capability}",
+        ) from exc
+    if (
+        isinstance(
+            exc,
+            organization_workflow_notification_service.OrganizationWorkflowNotificationServiceError,
+        )
+        and exc.status_code >= 500
+    ):
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail="Workflow notification service encountered a problem",
         ) from exc
     raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
 
@@ -201,6 +219,29 @@ async def cancel_event(
     except SERVICE_ERRORS as exc:
         _raise_service_error(exc)
     return _response(record)
+
+
+@router.post(
+    "/{organization_id}/events/{event_id}/notifications",
+    response_model=OrganizationEventNotificationResult,
+)
+async def notify_event(
+    organization_id: str,
+    event_id: str,
+    payload: OrganizationEventNotificationRequest,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> OrganizationEventNotificationResult:
+    try:
+        return await organization_workflow_notification_service.notify_event(
+            db,
+            organization_id=organization_id,
+            event_id=event_id,
+            actor_user_id=current_user.id,
+            notification_type=payload.notification_type,
+        )
+    except SERVICE_ERRORS as exc:
+        _raise_service_error(exc)
 
 
 @router.delete(

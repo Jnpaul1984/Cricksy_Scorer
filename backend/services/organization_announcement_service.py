@@ -358,6 +358,48 @@ async def _recipients(
     ]
 
 
+async def resolve_safe_user_recipients(
+    db: AsyncSession,
+    *,
+    organization_id: str,
+    audience_type: str,
+    actor_user_id: str,
+    actor_role: str,
+    team_ids: tuple[str, ...] = (),
+) -> list[str]:
+    """Reuse the governed Block 3B User audience rules for workflow delivery."""
+    if audience_type in {"organization", "staff"}:
+        if team_ids:
+            raise _invalid("Organization and staff audiences cannot include Teams")
+        return await _recipients(
+            db,
+            organization_id=organization_id,
+            audience_type=audience_type,
+            team=None,
+        )
+    if audience_type != "team" or not team_ids:
+        raise _invalid("Team audience requires at least one active Team")
+
+    recipient_ids: set[str] = set()
+    for team_id in sorted(set(team_ids)):
+        team = await _team_for_audience(
+            db,
+            organization_id=organization_id,
+            team_id=team_id,
+            actor_user_id=actor_user_id,
+            actor_role=actor_role,
+        )
+        recipient_ids.update(
+            await _recipients(
+                db,
+                organization_id=organization_id,
+                audience_type="team",
+                team=team,
+            )
+        )
+    return sorted(recipient_ids)
+
+
 def _notification_contract(
     *,
     announcement: OrganizationAnnouncement,

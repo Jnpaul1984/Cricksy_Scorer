@@ -403,6 +403,39 @@ export interface OrganizationSelectionHandoff {
   planned_batting_order_membership_ids: string[];
 }
 
+export interface OrganizationWorkflowDeliveryResult {
+  source_type: 'organization_event' | 'selection_publication' | 'availability_target';
+  source_id: string;
+  source_version: string;
+  safe_user_recipient_count: number;
+  delivered_count: number;
+  suppressed_by_preference_count: number;
+  unresolved_roster_recipient_count: number;
+}
+
+export interface OrganizationEventNotificationResult extends OrganizationWorkflowDeliveryResult {
+  source_type: 'organization_event';
+  notification_type: 'update' | 'cancellation';
+}
+
+export interface OrganizationSelectionNotificationResult
+  extends OrganizationWorkflowDeliveryResult {
+  source_type: 'selection_publication';
+  selection_plan_id: string;
+  publication_version: number;
+  xi_roster_count: number;
+  reserve_roster_count: number;
+  unresolved_xi_count: number;
+  unresolved_reserve_count: number;
+}
+
+export interface OrganizationAvailabilityReminderResult
+  extends OrganizationWorkflowDeliveryResult {
+  source_type: 'availability_target';
+  target_type: OrganizationAvailabilityTargetType;
+  no_response_count: number;
+}
+
 export type OrganizationEventType = 'training' | 'other';
 export type OrganizationEventStatus = 'scheduled' | 'cancelled';
 export type OrganizationEventParticipantScope = 'organization' | 'teams' | 'selected_players';

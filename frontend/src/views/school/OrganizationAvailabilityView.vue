@@ -7,10 +7,12 @@ import {
   getOrganizationAvailability,
   listSchoolTeams,
   recordOrganizationPlayerAvailability,
+  sendOrganizationAvailabilityReminder,
   updateOrganizationAvailabilityDeadline,
 } from '@/services/schoolAdminApi';
 import type {
   OrganizationAvailabilityFilter,
+  OrganizationAvailabilityReminderResult,
   OrganizationAvailabilityState,
   OrganizationAvailabilitySummary,
   OrganizationAvailabilityTargetType,
@@ -39,6 +41,8 @@ const deadline = ref('');
 const loading = ref(true);
 const saving = ref(false);
 const error = ref('');
+const reminderResult = ref<OrganizationAvailabilityReminderResult | null>(null);
+const reminding = ref(false);
 let loadGeneration = 0;
 let resettingFilters = false;
 
@@ -153,6 +157,37 @@ async function record(rosterMembershipId: string, state: OrganizationAvailabilit
   }
 }
 
+async function sendReminder() {
+  const generation = loadGeneration;
+  const currentOrganizationId = organizationId.value;
+  const currentTargetType = targetType.value;
+  const currentTargetId = targetId.value;
+  reminding.value = true;
+  reminderResult.value = null;
+  error.value = '';
+  try {
+    const result = await sendOrganizationAvailabilityReminder(
+      currentOrganizationId,
+      currentTargetType,
+      currentTargetId,
+    );
+    if (
+      generation !== loadGeneration ||
+      organizationId.value !== currentOrganizationId ||
+      targetType.value !== currentTargetType ||
+      targetId.value !== currentTargetId
+    )
+      return;
+    reminderResult.value = result;
+  } catch (reason) {
+    if (generation === loadGeneration && organizationId.value === currentOrganizationId) {
+      error.value = organizationOperationError(reason, 'availability reminder');
+    }
+  } finally {
+    if (generation === loadGeneration) reminding.value = false;
+  }
+}
+
 watch([stateFilter, teamFilter], () => {
   if (!resettingFilters) void load();
 });
@@ -165,6 +200,8 @@ watch(
     teams.value = [];
     deadline.value = '';
     error.value = '';
+    reminderResult.value = null;
+    reminding.value = false;
     stateFilter.value = '';
     teamFilter.value = '';
     await nextTick();
@@ -249,6 +286,28 @@ watch(
         <p v-if="summary.target.deadline_passed" class="late-note">
           The response deadline has passed. Authorized staff may still record a documented late
           correction.
+        </p>
+        <div v-if="canManage" class="reminder-action">
+          <button
+            type="button"
+            data-test="send-availability-reminder"
+            :disabled="reminding"
+            @click="sendReminder"
+          >
+            {{ reminding ? 'Sending…' : 'Send staff reminder' }}
+          </button>
+          <p>
+            Sends one bounded in-app operational reminder. It does not record or change player
+            availability.
+          </p>
+        </div>
+        <p v-if="reminderResult" class="dispatch-result" role="status">
+          Reminder sent to {{ reminderResult.delivered_count }} staff User{{
+            reminderResult.delivered_count === 1 ? '' : 's'
+          }}; {{ reminderResult.suppressed_by_preference_count }} suppressed by preference.
+          {{ reminderResult.no_response_count }} roster response{{
+            reminderResult.no_response_count === 1 ? ' is' : 's are'
+          }} still outstanding and not directly reachable in-app.
         </p>
       </section>
 
@@ -345,6 +404,15 @@ watch(
 .late-note {
   flex-basis: 100%;
   color: #ffd580;
+}
+.reminder-action,
+.dispatch-result {
+  flex-basis: 100%;
+}
+.reminder-action p,
+.dispatch-result {
+  margin: 0.4rem 0 0;
+  color: #cbd5ee;
 }
 .retained-note {
   display: block;

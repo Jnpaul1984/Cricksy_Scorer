@@ -11,6 +11,7 @@ import {
   listOrganizationSelectionPublications,
   listSchoolFixtures,
   listSchoolTeams,
+  notifyOrganizationSelectionPublication,
   prepareOrganizationSelectionHandoff,
   publishOrganizationSelectionPlan,
   updateOrganizationSelectionPlan,
@@ -18,6 +19,7 @@ import {
 import type {
   OrganizationSelectionAvailabilityState,
   OrganizationSelectionCandidate,
+  OrganizationSelectionNotificationResult,
   OrganizationSelectionPlan,
   OrganizationSelectionPublication,
   SchoolFixtureSummary,
@@ -55,6 +57,8 @@ const creating = ref(false);
 const saving = ref(false);
 const publishing = ref(false);
 const handingOffVersion = ref<number | null>(null);
+const notifyingVersion = ref<number | null>(null);
+const notificationResult = ref<OrganizationSelectionNotificationResult | null>(null);
 const missing = ref(false);
 const error = ref('');
 const conflict = ref('');
@@ -112,6 +116,8 @@ function clearWorkspace() {
   bowlingPlan.value = [];
   publications.value = [];
   viewedPublication.value = null;
+  notificationResult.value = null;
+  notifyingVersion.value = null;
   availabilityFilter.value = 'all';
   missing.value = false;
   error.value = '';
@@ -401,6 +407,38 @@ async function useInMatchSetup(publication: OrganizationSelectionPublication) {
   }
 }
 
+async function notifySelection(publication: OrganizationSelectionPublication) {
+  if (!canEdit.value || notifyingVersion.value !== null) return;
+  const generation = loadGeneration;
+  const currentOrganizationId = organizationId.value;
+  const currentTeamId = teamId.value;
+  const currentFixtureId = fixtureId.value;
+  notifyingVersion.value = publication.publication_version;
+  notificationResult.value = null;
+  error.value = '';
+  try {
+    const result = await notifyOrganizationSelectionPublication(
+      currentOrganizationId,
+      publication.selection_plan_id,
+      publication.publication_version,
+    );
+    if (
+      generation !== loadGeneration ||
+      organizationId.value !== currentOrganizationId ||
+      teamId.value !== currentTeamId ||
+      fixtureId.value !== currentFixtureId
+    )
+      return;
+    notificationResult.value = result;
+  } catch (reason) {
+    if (generation === loadGeneration && organizationId.value === currentOrganizationId) {
+      error.value = organizationOperationError(reason, 'selection notification');
+    }
+  } finally {
+    if (generation === loadGeneration) notifyingVersion.value = null;
+  }
+}
+
 watch([organizationId, teamId, fixtureId], load, { immediate: true });
 </script>
 
@@ -629,6 +667,33 @@ watch([organizationId, teamId, fixtureId], load, { immediate: true });
             <button
               v-if="canEdit"
               type="button"
+              class="notify"
+              data-test="notify-selection"
+              :disabled="notifyingVersion !== null"
+              @click="notifySelection(viewedPublication)"
+            >
+              {{
+                notifyingVersion === viewedPublication.publication_version
+                  ? 'Sending…'
+                  : 'Notify selection'
+              }}
+            </button>
+            <p v-if="notificationResult" class="dispatch-result" role="status">
+              Selection notification sent to {{ notificationResult.delivered_count }} staff User{{
+                notificationResult.delivered_count === 1 ? '' : 's'
+              }}; {{ notificationResult.suppressed_by_preference_count }} suppressed by preference.
+              {{ notificationResult.unresolved_xi_count }} XI and
+              {{ notificationResult.unresolved_reserve_count }} reserve roster recipient{{
+                notificationResult.unresolved_xi_count +
+                  notificationResult.unresolved_reserve_count ===
+                1
+                  ? ' is'
+                  : 's are'
+              }} not directly reachable in-app.
+            </p>
+            <button
+              v-if="canEdit"
+              type="button"
               class="handoff"
               data-test="use-selection-in-match-setup"
               :disabled="handingOffVersion !== null"
@@ -676,6 +741,8 @@ button.danger { background: #e58b8b; }
 .save { width: 100%; margin-top: 1rem; }
 .publish { width: 100%; margin-top: 0.6rem; background: #f3ca72; }
 .handoff { margin-top: 0.7rem; background: #70d7b0; }
+.notify { margin-top: 0.7rem; margin-right: 0.5rem; background: #9fb4dc; }
+.dispatch-result { color: #cbd5ee; }
 .ordered-plan { display: grid; gap: 0.45rem; padding-left: 1.5rem; }
 .ordered-plan li { padding: 0.55rem; border: 1px solid #46516d; border-radius: 8px; }
 .planning-picker { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 1rem; }
