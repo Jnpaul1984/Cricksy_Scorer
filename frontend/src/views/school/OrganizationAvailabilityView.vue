@@ -158,6 +158,7 @@ async function record(rosterMembershipId: string, state: OrganizationAvailabilit
 }
 
 async function sendReminder() {
+  if (!canManage.value || reminding.value) return;
   const generation = loadGeneration;
   const currentOrganizationId = organizationId.value;
   const currentTargetType = targetType.value;
@@ -181,7 +182,9 @@ async function sendReminder() {
     reminderResult.value = result;
   } catch (reason) {
     if (generation === loadGeneration && organizationId.value === currentOrganizationId) {
+      reminderResult.value = null;
       error.value = organizationOperationError(reason, 'availability reminder');
+      if ((reason as { status?: number })?.status === 403) void load(true);
     }
   } finally {
     if (generation === loadGeneration) reminding.value = false;

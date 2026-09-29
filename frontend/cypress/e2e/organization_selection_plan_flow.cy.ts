@@ -139,6 +139,9 @@ function stubSelectionJourney(kind: OrganizationKind) {
     created_at: '',
     updated_at: '',
   });
+  cy.intercept('GET', `**/api/organizations/${organizationId}/notifications/unread-count`, {
+    unread_count: 0,
+  });
   cy.intercept('GET', `**/api/organizations/${organizationId}/teams`, [team, opponentTeam]);
   cy.intercept('GET', `**/api/organizations/${organizationId}/teams/team-a/players`, matchRoster('team-a'));
   cy.intercept('GET', `**/api/organizations/${organizationId}/teams/team-b/players`, matchRoster('team-b'));

@@ -2,7 +2,10 @@ import { flushPromises, mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, ref } from 'vue';
 
-import { organizationBasePath, organizationTerminology } from '@/composables/useOrganizationTerminology';
+import {
+  organizationBasePath,
+  organizationTerminology,
+} from '@/composables/useOrganizationTerminology';
 import { schoolContextKey, type SchoolContext } from '@/composables/useSchoolContext';
 import * as schoolApi from '@/services/schoolAdminApi';
 import SchoolAdminShellView from '@/views/school/SchoolAdminShellView.vue';
@@ -84,6 +87,7 @@ const entitlement = {
     'school_competitions',
     'organization_events',
     'organization_availability',
+    'organization_notifications',
   ],
   excluded_capabilities: ['advanced_ai'],
   created_at: '',
@@ -138,6 +142,9 @@ describe('Club Free shared organization views', () => {
     vi.mocked(schoolApi.getSchool).mockResolvedValue(club);
     vi.mocked(schoolApi.getMySchoolMembership).mockResolvedValue(membership);
     vi.mocked(schoolApi.getSchoolEntitlement).mockResolvedValue(entitlement);
+    vi.mocked(schoolApi.getOrganizationNotificationUnreadCount).mockResolvedValue({
+      unread_count: 3,
+    });
     vi.mocked(schoolApi.listSchoolTeams).mockResolvedValue([]);
     vi.mocked(schoolApi.listSchoolPlayers).mockResolvedValue([]);
     vi.mocked(schoolApi.listTeamRoster).mockResolvedValue([]);
@@ -193,6 +200,11 @@ describe('Club Free shared organization views', () => {
     expect(wrapper.html()).toContain('/clubs/club-a/matches/new');
     expect(wrapper.html()).toContain('/clubs/club-a/events');
     expect(wrapper.text()).toContain('Calendar');
+    expect(wrapper.text()).toContain('Notifications');
+    expect(wrapper.get('[data-test=notification-unread-count]').text()).toBe('3');
+    expect(wrapper.get('[data-test=notification-unread-count]').attributes('aria-label')).toBe(
+      '3 unread notifications',
+    );
     expect(wrapper.text()).not.toContain('School Administration');
   });
 
@@ -270,5 +282,57 @@ describe('Club Free shared organization views', () => {
     await flushPromises();
     expect(wrapper.text()).toContain('Central Cricket Club');
     expect(wrapper.text()).toContain('Club Administration');
+  });
+
+  it('does not repaint a new organization with a late unread count', async () => {
+    let resolveClubCount: (value: { unread_count: number }) => void = () => undefined;
+    const clubCount = new Promise<{ unread_count: number }>((resolve) => {
+      resolveClubCount = resolve;
+    });
+    const school = {
+      ...club,
+      id: 'school-a',
+      name: 'Central School',
+      organization_type: 'school' as const,
+    };
+    vi.mocked(schoolApi.getSchool).mockImplementation(async (organizationId) =>
+      organizationId === 'school-a' ? school : club,
+    );
+    vi.mocked(schoolApi.getMySchoolMembership).mockImplementation(async (organizationId) => ({
+      ...membership,
+      organization_id: organizationId,
+    }));
+    vi.mocked(schoolApi.getSchoolEntitlement).mockImplementation(async (organizationId) => ({
+      ...entitlement,
+      organization_id: organizationId,
+      plan_key: organizationId === 'school-a' ? 'school_free' : 'club_free',
+    }));
+    vi.mocked(schoolApi.getOrganizationNotificationUnreadCount).mockImplementation(
+      async (organizationId) =>
+        organizationId === 'club-a' ? clubCount : Promise.resolve({ unread_count: 1 }),
+    );
+
+    const wrapper = mount(SchoolAdminShellView);
+    await wrapper.vm.$nextTick();
+    mocks.setRoute?.('school', 'school-a');
+    await flushPromises();
+    expect(wrapper.text()).toContain('Central School');
+    expect(wrapper.get('[data-test=notification-unread-count]').text()).toBe('1');
+
+    resolveClubCount({ unread_count: 99 });
+    await flushPromises();
+    expect(wrapper.get('[data-test=notification-unread-count]').text()).toBe('1');
+    expect(wrapper.text()).not.toContain('99');
+  });
+
+  it('fails closed without retaining an unread badge when count access is revoked', async () => {
+    vi.mocked(schoolApi.getOrganizationNotificationUnreadCount).mockRejectedValue(
+      Object.assign(new Error('private backend detail'), { status: 403 }),
+    );
+    const wrapper = mount(SchoolAdminShellView);
+    await flushPromises();
+    expect(wrapper.text()).toContain('Central Cricket Club');
+    expect(wrapper.find('[data-test=notification-unread-count]').exists()).toBe(false);
+    expect(wrapper.text()).not.toContain('private backend detail');
   });
 });

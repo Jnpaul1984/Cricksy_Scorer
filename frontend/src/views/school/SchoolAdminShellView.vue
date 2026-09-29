@@ -2,13 +2,19 @@
 import { computed, provide, ref, watch } from 'vue';
 import { RouterLink, RouterView, useRoute } from 'vue-router';
 
+import { organizationNotificationShellKey } from '@/composables/useOrganizationNotificationShell';
 import {
   organizationBasePath as organizationBasePathForType,
   organizationTerminology,
 } from '@/composables/useOrganizationTerminology';
 import { schoolContextKey } from '@/composables/useSchoolContext';
 import { getErrorMessage } from '@/services/api';
-import { getMySchoolMembership, getSchool, getSchoolEntitlement } from '@/services/schoolAdminApi';
+import {
+  getMySchoolMembership,
+  getOrganizationNotificationUnreadCount,
+  getSchool,
+  getSchoolEntitlement,
+} from '@/services/schoolAdminApi';
 import type {
   FreeOrganizationType,
   SchoolEntitlement,
@@ -74,6 +80,43 @@ const canViewAnnouncements = computed(() => capabilities.value.has('organization
 const canManageAnnouncements = computed(
   () => canViewAnnouncements.value && ['owner', 'admin', 'coach'].includes(role.value || ''),
 );
+const canViewNotifications = computed(() => capabilities.value.has('organization_notifications'));
+const notificationUnreadCount = ref(0);
+let unreadGeneration = 0;
+
+function clearNotificationPrivateState() {
+  ++unreadGeneration;
+  notificationUnreadCount.value = 0;
+}
+
+async function refreshNotificationUnreadCount() {
+  const generation = ++unreadGeneration;
+  const currentOrganizationId = organizationId.value;
+  const currentOrganizationType = organizationType.value;
+  if (
+    !canViewNotifications.value ||
+    organization.value?.id !== currentOrganizationId ||
+    organization.value?.organization_type !== currentOrganizationType ||
+    membership.value?.organization_id !== currentOrganizationId ||
+    entitlement.value?.organization_id !== currentOrganizationId
+  ) {
+    notificationUnreadCount.value = 0;
+    return;
+  }
+  try {
+    const response = await getOrganizationNotificationUnreadCount(currentOrganizationId);
+    if (
+      generation !== unreadGeneration ||
+      organizationId.value !== currentOrganizationId ||
+      organizationType.value !== currentOrganizationType
+    ) {
+      return;
+    }
+    notificationUnreadCount.value = response.unread_count;
+  } catch {
+    if (generation === unreadGeneration) notificationUnreadCount.value = 0;
+  }
+}
 
 provide(schoolContextKey, {
   organizationId,
@@ -101,10 +144,16 @@ provide(schoolContextKey, {
   canViewAnnouncements,
   canManageAnnouncements,
 });
+provide(organizationNotificationShellKey, {
+  unreadCount: notificationUnreadCount,
+  refreshUnreadCount: refreshNotificationUnreadCount,
+  clearPrivateState: clearNotificationPrivateState,
+});
 
 let loadGeneration = 0;
 async function loadContext() {
   const generation = ++loadGeneration;
+  clearNotificationPrivateState();
   organization.value = null;
   membership.value = null;
   entitlement.value = null;
@@ -128,6 +177,7 @@ async function loadContext() {
     organization.value = currentOrganization;
     membership.value = currentMembership;
     entitlement.value = currentEntitlement;
+    await refreshNotificationUnreadCount();
   } catch (reason) {
     if (generation !== loadGeneration) return;
     const status = (reason as { status?: number })?.status;
@@ -141,6 +191,12 @@ async function loadContext() {
 }
 
 watch([organizationId, organizationType], loadContext, { immediate: true });
+watch(
+  () => route.fullPath,
+  () => {
+    if (!loading.value && !error.value) void refreshNotificationUnreadCount();
+  },
+);
 </script>
 
 <template>
@@ -205,6 +261,21 @@ watch([organizationId, organizationType], loadContext, { immediate: true });
           :to="`${organizationBasePath}/${organizationId}/announcements`"
           >Announcements</RouterLink
         >
+        <RouterLink
+          v-if="canViewNotifications"
+          class="notification-link"
+          data-test="organization-notifications-link"
+          :to="`${organizationBasePath}/${organizationId}/notifications`"
+        >
+          Notifications
+          <span
+            v-if="notificationUnreadCount > 0"
+            class="notification-badge"
+            data-test="notification-unread-count"
+            :aria-label="`${notificationUnreadCount} unread notifications`"
+            >{{ notificationUnreadCount }}</span
+          >
+        </RouterLink>
       </nav>
       <RouterView :key="routeViewKey" />
     </template>
@@ -263,6 +334,22 @@ watch([organizationId, organizationType], loadContext, { immediate: true });
   color: #0d1b18;
   background: #70d7b0;
   font-weight: 700;
+}
+.notification-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.notification-badge {
+  min-width: 1.35rem;
+  padding: 0.08rem 0.35rem;
+  border-radius: 999px;
+  color: #111827;
+  background: #f6c85f;
+  font-size: 0.75rem;
+  font-weight: 800;
+  line-height: 1.2;
+  text-align: center;
 }
 .shell-state {
   margin: 2rem 0;

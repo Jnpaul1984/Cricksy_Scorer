@@ -1,6 +1,10 @@
 import { apiRequest } from '@/services/api';
 import type {
   OrganizationCalendar,
+  OrganizationNotification,
+  OrganizationNotificationCategory,
+  OrganizationNotificationList,
+  OrganizationNotificationPreference,
   OrganizationAnnouncementDraft,
   OrganizationAnnouncementFeedItem,
   OrganizationAnnouncementInput,
@@ -77,6 +81,50 @@ export const getMySchoolMembership = (organizationId: string) =>
   apiRequest<SchoolMembership>(orgPath(organizationId, '/me'));
 export const getSchoolEntitlement = (organizationId: string) =>
   apiRequest<SchoolEntitlement>(orgPath(organizationId, '/entitlements'));
+
+export const listOrganizationNotifications = (
+  organizationId: string,
+  options: {
+    category?: OrganizationNotificationCategory;
+    unreadOnly?: boolean;
+    limit?: number;
+    offset?: number;
+  } = {},
+) => {
+  const params = new URLSearchParams();
+  if (options.category) params.set('category', options.category);
+  if (options.unreadOnly !== undefined) params.set('unread_only', String(options.unreadOnly));
+  if (options.limit !== undefined) params.set('limit', String(options.limit));
+  if (options.offset !== undefined) params.set('offset', String(options.offset));
+  const query = params.toString();
+  return apiRequest<OrganizationNotificationList>(
+    orgPath(organizationId, `/notifications${query ? `?${query}` : ''}`),
+  );
+};
+
+export const getOrganizationNotificationUnreadCount = (organizationId: string) =>
+  apiRequest<{ unread_count: number }>(orgPath(organizationId, '/notifications/unread-count'));
+
+export const markOrganizationNotificationRead = (organizationId: string, notificationId: string) =>
+  apiRequest<OrganizationNotification>(
+    orgPath(organizationId, `/notifications/${encodeURIComponent(notificationId)}/read`),
+    { method: 'POST' },
+  );
+
+export const listOrganizationNotificationPreferences = (organizationId: string) =>
+  apiRequest<{ items: OrganizationNotificationPreference[] }>(
+    orgPath(organizationId, '/notifications/preferences'),
+  );
+
+export const updateOrganizationNotificationPreference = (
+  organizationId: string,
+  category: OrganizationNotificationCategory,
+  enabled: boolean,
+) =>
+  apiRequest<OrganizationNotificationPreference>(
+    orgPath(organizationId, `/notifications/preferences/${category}`),
+    { method: 'PATCH', body: JSON.stringify({ enabled }) },
+  );
 
 export const listOrganizationAnnouncements = (
   organizationId: string,

@@ -50,7 +50,16 @@ function context(
     organizationBasePath: computed(() => organizationBasePath(organizationType)),
     terminology: computed(() => organizationTerminology(organizationType)),
     organization: ref(null),
-    membership: ref(null),
+    membership: ref({
+      id: 'membership-a',
+      organization_id: organizationId.value,
+      user_id: role === 'coach' ? 'coach-a' : 'owner-a',
+      role,
+      status: 'active',
+      created_by_user_id: null,
+      created_at: '',
+      updated_at: '',
+    }),
     entitlement: ref(null),
     canManageTeams: writes,
     canManageRosterMetadata: writes,
@@ -170,7 +179,12 @@ describe('shared organization announcements view', () => {
     };
     vi.mocked(schoolApi.listOrganizationAnnouncements)
       .mockResolvedValueOnce({ items: [draft], total: 1, limit: 100, offset: 0 })
-      .mockResolvedValue({ items: [{ ...published, audience_type: 'team', team_id: 'team-a' }], total: 1, limit: 100, offset: 0 });
+      .mockResolvedValue({
+        items: [{ ...published, audience_type: 'team', team_id: 'team-a' }],
+        total: 1,
+        limit: 100,
+        offset: 0,
+      });
     vi.mocked(schoolApi.publishOrganizationAnnouncement).mockResolvedValue({
       id: 'publication-a',
       announcement_id: draft.announcement_id,
@@ -200,6 +214,76 @@ describe('shared organization announcements view', () => {
       1,
     );
     expect(wrapper.text()).toContain('2 delivered, 1 suppressed');
+  });
+
+  it('prevents duplicate draft submission while the first request is pending', async () => {
+    let resolveCreate: (
+      value: Awaited<ReturnType<typeof schoolApi.createOrganizationAnnouncement>>,
+    ) => void = () => undefined;
+    vi.mocked(schoolApi.createOrganizationAnnouncement).mockReturnValue(
+      new Promise((resolve) => {
+        resolveCreate = resolve;
+      }),
+    );
+    const wrapper = mountView('school', 'owner');
+    await flushPromises();
+    await wrapper.get('[data-test=announcement-title]').setValue('One draft');
+    await wrapper.get('[data-test=announcement-body]').setValue('One submission only.');
+    await wrapper.get('[data-test=save-announcement]').trigger('submit');
+    await wrapper.get('[data-test=save-announcement]').trigger('submit');
+    expect(schoolApi.createOrganizationAnnouncement).toHaveBeenCalledTimes(1);
+    resolveCreate({
+      id: 'draft-a',
+      organization_id: 'school-a',
+      title: 'One draft',
+      body: 'One submission only.',
+      audience_type: 'organization',
+      team_id: null,
+      status: 'draft',
+      revision: 1,
+      last_published_version: 0,
+      created_by_user_id: 'owner-a',
+      updated_by_user_id: 'owner-a',
+      created_at: '',
+      updated_at: '',
+    });
+    await flushPromises();
+  });
+
+  it('only offers a coach Teams currently assigned to that coach', async () => {
+    vi.mocked(schoolApi.listSchoolTeams).mockResolvedValue([
+      {
+        id: 'team-a',
+        organization_id: 'school-a',
+        name: 'Assigned XI',
+        status: 'active',
+        home_ground: null,
+        season: null,
+        owner_user_id: 'owner-a',
+        coach_user_id: 'coach-a',
+        coach_name: 'Coach A',
+        created_at: '',
+        updated_at: '',
+      },
+      {
+        id: 'team-b',
+        organization_id: 'school-a',
+        name: 'Foreign XI',
+        status: 'active',
+        home_ground: null,
+        season: null,
+        owner_user_id: 'owner-a',
+        coach_user_id: 'coach-b',
+        coach_name: 'Coach B',
+        created_at: '',
+        updated_at: '',
+      },
+    ]);
+    const wrapper = mountView('school', 'coach');
+    await flushPromises();
+    await wrapper.get('[data-test=announcement-audience]').setValue('team');
+    expect(wrapper.get('[data-test=announcement-team]').text()).toContain('Assigned XI');
+    expect(wrapper.get('[data-test=announcement-team]').text()).not.toContain('Foreign XI');
   });
 
   (['scorer', 'viewer'] as const).forEach((role) => {

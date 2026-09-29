@@ -207,6 +207,35 @@ describe('shared organization availability view', () => {
     expect(schoolApi.recordOrganizationPlayerAvailability).not.toHaveBeenCalled();
   });
 
+  it('prevents rapid duplicate reminder delivery while the first request is pending', async () => {
+    let resolveReminder: (
+      value: Awaited<ReturnType<typeof schoolApi.sendOrganizationAvailabilityReminder>>,
+    ) => void = () => undefined;
+    vi.mocked(schoolApi.sendOrganizationAvailabilityReminder).mockReturnValue(
+      new Promise((resolve) => {
+        resolveReminder = resolve;
+      }),
+    );
+    const wrapper = mountView('owner');
+    await flushPromises();
+    const button = wrapper.get('[data-test="send-availability-reminder"]');
+    await button.trigger('click');
+    await button.trigger('click');
+    expect(schoolApi.sendOrganizationAvailabilityReminder).toHaveBeenCalledTimes(1);
+    resolveReminder({
+      source_type: 'availability_target',
+      source_id: 'target-a',
+      source_version: 'version-a',
+      target_type: 'event',
+      no_response_count: 1,
+      safe_user_recipient_count: 1,
+      delivered_count: 1,
+      suppressed_by_preference_count: 0,
+      unresolved_roster_recipient_count: 1,
+    });
+    await flushPromises();
+  });
+
   it('applies state and Team filters to the shared API', async () => {
     const wrapper = mountView('owner');
     await flushPromises();

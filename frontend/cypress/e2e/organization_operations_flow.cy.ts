@@ -101,6 +101,9 @@ function stubOperations(
     created_at: createdAt,
     updated_at: createdAt,
   });
+  cy.intercept('GET', `**/api/organizations/${organizationId}/notifications/unread-count`, {
+    unread_count: 0,
+  });
   cy.intercept('GET', `**/api/organizations/${organizationId}/teams`, [team]);
   cy.intercept('GET', `**/api/organizations/${organizationId}/players?status=active`, players);
   cy.intercept('GET', `**/api/organizations/${organizationId}/events*`, (req) => {
