@@ -63,6 +63,54 @@ export interface SchoolTeamInput {
   coach_name?: string | null;
 }
 
+export type OrganizationNotificationCategory =
+  | 'organization_announcement'
+  | 'team_announcement'
+  | 'event'
+  | 'selection'
+  | 'availability_reminder';
+
+export type OrganizationNotificationSourceType =
+  | 'organization_announcement'
+  | 'team_announcement'
+  | 'organization_event'
+  | 'selection_publication'
+  | 'availability_target';
+
+export interface OrganizationNotification {
+  id: string;
+  organization_id: string;
+  recipient_user_id: string;
+  category: OrganizationNotificationCategory;
+  source_type: OrganizationNotificationSourceType;
+  source_id: string | null;
+  source_version: string | null;
+  source_key: string | null;
+  idempotency_key: string;
+  title: string;
+  summary: string;
+  origin: 'actor' | 'system';
+  actor_user_id: string | null;
+  created_at: string;
+  read_at: string | null;
+}
+
+export interface OrganizationNotificationList {
+  items: OrganizationNotification[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface OrganizationNotificationPreference {
+  organization_id: string;
+  user_id: string;
+  category: OrganizationNotificationCategory;
+  enabled: boolean;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
 export type OrganizationAnnouncementAudience = 'organization' | 'team' | 'staff';
 export type OrganizationAnnouncementStatus = 'draft' | 'published';
 

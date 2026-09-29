@@ -43,6 +43,9 @@ function stubAnnouncements(kind: OrganizationKind) {
     created_at: createdAt,
     updated_at: createdAt,
   });
+  cy.intercept('GET', `**/api/organizations/${organizationId}/notifications/unread-count`, {
+    unread_count: 0,
+  });
   cy.intercept('GET', `**/api/organizations/${organizationId}/teams`, [
     {
       id: 'team-a',

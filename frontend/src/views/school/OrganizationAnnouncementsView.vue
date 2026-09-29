@@ -21,6 +21,7 @@ import { organizationOperationError } from '@/utils/organizationOperations';
 const {
   organizationId,
   terminology,
+  membership,
   canViewAnnouncements,
   canManageAnnouncements,
 } = useSchoolContext();
@@ -33,6 +34,12 @@ const notice = ref('');
 const editingId = ref<string | null>(null);
 const editingRevision = ref<number | null>(null);
 let loadGeneration = 0;
+let actionGeneration = 0;
+
+const manageableTeams = computed(() => {
+  if (membership.value?.role !== 'coach') return teams.value;
+  return teams.value.filter((team) => team.coach_user_id === membership.value?.user_id);
+});
 
 const form = reactive({
   title: '',
@@ -44,8 +51,20 @@ const form = reactive({
 const audienceLabel = computed(() => {
   if (form.audienceType === 'organization') return `Whole ${terminology.value.kindLabelLower}`;
   if (form.audienceType === 'staff') return 'Staff only';
-  return teams.value.find((team) => team.id === form.teamId)?.name || 'Select a Team';
+  return manageableTeams.value.find((team) => team.id === form.teamId)?.name || 'Select a Team';
 });
+
+function clearProtectedState() {
+  items.value = [];
+  teams.value = [];
+  resetForm();
+  notice.value = '';
+}
+
+function isAccessFailure(reason: unknown): boolean {
+  const status = (reason as { status?: number })?.status;
+  return status === 403 || status === 404;
+}
 
 function resetForm() {
   editingId.value = null;
@@ -85,6 +104,7 @@ async function load() {
     teams.value = teamRows;
   } catch (reason) {
     if (generation !== loadGeneration) return;
+    if (isAccessFailure(reason)) clearProtectedState();
     error.value = organizationOperationError(reason, 'announcement feed');
   } finally {
     if (generation === loadGeneration) loading.value = false;
@@ -92,6 +112,8 @@ async function load() {
 }
 
 async function saveDraft() {
+  if (saving.value || !canManageAnnouncements.value) return;
+  const generation = ++actionGeneration;
   const currentOrganizationId = organizationId.value;
   saving.value = true;
   error.value = '';
@@ -113,20 +135,23 @@ async function saveDraft() {
       await createOrganizationAnnouncement(currentOrganizationId, payload);
       notice.value = 'Draft created. No notifications were sent.';
     }
-    if (organizationId.value !== currentOrganizationId) return;
+    if (generation !== actionGeneration || organizationId.value !== currentOrganizationId) return;
     resetForm();
     await load();
   } catch (reason) {
-    if (organizationId.value === currentOrganizationId) {
+    if (generation === actionGeneration && organizationId.value === currentOrganizationId) {
+      if (isAccessFailure(reason)) clearProtectedState();
       error.value = organizationOperationError(reason, 'announcement');
     }
   } finally {
-    saving.value = false;
+    if (generation === actionGeneration) saving.value = false;
   }
 }
 
 async function publish(item: OrganizationAnnouncementFeedItem) {
+  if (saving.value || !canManageAnnouncements.value) return;
   if (!window.confirm(`Publish “${item.title}” to ${audienceName(item)}?`)) return;
+  const generation = ++actionGeneration;
   const currentOrganizationId = organizationId.value;
   saving.value = true;
   error.value = '';
@@ -137,20 +162,26 @@ async function publish(item: OrganizationAnnouncementFeedItem) {
       item.announcement_id,
       item.revision,
     );
-    if (organizationId.value !== currentOrganizationId) return;
+    if (generation !== actionGeneration || organizationId.value !== currentOrganizationId) return;
     notice.value = `Published version ${publication.publication_version}: ${publication.delivered_count} delivered, ${publication.suppressed_by_preference_count} suppressed.`;
     resetForm();
     await load();
   } catch (reason) {
-    if (organizationId.value === currentOrganizationId) {
+    if (generation === actionGeneration && organizationId.value === currentOrganizationId) {
+      if (isAccessFailure(reason)) {
+        clearProtectedState();
+        void load();
+      }
       error.value = organizationOperationError(reason, 'announcement');
     }
   } finally {
-    saving.value = false;
+    if (generation === actionGeneration) saving.value = false;
   }
 }
 
 async function startRevision(item: OrganizationAnnouncementFeedItem) {
+  if (saving.value || !canManageAnnouncements.value) return;
+  const generation = ++actionGeneration;
   const currentOrganizationId = organizationId.value;
   saving.value = true;
   error.value = '';
@@ -161,16 +192,20 @@ async function startRevision(item: OrganizationAnnouncementFeedItem) {
       item.announcement_id,
       item.revision,
     );
-    if (organizationId.value !== currentOrganizationId) return;
+    if (generation !== actionGeneration || organizationId.value !== currentOrganizationId) return;
     await load();
     beginEdit(draft);
     notice.value = `Draft revision ${draft.revision} created. Published versions remain unchanged.`;
   } catch (reason) {
-    if (organizationId.value === currentOrganizationId) {
+    if (generation === actionGeneration && organizationId.value === currentOrganizationId) {
+      if (isAccessFailure(reason)) {
+        clearProtectedState();
+        void load();
+      }
       error.value = organizationOperationError(reason, 'announcement revision');
     }
   } finally {
-    saving.value = false;
+    if (generation === actionGeneration) saving.value = false;
   }
 }
 
@@ -198,6 +233,8 @@ watch(
   [organizationId, canViewAnnouncements],
   () => {
     ++loadGeneration;
+    ++actionGeneration;
+    saving.value = false;
     resetForm();
     notice.value = '';
     void load();
@@ -213,7 +250,8 @@ watch(
       <h2>Announcements</h2>
       <p>
         Publish structured organization, Team or staff updates. This feed does not support private
-        messages, replies or reactions.
+        messages, replies or reactions. Authored updates appear here; your personal delivery inbox
+        is under Notifications.
       </p>
     </header>
 
@@ -246,7 +284,7 @@ watch(
         Team
         <select v-model="form.teamId" data-test="announcement-team" required>
           <option value="" disabled>Select a Team</option>
-          <option v-for="team in teams" :key="team.id" :value="team.id">{{ team.name }}</option>
+          <option v-for="team in manageableTeams" :key="team.id" :value="team.id">{{ team.name }}</option>
         </select>
       </label>
       <label class="wide">

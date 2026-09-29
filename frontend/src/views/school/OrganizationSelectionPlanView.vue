@@ -40,6 +40,11 @@ const canEdit = computed(() =>
 const canEditDraft = computed(() => canEdit.value && plan.value?.status === 'draft');
 
 const team = ref<SchoolTeam | null>(null);
+const canNotifySelection = computed(
+  () =>
+    canEdit.value &&
+    (membership.value?.role !== 'coach' || team.value?.coach_user_id === membership.value?.user_id),
+);
 const fixture = ref<SchoolFixtureSummary | null>(null);
 const plan = ref<OrganizationSelectionPlan | null>(null);
 const candidates = ref<OrganizationSelectionCandidate[]>([]);
@@ -408,7 +413,7 @@ async function useInMatchSetup(publication: OrganizationSelectionPublication) {
 }
 
 async function notifySelection(publication: OrganizationSelectionPublication) {
-  if (!canEdit.value || notifyingVersion.value !== null) return;
+  if (!canNotifySelection.value || notifyingVersion.value !== null) return;
   const generation = loadGeneration;
   const currentOrganizationId = organizationId.value;
   const currentTeamId = teamId.value;
@@ -432,7 +437,9 @@ async function notifySelection(publication: OrganizationSelectionPublication) {
     notificationResult.value = result;
   } catch (reason) {
     if (generation === loadGeneration && organizationId.value === currentOrganizationId) {
+      notificationResult.value = null;
       error.value = organizationOperationError(reason, 'selection notification');
+      if ((reason as { status?: number })?.status === 403) void load();
     }
   } finally {
     if (generation === loadGeneration) notifyingVersion.value = null;
@@ -665,7 +672,7 @@ watch([organizationId, teamId, fixtureId], load, { immediate: true });
             </ol>
             <p>Published selection is planning. Match setup creates the authoritative Playing XI.</p>
             <button
-              v-if="canEdit"
+              v-if="canNotifySelection"
               type="button"
               class="notify"
               data-test="notify-selection"

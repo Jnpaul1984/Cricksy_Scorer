@@ -307,6 +307,36 @@ describe('shared organization selection plan workspace', () => {
     expect(schoolApi.recordOrganizationPlayerAvailability).not.toHaveBeenCalled();
   });
 
+  it('does not show a Team selection trigger to a Coach after Team reassignment', async () => {
+    vi.mocked(schoolApi.listSchoolTeams).mockResolvedValue([
+      { ...team, coach_user_id: 'different-coach' },
+    ]);
+    vi.mocked(schoolApi.listOrganizationSelectionPublications).mockResolvedValue([
+      {
+        id: 'publication-a',
+        organization_id: 'school-a',
+        selection_plan_id: 'plan-a',
+        team_id: 'team-a',
+        fixture_id: 'fixture-a',
+        plan_revision: 2,
+        publication_version: 1,
+        status: 'published',
+        captain_roster_membership_id: null,
+        wicketkeeper_roster_membership_id: null,
+        players: [],
+        published_by_user_id: 'owner-a',
+        published_at: '2026-09-28T00:00:00Z',
+      },
+    ]);
+    const wrapper = mountView('coach');
+    await flushPromises();
+    const versionButton = wrapper
+      .findAll('button')
+      .find((button) => button.text().includes('Version 1'));
+    await versionButton!.trigger('click');
+    expect(wrapper.find('[data-test="notify-selection"]').exists()).toBe(false);
+  });
+
   it.each(['owner', 'admin', 'coach'] as const)('lets %s explicitly create a missing draft', async (role) => {
     vi.mocked(schoolApi.getOrganizationSelectionPlan).mockRejectedValueOnce(
       Object.assign(new Error('missing'), { status: 404 }),

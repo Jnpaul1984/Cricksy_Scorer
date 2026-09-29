@@ -30,6 +30,7 @@ const {
   organizationId,
   organizationBasePath,
   terminology,
+  membership,
   entitlement,
   canViewEvents,
   canManageEvents,
@@ -71,6 +72,15 @@ const canViewAttendance = computed(
     canManageEvents.value &&
     (entitlement.value?.capabilities || []).includes('organization_attendance'),
 );
+
+function canNotifyEvent(event: OrganizationEvent): boolean {
+  if (!canManageEvents.value) return false;
+  if (membership.value?.role !== 'coach' || event.participant_scope !== 'teams') return true;
+  return event.team_ids.every(
+    (teamId) =>
+      teams.value.find((team) => team.id === teamId)?.coach_user_id === membership.value?.user_id,
+  );
+}
 
 function localDateTime(value: string): string {
   const date = new Date(value);
@@ -225,6 +235,7 @@ async function remove(event: OrganizationEvent) {
 }
 
 async function notify(event: OrganizationEvent, notificationType: 'update' | 'cancellation') {
+  if (!canNotifyEvent(event) || notifyingEventId.value !== null) return;
   const generation = loadGeneration;
   const currentOrganizationId = organizationId.value;
   notifyingEventId.value = event.id;
@@ -240,7 +251,9 @@ async function notify(event: OrganizationEvent, notificationType: 'update' | 'ca
     notificationResult.value = { eventId: event.id, result };
   } catch (reason) {
     if (generation === loadGeneration && organizationId.value === currentOrganizationId) {
+      notificationResult.value = null;
       error.value = organizationOperationError(reason, 'event notification');
+      if ((reason as { status?: number })?.status === 403) void load();
     }
   } finally {
     if (generation === loadGeneration) notifyingEventId.value = null;
@@ -437,6 +450,7 @@ watch(
               Cancel
             </button>
             <button
+              v-if="canNotifyEvent(eventFor(item)!)"
               type="button"
               class="secondary"
               :disabled="notifyingEventId !== null"
@@ -447,7 +461,11 @@ watch(
             </button>
           </template>
           <button
-            v-if="canManageEvents && eventFor(item)?.status === 'cancelled'"
+            v-if="
+              canManageEvents &&
+              eventFor(item)?.status === 'cancelled' &&
+              canNotifyEvent(eventFor(item)!)
+            "
             type="button"
             class="secondary"
             :disabled="notifyingEventId !== null"

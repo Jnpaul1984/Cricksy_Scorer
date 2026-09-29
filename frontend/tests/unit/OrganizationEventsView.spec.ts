@@ -29,7 +29,16 @@ function context(
     organizationBasePath: computed(() => organizationBasePath(organizationTypeRef.value)),
     terminology: computed(() => organizationTerminology(organizationTypeRef.value)),
     organization: ref(null),
-    membership: ref(null),
+    membership: ref({
+      id: 'membership-a',
+      organization_id: organizationId.value,
+      user_id: role === 'coach' ? 'coach-a' : 'owner-a',
+      role,
+      status: 'active',
+      created_by_user_id: null,
+      created_at: '',
+      updated_at: '',
+    }),
     entitlement: ref(null),
     canManageTeams: canManage,
     canManageRosterMetadata: canManage,
@@ -376,7 +385,15 @@ describe('shared organization events view', () => {
       limit: 100,
       offset: 0,
     });
-    vi.mocked(schoolApi.notifyOrganizationEvent).mockResolvedValue({
+    let resolveNotification: (
+      value: Awaited<ReturnType<typeof schoolApi.notifyOrganizationEvent>>,
+    ) => void = () => undefined;
+    vi.mocked(schoolApi.notifyOrganizationEvent).mockReturnValue(
+      new Promise((resolve) => {
+        resolveNotification = resolve;
+      }),
+    );
+    const result = {
       source_type: 'organization_event',
       source_id: event.id,
       source_version: event.updated_at,
@@ -385,10 +402,14 @@ describe('shared organization events view', () => {
       delivered_count: 0,
       suppressed_by_preference_count: 0,
       unresolved_roster_recipient_count: 1,
-    });
+    } as const;
     const wrapper = mountView('school', 'coach');
     await flushPromises();
-    await wrapper.get('[data-test="notify-event-update-notify-event"]').trigger('click');
+    const trigger = wrapper.get('[data-test="notify-event-update-notify-event"]');
+    await trigger.trigger('click');
+    await trigger.trigger('click');
+    expect(schoolApi.notifyOrganizationEvent).toHaveBeenCalledTimes(1);
+    resolveNotification(result);
     await flushPromises();
 
     expect(schoolApi.notifyOrganizationEvent).toHaveBeenCalledWith(
@@ -400,6 +421,74 @@ describe('shared organization events view', () => {
     expect(wrapper.text()).toContain('1 roster participant');
     expect(wrapper.text()).toContain('not directly reachable in-app');
     expect(wrapper.text()).not.toContain('1 player notified');
+  });
+
+  it('does not show a Team workflow trigger to a Coach after Team reassignment', async () => {
+    const event = {
+      id: 'team-event',
+      organization_id: 'school-a',
+      event_type: 'training' as const,
+      title: 'Team training',
+      description: null,
+      start_at: '2099-04-01T14:00:00Z',
+      end_at: null,
+      location: 'Main Ground',
+      participant_scope: 'teams' as const,
+      team_ids: ['team-a'],
+      roster_membership_ids: [],
+      status: 'scheduled' as const,
+      created_by_user_id: 'owner-a',
+      updated_by_user_id: 'owner-a',
+      cancelled_by_user_id: null,
+      cancelled_at: null,
+      created_at: '',
+      updated_at: '2099-01-01T00:00:00Z',
+    };
+    vi.mocked(schoolApi.listOrganizationEvents).mockResolvedValue({
+      items: [event],
+      total: 1,
+      limit: 100,
+      offset: 0,
+    });
+    vi.mocked(schoolApi.getOrganizationCalendar).mockResolvedValue({
+      items: [
+        {
+          source_type: 'organization_event',
+          source_id: event.id,
+          title: event.title,
+          start_at: event.start_at,
+          end_at: null,
+          location: event.location,
+          status: 'scheduled',
+          event_type: 'training',
+          participant_scope: 'teams',
+          team_ids: ['team-a'],
+          game_id: null,
+          competition_id: null,
+        },
+      ],
+      total: 1,
+      limit: 100,
+      offset: 0,
+    });
+    vi.mocked(schoolApi.listSchoolTeams).mockResolvedValue([
+      {
+        id: 'team-a',
+        organization_id: 'school-a',
+        name: 'Reassigned XI',
+        status: 'active',
+        home_ground: null,
+        season: null,
+        owner_user_id: null,
+        coach_user_id: 'coach-b',
+        coach_name: 'Coach B',
+        created_at: '',
+        updated_at: '',
+      },
+    ]);
+    const wrapper = mountView('school', 'coach');
+    await flushPromises();
+    expect(wrapper.find('[data-test="notify-event-update-team-event"]').exists()).toBe(false);
   });
 
   it('suppresses a stale calendar response after an organization switch', async () => {
