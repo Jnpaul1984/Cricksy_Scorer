@@ -65,6 +65,10 @@ async def create_organization(
     db.add_all([organization, owner_membership])
     try:
         await db.flush()
+        # Local import avoids coupling the core membership module to public routes.
+        from backend.services.organization_publication_service import create_default_settings
+
+        await create_default_settings(db, organization_id=organization.id)
         await ensure_free_organization_entitlement(db, organization_id=organization.id)
         await db.commit()
     except Exception:
