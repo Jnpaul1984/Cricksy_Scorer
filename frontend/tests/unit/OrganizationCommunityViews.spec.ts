@@ -255,4 +255,80 @@ describe('OrganizationCommunitySettingsView', () => {
       );
     },
   );
+
+  it.each(
+    (
+      [
+        ['school', 'school-a', 'club', 'club-b'],
+        ['club', 'club-a', 'school', 'school-b'],
+        ['school', 'school-a', 'school', 'school-b'],
+        ['club', 'club-a', 'club', 'club-b'],
+      ] as const
+    ).flatMap(([fromType, fromId, toType, toId]) =>
+      (['publication', 'branding', 'competition'] as const).map(
+        (mutation) => [mutation, fromType, fromId, toType, toId] as const,
+      ),
+    ),
+  )(
+    'clears stale %s saving state after switching from %s %s to %s %s',
+    async (mutation, fromType, fromId, toType, toId) => {
+      const organizationId = ref(fromId);
+      const organizationType = ref<FreeOrganizationType>(fromType);
+      const inFlight = deferred<unknown>();
+      api.getOrganizationCommunitySettings
+        .mockResolvedValueOnce(settings(fromId, 'Stale Cup'))
+        .mockResolvedValueOnce(settings(toId, 'Current Cup'));
+      api.publishOrganizationCommunity.mockReturnValueOnce(inFlight.promise);
+      api.updateOrganizationCommunityBranding.mockReturnValueOnce(inFlight.promise);
+      api.setOrganizationCompetitionCommunityPublication.mockReturnValueOnce(inFlight.promise);
+
+      const wrapper = mount(OrganizationCommunitySettingsView, {
+        global: {
+          provide: {
+            [schoolContextKey as symbol]: context(organizationId, organizationType),
+          },
+          stubs: routerStubs,
+        },
+      });
+      await flushPromises();
+
+      if (mutation === 'publication') {
+        await wrapper.get('[data-test="community-homepage-toggle"]').trigger('click');
+      } else if (mutation === 'branding') {
+        await wrapper.get('#community-logo-url').setValue('https://cdn.example.com/logo.png');
+        await wrapper.get('#community-logo-alt').setValue('Organization crest');
+        await wrapper.get('[data-test="community-branding-form"]').trigger('submit');
+      } else {
+        await wrapper.get('[data-test="community-competition-toggle"]').trigger('click');
+      }
+      expect(
+        wrapper.get('[data-test="community-homepage-toggle"]').attributes('disabled'),
+      ).toBeDefined();
+
+      organizationId.value = toId;
+      organizationType.value = toType;
+      await nextTick();
+      await flushPromises();
+
+      expect(wrapper.text()).toContain('Current Cup');
+      expect(wrapper.text()).not.toContain('Stale Cup');
+      expect(
+        wrapper.get('[data-test="community-homepage-toggle"]').attributes('disabled'),
+      ).toBeUndefined();
+      expect(
+        wrapper.get('[data-test="community-branding-form"] button').attributes('disabled'),
+      ).toBeUndefined();
+      expect(
+        wrapper.get('[data-test="community-competition-toggle"]').attributes('disabled'),
+      ).toBeUndefined();
+
+      inFlight.resolve({});
+      await flushPromises();
+      expect(wrapper.text()).toContain('Current Cup');
+      expect(
+        wrapper.get('[data-test="community-homepage-toggle"]').attributes('disabled'),
+      ).toBeUndefined();
+      expect(api.getOrganizationCommunitySettings).toHaveBeenCalledTimes(2);
+    },
+  );
 });

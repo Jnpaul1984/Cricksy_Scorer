@@ -243,7 +243,7 @@ def validate_logo_url(value: str) -> str:
         raise OrganizationServiceError(
             422, "Logo URL must reference a PNG, JPEG, WebP, GIF, or AVIF image"
         )
-    return candidate
+    return parsed._replace(scheme="https").geturl()
 
 
 def _validated_alt_text(value: str | None, *, organization_name: str) -> str:

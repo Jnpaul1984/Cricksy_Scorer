@@ -49,6 +49,7 @@ async function load() {
   logoAltText.value = '';
   error.value = '';
   notice.value = '';
+  saving.value = false;
   loading.value = true;
   try {
     const response = await getOrganizationCommunitySettings(currentId);
@@ -169,12 +170,20 @@ watch([organizationId, organizationType], load, { immediate: true });
           <button
             v-if="settings.publication_state === 'unpublished'"
             type="button"
+            data-test="community-homepage-toggle"
             :disabled="saving"
             @click="setHomepagePublished(true)"
           >
             Publish homepage
           </button>
-          <button v-else type="button" class="secondary" :disabled="saving" @click="setHomepagePublished(false)">
+          <button
+            v-else
+            type="button"
+            class="secondary"
+            data-test="community-homepage-toggle"
+            :disabled="saving"
+            @click="setHomepagePublished(false)"
+          >
             Unpublish homepage
           </button>
         </div>
@@ -192,7 +201,7 @@ watch([organizationId, organizationType], load, { immediate: true });
       <article class="panel">
         <h3>Basic logo</h3>
         <p>HTTPS raster images only: PNG, JPEG, WebP, GIF, or AVIF. SVG and scripts are not accepted.</p>
-        <form v-if="canManageCommunity" @submit.prevent="saveBranding">
+        <form v-if="canManageCommunity" data-test="community-branding-form" @submit.prevent="saveBranding">
           <label for="community-logo-url">Logo URL</label>
           <input
             id="community-logo-url"
@@ -238,6 +247,7 @@ watch([organizationId, organizationType], load, { immediate: true });
               v-if="canManageCommunity"
               type="button"
               class="secondary"
+              data-test="community-competition-toggle"
               :disabled="saving"
               @click="setCompetitionPublished(competition.competition_id, competition.publication_state !== 'published')"
             >
