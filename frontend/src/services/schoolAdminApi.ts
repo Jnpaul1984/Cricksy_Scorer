@@ -53,6 +53,9 @@ import type {
   OrganizationAvailabilityReminderResult,
   OrganizationEventNotificationResult,
   OrganizationSelectionNotificationResult,
+  OrganizationCommunitySettings,
+  OrganizationCommunityCompetitionSettings,
+  PublicOrganizationCommunity,
 } from '@/types/schoolAdmin';
 
 const orgPath = (organizationId: string, suffix = '') =>
@@ -700,6 +703,37 @@ export const updateSchoolMatchPublication = (
   );
 export const getPublicSchoolScorecard = (gameId: string) =>
   apiRequest<PublicSchoolScorecard>(`/public/school-scorecards/${encodeURIComponent(gameId)}`);
+
+export const getOrganizationCommunitySettings = (organizationId: string) =>
+  apiRequest<OrganizationCommunitySettings>(orgPath(organizationId, '/community-settings'));
+export const publishOrganizationCommunity = (organizationId: string) =>
+  apiRequest(orgPath(organizationId, '/public-settings/publish'), { method: 'PUT' });
+export const unpublishOrganizationCommunity = (organizationId: string) =>
+  apiRequest(orgPath(organizationId, '/public-settings/unpublish'), { method: 'PUT' });
+export const updateOrganizationCommunityBranding = (
+  organizationId: string,
+  payload: { logo_url: string | null; logo_alt_text: string | null },
+) =>
+  apiRequest(orgPath(organizationId, '/community-branding'), {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  });
+export const setOrganizationCompetitionCommunityPublication = (
+  organizationId: string,
+  competitionId: string,
+  publish: boolean,
+) =>
+  apiRequest<OrganizationCommunityCompetitionSettings>(
+    orgPath(
+      organizationId,
+      `/competitions/${encodeURIComponent(competitionId)}/community-publication/${publish ? 'publish' : 'unpublish'}`,
+    ),
+    { method: 'PUT' },
+  );
+export const getPublicOrganizationCommunity = (publicIdentifier: string) =>
+  apiRequest<PublicOrganizationCommunity>(
+    `/api/public/organizations/${encodeURIComponent(publicIdentifier)}/community`,
+  );
 
 export const previewPlayerImport = (
   organizationId: string,

@@ -1,0 +1,258 @@
+import { flushPromises, mount } from '@vue/test-utils';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { computed, nextTick, ref } from 'vue';
+
+import { organizationBasePath, organizationTerminology } from '@/composables/useOrganizationTerminology';
+import { schoolContextKey, type SchoolContext } from '@/composables/useSchoolContext';
+import router from '@/router';
+import type {
+  FreeOrganizationType,
+  OrganizationCommunitySettings,
+  PublicOrganizationCommunity,
+} from '@/types/schoolAdmin';
+import OrganizationCommunityView from '@/views/OrganizationCommunityView.vue';
+import OrganizationCommunitySettingsView from '@/views/school/OrganizationCommunitySettingsView.vue';
+
+const api = vi.hoisted(() => ({
+  getOrganizationCommunitySettings: vi.fn(),
+  publishOrganizationCommunity: vi.fn(),
+  unpublishOrganizationCommunity: vi.fn(),
+  updateOrganizationCommunityBranding: vi.fn(),
+  setOrganizationCompetitionCommunityPublication: vi.fn(),
+  getPublicOrganizationCommunity: vi.fn(),
+}));
+
+vi.mock('@/services/schoolAdminApi', () => api);
+
+const routerStubs = {
+  RouterLink: { template: '<a><slot /></a>' },
+};
+
+function settings(organizationId: string, name = 'Community Cup'): OrganizationCommunitySettings {
+  return {
+    organization_id: organizationId,
+    public_identifier: 'org_0123456789abcdef01234567',
+    publication_state: 'unpublished',
+    logo_url: null,
+    logo_alt_text: null,
+    branding_version: 1,
+    branding_updated_at: null,
+    competitions: [
+      {
+        competition_id: `${organizationId}-competition`,
+        competition_name: name,
+        publication_state: 'unpublished',
+        publication_version: 1,
+        published_at: null,
+        unpublished_at: null,
+        updated_by_user_id: null,
+      },
+    ],
+  };
+}
+
+function community(organizationType: FreeOrganizationType): PublicOrganizationCommunity {
+  return {
+    public_identifier: 'org_0123456789abcdef01234567',
+    display_name: organizationType === 'school' ? 'North School' : 'North Club',
+    organization_type: organizationType,
+    branding: {
+      logo_url: null,
+      logo_alt_text: `North ${organizationType} logo`,
+      fallback_text: 'N',
+    },
+    competitions: [
+      {
+        name: 'Community Cup',
+        tournament_type: 'league',
+        start_date: '2026-09-30T12:00:00Z',
+        end_date: null,
+        status: 'ongoing',
+        team_names: ['First XI', 'Second XI'],
+        fixtures: [
+          {
+            team_a_name: 'First XI',
+            team_b_name: 'Second XI',
+            match_number: 1,
+            venue: 'Main Ground',
+            scheduled_date: '2026-10-01T12:00:00Z',
+            fixture_status: 'completed',
+            game_status: 'completed',
+            result: 'First XI won by 8 runs',
+            public_scorecard_path: '/school-scorecards/public-game',
+          },
+        ],
+        standings: [
+          {
+            team_name: 'First XI',
+            matches_played: 1,
+            matches_won: 1,
+            matches_lost: 0,
+            matches_drawn: 0,
+            points: 2,
+          },
+        ],
+      },
+    ],
+  };
+}
+
+function context(
+  organizationId = ref('school-a'),
+  organizationType = ref<FreeOrganizationType>('school'),
+  canManageCommunity = ref(true),
+): SchoolContext {
+  const allowed = computed(() => true);
+  return {
+    organizationId: computed(() => organizationId.value),
+    organizationType: computed(() => organizationType.value),
+    organizationBasePath: computed(() => organizationBasePath(organizationType.value)),
+    terminology: computed(() => organizationTerminology(organizationType.value)),
+    organization: ref(null),
+    membership: ref(null),
+    entitlement: ref(null),
+    canManageTeams: allowed,
+    canManageRosterMetadata: allowed,
+    canManageRosterLifecycle: allowed,
+    canManageTeamRoster: allowed,
+    canImport: allowed,
+    canCreateSchoolMatch: allowed,
+    canViewStatistics: allowed,
+    canViewFixturesResults: allowed,
+    canViewCompetitions: allowed,
+    canManageCompetitions: allowed,
+    canDeleteCompetitions: allowed,
+    canLinkFixtures: allowed,
+    canPublishScorecards: allowed,
+    canViewEvents: allowed,
+    canManageEvents: allowed,
+    canViewAnnouncements: allowed,
+    canManageAnnouncements: allowed,
+    canManageCommunity: computed(() => canManageCommunity.value),
+  };
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>(resolver => {
+    resolve = resolver;
+  });
+  return { promise, resolve };
+}
+
+beforeEach(() => {
+  vi.resetAllMocks();
+  Object.defineProperty(navigator, 'clipboard', {
+    configurable: true,
+    value: { writeText: vi.fn().mockResolvedValue(undefined) },
+  });
+});
+
+describe('OrganizationCommunityView', () => {
+  it.each(['school', 'club'] as const)(
+    'renders one accessible responsive %s community component with public cricket only',
+    async organizationType => {
+      api.getPublicOrganizationCommunity.mockResolvedValue(community(organizationType));
+      const wrapper = mount(OrganizationCommunityView, {
+        props: { publicIdentifier: 'org_0123456789abcdef01234567' },
+        global: { stubs: routerStubs },
+      });
+      await flushPromises();
+
+      expect(wrapper.get('h1').text()).toBe(
+        organizationType === 'school' ? 'North School' : 'North Club',
+      );
+      expect(wrapper.text()).toContain(`${organizationType === 'school' ? 'School' : 'Club'} cricket community`);
+      expect(wrapper.text()).toContain('First XI won by 8 runs');
+      expect(wrapper.text()).toContain('View published scorecard');
+      expect(wrapper.find('table').exists()).toBe(true);
+      expect(wrapper.text().toLowerCase()).not.toContain('roster');
+      expect(wrapper.text().toLowerCase()).not.toContain('player profile');
+      expect(wrapper.get('main').classes()).toContain('community-page');
+    },
+  );
+
+  it('uses the same anonymous router component and a safe not-found state', async () => {
+    api.getPublicOrganizationCommunity.mockRejectedValue(Object.assign(new Error('missing'), { status: 404 }));
+    const wrapper = mount(OrganizationCommunityView, {
+      props: { publicIdentifier: 'org_000000000000000000000000' },
+      global: { stubs: routerStubs },
+    });
+    await flushPromises();
+    expect(wrapper.get('[role="alert"]').text()).toContain('Community page not found');
+    expect(router.resolve('/community/org_0123456789abcdef01234567').name).toBe(
+      'organization-community',
+    );
+  });
+});
+
+describe('OrganizationCommunitySettingsView', () => {
+  it('shows enabled publication, branding, link, and competition controls only to managers', async () => {
+    api.getOrganizationCommunitySettings.mockResolvedValue(settings('school-a'));
+    api.publishOrganizationCommunity.mockResolvedValue({});
+    const wrapper = mount(OrganizationCommunitySettingsView, {
+      global: {
+        provide: { [schoolContextKey as symbol]: context() },
+        stubs: routerStubs,
+      },
+    });
+    await flushPromises();
+    expect(wrapper.text()).toContain('Publish homepage');
+    expect(wrapper.text()).toContain('Save logo');
+    expect(wrapper.text()).toContain('Community Cup');
+    await wrapper.get('button').trigger('click');
+    await flushPromises();
+    expect(api.publishOrganizationCommunity).toHaveBeenCalledWith('school-a');
+
+    const readOnlyContext = context(ref('school-a'), ref('school'), ref(false));
+    const readOnly = mount(OrganizationCommunitySettingsView, {
+      global: {
+        provide: { [schoolContextKey as symbol]: readOnlyContext },
+        stubs: routerStubs,
+      },
+    });
+    await flushPromises();
+    expect(readOnly.text()).toContain('Only a current Owner or Admin');
+    expect(readOnly.text()).not.toContain('Publish homepage');
+    expect(readOnly.text()).not.toContain('Save logo');
+  });
+
+  it.each([
+    ['school', 'school-a', 'club', 'club-b'],
+    ['club', 'club-a', 'school', 'school-b'],
+    ['school', 'school-a', 'school', 'school-b'],
+    ['club', 'club-a', 'club', 'club-b'],
+  ] as const)(
+    'suppresses a stale %s %s response after switching to %s %s',
+    async (fromType, fromId, toType, toId) => {
+      const organizationId = ref(fromId);
+      const organizationType = ref<FreeOrganizationType>(fromType);
+      const first = deferred<OrganizationCommunitySettings>();
+      const second = deferred<OrganizationCommunitySettings>();
+      api.getOrganizationCommunitySettings
+        .mockImplementationOnce(() => first.promise)
+        .mockImplementationOnce(() => second.promise);
+      const wrapper = mount(OrganizationCommunitySettingsView, {
+        global: {
+          provide: {
+            [schoolContextKey as symbol]: context(organizationId, organizationType),
+          },
+          stubs: routerStubs,
+        },
+      });
+      organizationId.value = toId;
+      organizationType.value = toType;
+      await nextTick();
+      second.resolve(settings(toId, 'Current Cup'));
+      await flushPromises();
+      first.resolve(settings(fromId, 'Stale Cup'));
+      await flushPromises();
+
+      expect(wrapper.text()).toContain('Current Cup');
+      expect(wrapper.text()).not.toContain('Stale Cup');
+      expect(wrapper.get('input[readonly]').attributes('value')).toContain(
+        'org_0123456789abcdef01234567',
+      );
+    },
+  );
+});

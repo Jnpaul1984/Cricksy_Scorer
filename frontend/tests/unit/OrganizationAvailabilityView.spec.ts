@@ -73,6 +73,7 @@ function context(
     canManageEvents: writable,
     canViewAnnouncements: computed(() => true),
     canManageAnnouncements: writable,
+    canManageCommunity: writable,
   };
 }
 

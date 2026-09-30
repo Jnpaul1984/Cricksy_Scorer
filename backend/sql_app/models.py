@@ -289,6 +289,26 @@ class OrganizationPublicSettings(Base):
             "publication_version >= 1",
             name="ck_organization_public_settings_version",
         ),
+        CheckConstraint(
+            "branding_version >= 1",
+            name="ck_organization_public_settings_branding_version",
+        ),
+        CheckConstraint(
+            "logo_url IS NULL OR (length(logo_url) <= 2048 AND "
+            "logo_url LIKE 'https://%' AND logo_url NOT LIKE '%<%' AND "
+            "logo_url NOT LIKE '%>%')",
+            name="ck_organization_public_settings_logo_url",
+        ),
+        CheckConstraint(
+            "logo_alt_text IS NULL OR (length(logo_alt_text) <= 120 AND "
+            "logo_alt_text NOT LIKE '%<%' AND logo_alt_text NOT LIKE '%>%')",
+            name="ck_organization_public_settings_logo_alt_text",
+        ),
+        CheckConstraint(
+            "(logo_url IS NULL AND logo_alt_text IS NULL) OR "
+            "(logo_url IS NOT NULL AND logo_alt_text IS NOT NULL)",
+            name="ck_organization_public_settings_logo_pair",
+        ),
         Index(
             "ix_organization_public_settings_public_lookup",
             "public_identifier",
@@ -317,6 +337,15 @@ class OrganizationPublicSettings(Base):
     updated_by_user_id: Mapped[str | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL")
     )
+    logo_url: Mapped[str | None] = mapped_column(String(2048))
+    logo_alt_text: Mapped[str | None] = mapped_column(String(120))
+    branding_version: Mapped[int] = mapped_column(
+        Integer, default=1, server_default="1", nullable=False
+    )
+    branding_updated_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    branding_updated_by_user_id: Mapped[str | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
     created_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -324,6 +353,59 @@ class OrganizationPublicSettings(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
     organization: Mapped[Organization] = relationship(back_populates="public_settings")
+
+
+class OrganizationCompetitionPublication(Base):
+    """Explicit default-private publication state for one organization competition."""
+
+    __tablename__ = "organization_competition_publications"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["competition_id", "organization_id"],
+            ["tournaments.id", "tournaments.organization_id"],
+            ondelete="CASCADE",
+            name="fk_org_comp_publication_tournament_org",
+        ),
+        CheckConstraint(
+            "publication_state IN ('unpublished', 'published')",
+            name="ck_organization_competition_publications_state",
+        ),
+        CheckConstraint(
+            "publication_version >= 1",
+            name="ck_organization_competition_publications_version",
+        ),
+        Index(
+            "ix_organization_competition_publications_public_lookup",
+            "organization_id",
+            "publication_state",
+        ),
+    )
+
+    competition_id: Mapped[str] = mapped_column(String, primary_key=True, nullable=False)
+    organization_id: Mapped[str] = mapped_column(String, nullable=False)
+    publication_state: Mapped[str] = mapped_column(
+        String(16), default="unpublished", server_default="unpublished", nullable=False
+    )
+    publication_version: Mapped[int] = mapped_column(
+        Integer, default=1, server_default="1", nullable=False
+    )
+    published_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    unpublished_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    published_by_user_id: Mapped[str | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+    unpublished_by_user_id: Mapped[str | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+    updated_by_user_id: Mapped[str | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
 
 
 class OrganizationMembership(Base):

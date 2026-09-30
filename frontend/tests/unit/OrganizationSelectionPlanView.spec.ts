@@ -125,6 +125,7 @@ function context(
     canManageEvents: editable,
     canViewAnnouncements: computed(() => true),
     canManageAnnouncements: editable,
+    canManageCommunity: editable,
   };
 }
 
