@@ -7,13 +7,55 @@ Create Date: 2026-09-29 03:00:00.000000
 
 from collections.abc import Sequence
 
-from alembic import op
 import sqlalchemy as sa
+
+from alembic import op
 
 revision: str = "20260929030000"
 down_revision: str | Sequence[str] | None = "20260929020000"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
+
+ORGANIZATION_PUBLIC_SETTINGS_BACKFILL_SQL = """
+DO $$
+DECLARE
+    organization_record RECORD;
+    collision_attempt INTEGER;
+    candidate TEXT;
+BEGIN
+    FOR organization_record IN SELECT id FROM organizations ORDER BY id LOOP
+        collision_attempt := 0;
+        LOOP
+            IF collision_attempt >= 100 THEN
+                RAISE EXCEPTION
+                    'Unable to allocate public identifier for organization %',
+                    organization_record.id;
+            END IF;
+            candidate := 'org_' || substring(
+                md5(
+                    organization_record.id ||
+                    CASE
+                        WHEN collision_attempt = 0 THEN ''
+                        ELSE ':' || collision_attempt::text
+                    END
+                )
+                from 1 for 24
+            );
+            BEGIN
+                INSERT INTO organization_public_settings (
+                    organization_id,
+                    public_identifier
+                )
+                VALUES (organization_record.id, candidate);
+                EXIT;
+            EXCEPTION WHEN unique_violation THEN
+                collision_attempt := collision_attempt + 1;
+            END;
+        END LOOP;
+    END LOOP;
+END
+$$;
+"""
 
 
 def upgrade() -> None:
@@ -50,15 +92,9 @@ def upgrade() -> None:
         sa.CheckConstraint(
             "publication_version >= 1", name="ck_organization_public_settings_version"
         ),
-        sa.ForeignKeyConstraint(
-            ["organization_id"], ["organizations.id"], ondelete="CASCADE"
-        ),
-        sa.ForeignKeyConstraint(
-            ["published_by_user_id"], ["users.id"], ondelete="SET NULL"
-        ),
-        sa.ForeignKeyConstraint(
-            ["unpublished_by_user_id"], ["users.id"], ondelete="SET NULL"
-        ),
+        sa.ForeignKeyConstraint(["organization_id"], ["organizations.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["published_by_user_id"], ["users.id"], ondelete="SET NULL"),
+        sa.ForeignKeyConstraint(["unpublished_by_user_id"], ["users.id"], ondelete="SET NULL"),
         sa.ForeignKeyConstraint(["updated_by_user_id"], ["users.id"], ondelete="SET NULL"),
         sa.PrimaryKeyConstraint("organization_id"),
         sa.UniqueConstraint(
@@ -71,13 +107,7 @@ def upgrade() -> None:
         ["public_identifier", "publication_state"],
         unique=False,
     )
-    op.execute(
-        """
-        INSERT INTO organization_public_settings (organization_id, public_identifier)
-        SELECT id, 'org_' || substring(md5(id) from 1 for 24)
-        FROM organizations
-        """
-    )
+    op.execute(ORGANIZATION_PUBLIC_SETTINGS_BACKFILL_SQL)
 
 
 def downgrade() -> None:

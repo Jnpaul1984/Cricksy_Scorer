@@ -13,6 +13,7 @@ from backend.services.organization_service import (
 )
 from backend.sql_app.models import Organization, OrganizationMembership, OrganizationPublicSettings
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = structlog.get_logger(__name__)
@@ -20,6 +21,8 @@ logger = structlog.get_logger(__name__)
 PUBLIC_IDENTIFIER_PATTERN = re.compile(r"^org_[0-9a-f]{24}$")
 PUBLICATION_MANAGERS = {"owner", "admin"}
 _PUBLIC_IDENTIFIER_NAMESPACE = uuid.UUID("f095452d-9128-46ac-9a82-d504819bcb64")
+_PUBLIC_IDENTIFIER_UNIQUE_CONSTRAINT = "uq_organization_public_settings_public_identifier"
+_PUBLIC_SETTINGS_PRIMARY_KEY_CONSTRAINT = "organization_public_settings_pkey"
 
 
 def public_identifier_candidate(organization_id: str, collision_attempt: int = 0) -> str:
@@ -28,30 +31,41 @@ def public_identifier_candidate(organization_id: str, collision_attempt: int = 0
     return f"org_{uuid.uuid5(_PUBLIC_IDENTIFIER_NAMESPACE, seed).hex[:24]}"
 
 
-async def allocate_public_identifier(db: AsyncSession, *, organization_id: str) -> str:
-    """Resolve the vanishingly rare collision deterministically; the unique index is final."""
-    for collision_attempt in range(100):
-        candidate = public_identifier_candidate(organization_id, collision_attempt)
-        existing = await db.scalar(
-            select(OrganizationPublicSettings.organization_id).where(
-                OrganizationPublicSettings.public_identifier == candidate
-            )
-        )
-        if existing is None or existing == organization_id:
-            return candidate
-    raise RuntimeError("Unable to allocate organization public identifier")
+def _integrity_constraint_name(exc: IntegrityError) -> str | None:
+    current: BaseException | None = exc.orig
+    while current is not None:
+        constraint_name = getattr(current, "constraint_name", None)
+        if isinstance(constraint_name, str):
+            return constraint_name
+        current = current.__cause__ or current.__context__
+    return None
 
 
 async def create_default_settings(
     db: AsyncSession, *, organization_id: str
 ) -> OrganizationPublicSettings:
-    settings = OrganizationPublicSettings(
-        organization_id=organization_id,
-        public_identifier=await allocate_public_identifier(db, organization_id=organization_id),
-        publication_state="unpublished",
-    )
-    db.add(settings)
-    return settings
+    """Insert one settings row, retrying identifier collisions under DB authority."""
+    for collision_attempt in range(100):
+        settings = OrganizationPublicSettings(
+            organization_id=organization_id,
+            public_identifier=public_identifier_candidate(organization_id, collision_attempt),
+            publication_state="unpublished",
+        )
+        try:
+            async with db.begin_nested():
+                db.add(settings)
+                await db.flush()
+        except IntegrityError as exc:
+            constraint_name = _integrity_constraint_name(exc)
+            if constraint_name == _PUBLIC_SETTINGS_PRIMARY_KEY_CONSTRAINT:
+                existing = await db.get(OrganizationPublicSettings, organization_id)
+                if existing is not None:
+                    return existing
+            if constraint_name == _PUBLIC_IDENTIFIER_UNIQUE_CONSTRAINT:
+                continue
+            raise
+        return settings
+    raise RuntimeError("Unable to allocate organization public identifier")
 
 
 async def _lock_active_organization(db: AsyncSession, *, organization_id: str) -> Organization:
