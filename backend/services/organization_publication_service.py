@@ -7,6 +7,7 @@ import re
 import uuid
 from urllib.parse import unquote, urlsplit
 
+import idna
 import structlog
 from backend.api.schemas.organization_publication import (
     OrganizationBrandingUpdate,
@@ -272,10 +273,21 @@ def validate_logo_url(value: str) -> str:
     except ValueError as exc:
         raise OrganizationServiceError(422, "Logo URL has an invalid port") from exc
 
+    raw_hostname = parsed.hostname
     try:
-        hostname = parsed.hostname.encode("idna").decode("ascii").rstrip(".").lower()
-    except UnicodeError as exc:
-        raise OrganizationServiceError(422, "Logo URL host is invalid") from exc
+        literal_address = ipaddress.ip_address(raw_hostname)
+    except ValueError:
+        try:
+            hostname = (
+                idna.encode(raw_hostname, uts46=True, std3_rules=True)
+                .decode("ascii")
+                .rstrip(".")
+                .lower()
+            )
+        except idna.IDNAError as exc:
+            raise OrganizationServiceError(422, "Logo URL host is invalid") from exc
+    else:
+        hostname = str(literal_address)
     if not hostname:
         raise OrganizationServiceError(422, "Logo URL host is invalid")
     if hostname == "localhost" or hostname.endswith((".localhost", ".local", ".internal")):
@@ -294,7 +306,10 @@ def validate_logo_url(value: str) -> str:
         raise OrganizationServiceError(
             422, "Logo URL must reference a PNG, JPEG, WebP, GIF, or AVIF image"
         )
-    return parsed._replace(scheme="https").geturl()
+    canonical_netloc = f"[{hostname}]" if ":" in hostname else hostname
+    if parsed.port == 443:
+        canonical_netloc = f"{canonical_netloc}:443"
+    return parsed._replace(scheme="https", netloc=canonical_netloc).geturl()
 
 
 def _validated_alt_text(value: str | None, *, organization_name: str) -> str:

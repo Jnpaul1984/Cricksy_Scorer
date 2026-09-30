@@ -51,6 +51,7 @@ async def test_logo_url_scheme_is_normalized_before_postgresql_persistence(
     for unicode_local_host in (
         "\uff11\uff12\uff17\u3002\uff10\u3002\uff10\u3002\uff11",
         "\u24db\u24de\u24d2\u24d0\u24db\u24d7\u24de\u24e2\u24e3",
+        "local\u115fhost",
     ):
         unicode_local = school_client.put(
             endpoint,
@@ -66,6 +67,14 @@ async def test_logo_url_scheme_is_normalized_before_postgresql_persistence(
     )
     assert encoded_path.status_code == 200, encoded_path.text
     assert encoded_path.json()["logo_url"] == "https://cdn.example.com/school%20logos/logo.png"
+
+    unicode_public = school_client.put(
+        endpoint,
+        json={"logo_url": "https://b\u00fccher.example/logo.png"},
+        headers=owner.headers,
+    )
+    assert unicode_public.status_code == 200, unicode_public.text
+    assert unicode_public.json()["logo_url"] == "https://xn--bcher-kva.example/logo.png"
 
     accepted = school_client.put(
         endpoint,
