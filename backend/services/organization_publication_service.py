@@ -272,7 +272,12 @@ def validate_logo_url(value: str) -> str:
     except ValueError as exc:
         raise OrganizationServiceError(422, "Logo URL has an invalid port") from exc
 
-    hostname = parsed.hostname.rstrip(".").lower()
+    try:
+        hostname = parsed.hostname.encode("idna").decode("ascii").rstrip(".").lower()
+    except UnicodeError as exc:
+        raise OrganizationServiceError(422, "Logo URL host is invalid") from exc
+    if not hostname:
+        raise OrganizationServiceError(422, "Logo URL host is invalid")
     if hostname == "localhost" or hostname.endswith((".localhost", ".local", ".internal")):
         raise OrganizationServiceError(422, "Logo URL host is not public")
     address: ipaddress.IPv4Address | ipaddress.IPv6Address | None
