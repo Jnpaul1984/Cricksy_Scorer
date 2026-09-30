@@ -268,6 +268,62 @@ class Organization(Base):
         cascade="all, delete-orphan",
         passive_deletes=True,
     )
+    public_settings: Mapped[OrganizationPublicSettings | None] = relationship(
+        back_populates="organization",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        uselist=False,
+    )
+
+
+class OrganizationPublicSettings(Base):
+    """Default-private publication contract for an organization's public identity."""
+
+    __tablename__ = "organization_public_settings"
+    __table_args__ = (
+        CheckConstraint(
+            "publication_state IN ('unpublished', 'published')",
+            name="ck_organization_public_settings_state",
+        ),
+        CheckConstraint(
+            "publication_version >= 1",
+            name="ck_organization_public_settings_version",
+        ),
+        Index(
+            "ix_organization_public_settings_public_lookup",
+            "public_identifier",
+            "publication_state",
+        ),
+    )
+
+    organization_id: Mapped[str] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE"), primary_key=True, nullable=False
+    )
+    public_identifier: Mapped[str] = mapped_column(String(28), unique=True, nullable=False)
+    publication_state: Mapped[str] = mapped_column(
+        String(16), default="unpublished", server_default="unpublished", nullable=False
+    )
+    publication_version: Mapped[int] = mapped_column(
+        Integer, default=1, server_default="1", nullable=False
+    )
+    published_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    unpublished_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    published_by_user_id: Mapped[str | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+    unpublished_by_user_id: Mapped[str | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+    updated_by_user_id: Mapped[str | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+    organization: Mapped[Organization] = relationship(back_populates="public_settings")
 
 
 class OrganizationMembership(Base):
