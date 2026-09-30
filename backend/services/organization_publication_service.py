@@ -44,6 +44,47 @@ MAX_ADMIN_COMPETITIONS = 100
 SAFE_LOGO_EXTENSIONS = frozenset({".png", ".jpg", ".jpeg", ".webp", ".gif", ".avif"})
 
 
+def _browser_ipv4_address(hostname: str) -> ipaddress.IPv4Address | None:
+    """Parse the legacy numeric IPv4 forms normalized by browser URL parsers."""
+    parts = hostname.split(".")
+    if not parts or len(parts) > 4 or any(not part for part in parts):
+        return None
+
+    numbers: list[int] = []
+    for part in parts:
+        radix = 10
+        digits = part
+        if part.lower().startswith("0x"):
+            radix = 16
+            digits = part[2:]
+        elif len(part) > 1 and part.startswith("0"):
+            radix = 8
+            digits = part[1:]
+
+        if digits:
+            allowed = {
+                8: r"[0-7]+",
+                10: r"[0-9]+",
+                16: r"[0-9a-fA-F]+",
+            }[radix]
+            if re.fullmatch(allowed, digits) is None:
+                return None
+            number = int(digits, radix)
+        else:
+            number = 0
+        numbers.append(number)
+
+    if any(number > 255 for number in numbers[:-1]):
+        return None
+    if numbers[-1] >= 256 ** (5 - len(numbers)):
+        return None
+
+    value = numbers[-1]
+    for index, number in enumerate(numbers[:-1]):
+        value += number * 256 ** (3 - index)
+    return ipaddress.IPv4Address(value)
+
+
 def public_identifier_candidate(organization_id: str, collision_attempt: int = 0) -> str:
     """Derive an opaque stable candidate without exposing the tenant UUID."""
     seed = f"{organization_id}:{collision_attempt}"
@@ -234,13 +275,13 @@ def validate_logo_url(value: str) -> str:
     hostname = parsed.hostname.rstrip(".").lower()
     if hostname == "localhost" or hostname.endswith((".localhost", ".local", ".internal")):
         raise OrganizationServiceError(422, "Logo URL host is not public")
+    address: ipaddress.IPv4Address | ipaddress.IPv6Address | None
     try:
         address = ipaddress.ip_address(hostname)
     except ValueError:
-        pass
-    else:
-        if not address.is_global:
-            raise OrganizationServiceError(422, "Logo URL host is not public")
+        address = _browser_ipv4_address(hostname)
+    if address is not None and not address.is_global:
+        raise OrganizationServiceError(422, "Logo URL host is not public")
 
     path = unquote(parsed.path).lower()
     extension = next((suffix for suffix in SAFE_LOGO_EXTENSIONS if path.endswith(suffix)), None)

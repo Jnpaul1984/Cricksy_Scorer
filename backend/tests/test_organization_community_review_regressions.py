@@ -40,6 +40,22 @@ async def test_logo_url_scheme_is_normalized_before_postgresql_persistence(
         )
         assert encoded.status_code == 422
 
+    for browser_loopback in ("127.1", "2130706433", "0x7f000001"):
+        loopback = school_client.put(
+            endpoint,
+            json={"logo_url": f"https://{browser_loopback}/logo.png"},
+            headers=owner.headers,
+        )
+        assert loopback.status_code == 422
+
+    encoded_path = school_client.put(
+        endpoint,
+        json={"logo_url": "https://cdn.example.com/school%20logos/logo.png"},
+        headers=owner.headers,
+    )
+    assert encoded_path.status_code == 200, encoded_path.text
+    assert encoded_path.json()["logo_url"] == "https://cdn.example.com/school%20logos/logo.png"
+
     accepted = school_client.put(
         endpoint,
         json={"logo_url": "HTTPS://cdn.example.com/logo.png"},
