@@ -98,6 +98,7 @@ function context(role: SchoolMembershipRole, organizationId = ref('school-a')): 
     canManageEvents: writes,
     canViewAnnouncements: computed(() => true),
     canManageAnnouncements: writes,
+    canManageCommunity: writes,
   };
 }
 

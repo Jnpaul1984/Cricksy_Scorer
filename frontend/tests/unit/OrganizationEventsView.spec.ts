@@ -57,6 +57,7 @@ function context(
     canManageEvents: canManage,
     canViewAnnouncements: computed(() => true),
     canManageAnnouncements: canManage,
+    canManageCommunity: canManage,
   };
 }
 

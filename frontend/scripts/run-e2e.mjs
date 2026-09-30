@@ -29,6 +29,7 @@ const SUITES = {
     'cypress/e2e/organization_selection_plan_flow.cy.ts',
     'cypress/e2e/organization_announcements_flow.cy.ts',
     'cypress/e2e/organization_notifications_flow.cy.ts',
+    'cypress/e2e/organization_community_flow.cy.ts',
   ].join(','),
   scoring: [
     'cypress/e2e/scoring_gate_smoke.cy.ts',
@@ -74,6 +75,7 @@ function run(command, args, extraEnv = env) {
     const child = spawn(command, args, {
       cwd: frontendDir,
       env: extraEnv,
+      shell: process.platform === 'win32',
       stdio: 'inherit',
     })
 
@@ -134,6 +136,7 @@ try {
   previewProcess = spawn(npmCmd, ['run', 'preview', '--', '--port', '3000'], {
     cwd: frontendDir,
     env,
+    shell: process.platform === 'win32',
     stdio: 'inherit',
   })
 

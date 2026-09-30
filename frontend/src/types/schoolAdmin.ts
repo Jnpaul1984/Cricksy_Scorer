@@ -704,6 +704,73 @@ export interface PublicScorecardEntry {
   wickets_taken?: number | null;
 }
 
+export type OrganizationCommunityPublicationState = 'unpublished' | 'published';
+
+export interface OrganizationCommunityCompetitionSettings {
+  competition_id: string;
+  competition_name: string;
+  publication_state: OrganizationCommunityPublicationState;
+  publication_version: number;
+  published_at: string | null;
+  unpublished_at: string | null;
+  updated_by_user_id: string | null;
+}
+
+export interface OrganizationCommunitySettings {
+  organization_id: string;
+  public_identifier: string;
+  publication_state: OrganizationCommunityPublicationState;
+  logo_url: string | null;
+  logo_alt_text: string | null;
+  branding_version: number;
+  branding_updated_at: string | null;
+  competitions: OrganizationCommunityCompetitionSettings[];
+}
+
+export interface PublicCommunityFixture {
+  team_a_name: string;
+  team_b_name: string;
+  match_number: number | null;
+  venue: string | null;
+  scheduled_date: string | null;
+  fixture_status: string;
+  game_status: string | null;
+  result: string | null;
+  public_scorecard_path: string | null;
+}
+
+export interface PublicCommunityStanding {
+  team_name: string;
+  matches_played: number;
+  matches_won: number;
+  matches_lost: number;
+  matches_drawn: number;
+  points: number;
+}
+
+export interface PublicCommunityCompetition {
+  name: string;
+  tournament_type: string;
+  start_date: string | null;
+  end_date: string | null;
+  status: string;
+  team_names: string[];
+  fixtures: PublicCommunityFixture[];
+  standings: PublicCommunityStanding[];
+}
+
+export interface PublicOrganizationCommunity {
+  public_identifier: string;
+  display_name: string;
+  organization_type: FreeOrganizationType;
+  branding: {
+    logo_url: string | null;
+    logo_alt_text: string;
+    fallback_text: string;
+  };
+  competitions: PublicCommunityCompetition[];
+}
+
 export type ImportClassification =
   | 'create_new'
   | 'duplicate_existing_school_membership'

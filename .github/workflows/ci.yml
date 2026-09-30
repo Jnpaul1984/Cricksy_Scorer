@@ -421,8 +421,7 @@ jobs:
         run: |
             python scripts/check_alembic_single_head.py
             alembic -c alembic.ini upgrade head
-            pytest -q tests/test_organization_publication.py
-            pytest -q tests/test_school_*.py
+            pytest -q tests/test_school_*.py tests/test_club_free.py tests/test_organization_*.py
 
   frontend-build:
     name: Frontend (build + type-check)

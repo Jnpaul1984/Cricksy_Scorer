@@ -44,6 +44,7 @@ function context(role: SchoolMembershipRole, organizationId = ref('school-a')): 
     canManageEvents: edit,
     canViewAnnouncements: computed(() => true),
     canManageAnnouncements: edit,
+    canManageCommunity: edit,
   };
 }
 

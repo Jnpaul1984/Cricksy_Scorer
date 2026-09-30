@@ -138,6 +138,14 @@ async def create_competition(
     )
     competition = models.Tournament(organization_id=organization_id, **payload.model_dump())
     db.add(competition)
+    await db.flush()
+    db.add(
+        models.OrganizationCompetitionPublication(
+            competition_id=competition.id,
+            organization_id=organization_id,
+            publication_state="unpublished",
+        )
+    )
     await db.commit()
     await db.refresh(competition)
     return competition
@@ -691,7 +699,7 @@ async def link_fixture_game(
 
 
 def _winner_team_id(game: models.Game, fixture: models.Fixture) -> str | Literal["draw"] | None:
-    result = _result_text(game.result)
+    result = authoritative_result_text(game.result)
     if result == "Match tied":
         return "draw"
     if not result or " won by " not in result:
@@ -708,7 +716,7 @@ def _winner_team_id(game: models.Game, fixture: models.Fixture) -> str | Literal
     return None
 
 
-def _result_text(value: str | None) -> str | None:
+def authoritative_result_text(value: str | None) -> str | None:
     """Normalize legacy text and the scorer's persisted structured result."""
     if value is None:
         return None
@@ -726,56 +734,28 @@ def _result_text(value: str | None) -> str | None:
     return normalized
 
 
-async def standings(
-    db: AsyncSession, *, organization_id: str, actor_user_id: str, competition_id: str
+def build_authoritative_standings(
+    *,
+    competition_id: str,
+    entrants: list[tuple[str, str]],
+    fixture_games: list[tuple[models.Fixture, models.Game]],
 ) -> SchoolStandingsResponse:
-    await _authorize(
-        db,
-        organization_id=organization_id,
-        actor_user_id=actor_user_id,
-        capability="school_competitions",
-        allowed_roles=READ_ROLES,
-    )
-    await require_organization_capability(
-        db,
-        organization_id=organization_id,
-        actor_user_id=actor_user_id,
-        capability="school_fixtures_results",
-    )
-    await _competition(db, organization_id=organization_id, competition_id=competition_id)
-    entrants = (
-        await db.scalars(
-            select(models.TournamentTeam).where(
-                models.TournamentTeam.tournament_id == competition_id,
-                models.TournamentTeam.team_id.is_not(None),
-            )
-        )
-    ).all()
+    """Build standings from entrant identity and completed authoritative Game truth."""
     values: dict[str, dict[str, int | str]] = {
-        str(entry.team_id): {
-            "team_id": str(entry.team_id),
-            "team_name": entry.team_name,
+        team_id: {
+            "team_id": team_id,
+            "team_name": team_name,
             "matches_played": 0,
             "matches_won": 0,
             "matches_lost": 0,
             "matches_drawn": 0,
             "points": 0,
         }
-        for entry in entrants
+        for team_id, team_name in entrants
     }
-    rows = await db.execute(
-        select(models.Fixture, models.Game)
-        .join(models.Game, models.Game.id == models.Fixture.game_id)
-        .where(
-            models.Fixture.tournament_id == competition_id,
-            models.Fixture.team_a_id.is_not(None),
-            models.Fixture.team_b_id.is_not(None),
-            models.Game.status == models.GameStatus.completed,
-        )
-    )
     unresolved = 0
     seen_games: set[str] = set()
-    for fixture, game in rows:
+    for fixture, game in fixture_games:
         if game.id in seen_games:
             continue
         seen_games.add(game.id)
@@ -807,6 +787,52 @@ async def standings(
         competition_id=competition_id,
         entries=entries,
         unresolved_completed_games=unresolved,
+    )
+
+
+async def standings(
+    db: AsyncSession, *, organization_id: str, actor_user_id: str, competition_id: str
+) -> SchoolStandingsResponse:
+    await _authorize(
+        db,
+        organization_id=organization_id,
+        actor_user_id=actor_user_id,
+        capability="school_competitions",
+        allowed_roles=READ_ROLES,
+    )
+    await require_organization_capability(
+        db,
+        organization_id=organization_id,
+        actor_user_id=actor_user_id,
+        capability="school_fixtures_results",
+    )
+    await _competition(db, organization_id=organization_id, competition_id=competition_id)
+    entrants = (
+        await db.scalars(
+            select(models.TournamentTeam).where(
+                models.TournamentTeam.tournament_id == competition_id,
+                models.TournamentTeam.team_id.is_not(None),
+            )
+        )
+    ).all()
+    fixture_games = list(
+        (
+            await db.execute(
+                select(models.Fixture, models.Game)
+                .join(models.Game, models.Game.id == models.Fixture.game_id)
+                .where(
+                    models.Fixture.tournament_id == competition_id,
+                    models.Fixture.team_a_id.is_not(None),
+                    models.Fixture.team_b_id.is_not(None),
+                    models.Game.status == models.GameStatus.completed,
+                )
+            )
+        ).all()
+    )
+    return build_authoritative_standings(
+        competition_id=competition_id,
+        entrants=[(str(entry.team_id), entry.team_name) for entry in entrants],
+        fixture_games=fixture_games,
     )
 
 
@@ -989,7 +1015,7 @@ async def public_scorecard(db: AsyncSession, *, game_id: str) -> PublicSchoolSco
         overs_completed=game.overs_completed,
         balls_this_over=game.balls_this_over,
         current_inning=game.current_inning,
-        result=_result_text(game.result),
+        result=authoritative_result_text(game.result),
         batting_scorecard=_public_card(game.batting_scorecard),
         bowling_scorecard=_public_card(game.bowling_scorecard),
     )

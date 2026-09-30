@@ -80,6 +80,7 @@ const canViewAnnouncements = computed(() => capabilities.value.has('organization
 const canManageAnnouncements = computed(
   () => canViewAnnouncements.value && ['owner', 'admin', 'coach'].includes(role.value || ''),
 );
+const canManageCommunity = computed(() => ['owner', 'admin'].includes(role.value || ''));
 const canViewNotifications = computed(() => capabilities.value.has('organization_notifications'));
 const notificationUnreadCount = ref(0);
 let unreadGeneration = 0;
@@ -143,6 +144,7 @@ provide(schoolContextKey, {
   canManageEvents,
   canViewAnnouncements,
   canManageAnnouncements,
+  canManageCommunity,
 });
 provide(organizationNotificationShellKey, {
   unreadCount: notificationUnreadCount,
@@ -252,6 +254,9 @@ watch(
           v-if="canViewCompetitions"
           :to="`${organizationBasePath}/${organizationId}/competitions`"
           >Competitions</RouterLink
+        >
+        <RouterLink :to="`${organizationBasePath}/${organizationId}/community`"
+          >Community page</RouterLink
         >
         <RouterLink v-if="canViewEvents" :to="`${organizationBasePath}/${organizationId}/events`"
           >Calendar</RouterLink

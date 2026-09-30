@@ -65,6 +65,11 @@ const organizationAdminChildren = (namePrefix: 'school' | 'club'): RouteRecordRa
     component: () => import('@/views/school/SchoolCompetitionsView.vue'),
   },
   {
+    path: 'community',
+    name: `${namePrefix}-community-settings`,
+    component: () => import('@/views/school/OrganizationCommunitySettingsView.vue'),
+  },
+  {
     path: 'events',
     name: `${namePrefix}-events`,
     component: () => import('@/views/school/OrganizationEventsView.vue'),
@@ -224,6 +229,12 @@ const router = createRouter({
       path: '/school-scorecards/:gameId',
       name: 'school-public-scorecard',
       component: () => import('@/views/school/SchoolPublicScorecardView.vue'),
+      props: true,
+    },
+    {
+      path: '/community/:publicIdentifier',
+      name: 'organization-community',
+      component: () => import('@/views/OrganizationCommunityView.vue'),
       props: true,
     },
 
@@ -413,7 +424,7 @@ router.beforeEach(async (to, _from, next) => {
     'pricing',
     'viewer-scoreboard',
     'embed-scoreboard',
-    'school-public-scorecard', 'register', 'school-free', 'club-free',
+    'school-public-scorecard', 'organization-community', 'register', 'school-free', 'club-free',
   ]
 
   const isPublic = publicPaths.includes(to.path) || (to.name != null && publicNames.includes(String(to.name)))

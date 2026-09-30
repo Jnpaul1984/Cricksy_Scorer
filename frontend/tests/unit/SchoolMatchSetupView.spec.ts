@@ -91,6 +91,7 @@ function context(
     canManageEvents: writes,
     canViewAnnouncements: computed(() => true),
     canManageAnnouncements: writes,
+    canManageCommunity: writes,
   };
 }
 
