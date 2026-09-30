@@ -419,9 +419,10 @@ jobs:
           APP_SECRET_KEY: school-ci-test-secret-not-for-production
           PYTHONPATH: ${{ github.workspace }}
         run: |
-          python scripts/check_alembic_single_head.py
-          alembic -c alembic.ini upgrade head
-          pytest -q tests/test_school_*.py
+            python scripts/check_alembic_single_head.py
+            alembic -c alembic.ini upgrade head
+            pytest -q tests/test_organization_publication.py
+            pytest -q tests/test_school_*.py
 
   frontend-build:
     name: Frontend (build + type-check)
