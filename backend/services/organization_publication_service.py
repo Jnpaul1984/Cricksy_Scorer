@@ -221,6 +221,8 @@ def validate_logo_url(value: str) -> str:
         raise OrganizationServiceError(422, "Logo URL is invalid") from exc
     if parsed.scheme.lower() != "https" or not parsed.hostname:
         raise OrganizationServiceError(422, "Logo URL must use HTTPS")
+    if "%" in parsed.netloc:
+        raise OrganizationServiceError(422, "Logo URL host must not use percent encoding")
     if parsed.username or parsed.password or parsed.fragment:
         raise OrganizationServiceError(422, "Logo URL must not contain credentials or fragments")
     try:
@@ -618,17 +620,18 @@ async def get_public_community(
                     entrants=entrants_by_competition[competition_id],
                     fixture_games=standing_games[competition_id],
                 )
-                standings_by_competition[competition_id] = [
-                    PublicCommunityStanding(
-                        team_name=entry.team_name,
-                        matches_played=entry.matches_played,
-                        matches_won=entry.matches_won,
-                        matches_lost=entry.matches_lost,
-                        matches_drawn=entry.matches_drawn,
-                        points=entry.points,
-                    )
-                    for entry in standings.entries
-                ]
+                if standings.unresolved_completed_games == 0:
+                    standings_by_competition[competition_id] = [
+                        PublicCommunityStanding(
+                            team_name=entry.team_name,
+                            matches_played=entry.matches_played,
+                            matches_won=entry.matches_won,
+                            matches_lost=entry.matches_lost,
+                            matches_drawn=entry.matches_drawn,
+                            points=entry.points,
+                        )
+                        for entry in standings.entries
+                    ]
 
     return PublicOrganizationCommunityResponse(
         public_identifier=settings.public_identifier,
