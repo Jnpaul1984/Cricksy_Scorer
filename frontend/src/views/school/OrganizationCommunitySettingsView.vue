@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
 import { RouterLink } from 'vue-router';
+import type { RouteLocationRaw } from 'vue-router';
 
 import { useSchoolContext } from '@/composables/useSchoolContext';
+import router from '@/router';
 import { getErrorMessage } from '@/services/api';
 import {
   getOrganizationCommunitySettings,
@@ -23,13 +25,21 @@ const error = ref('');
 const notice = ref('');
 let generation = 0;
 
-const communityPath = computed(() =>
-  settings.value ? `/community/${settings.value.public_identifier}` : '',
+const communityLocation = computed<RouteLocationRaw | null>(() =>
+  settings.value
+    ? {
+        name: 'organization-community',
+        params: { publicIdentifier: settings.value.public_identifier },
+      }
+    : null,
+);
+const communityHref = computed(() =>
+  communityLocation.value ? router.resolve(communityLocation.value).href : '',
 );
 const absoluteCommunityUrl = computed(() => {
-  if (!communityPath.value) return '';
-  if (typeof window === 'undefined') return communityPath.value;
-  return new URL(communityPath.value, window.location.origin).toString();
+  if (!communityHref.value) return '';
+  if (typeof window === 'undefined') return communityHref.value;
+  return new URL(communityHref.value, window.location.origin).toString();
 });
 
 function isCurrent(currentGeneration: number, currentId: string, currentType: string) {
@@ -192,7 +202,11 @@ watch([organizationId, organizationType], load, { immediate: true });
           <label for="community-link">Stable community link</label>
           <input id="community-link" :value="absoluteCommunityUrl" readonly />
           <button type="button" class="secondary" @click="copyLink">Copy link</button>
-          <RouterLink v-if="settings.publication_state === 'published'" :to="communityPath" target="_blank">
+          <RouterLink
+            v-if="settings.publication_state === 'published' && communityLocation"
+            :to="communityLocation"
+            target="_blank"
+          >
             Open public page
           </RouterLink>
         </div>

@@ -1,5 +1,5 @@
 import { flushPromises, mount } from '@vue/test-utils';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, nextTick, ref } from 'vue';
 
 import { organizationBasePath, organizationTerminology } from '@/composables/useOrganizationTerminology';
@@ -148,6 +148,10 @@ beforeEach(() => {
   });
 });
 
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
 describe('OrganizationCommunityView', () => {
   it.each(['school', 'club'] as const)(
     'renders one accessible responsive %s community component with public cricket only',
@@ -187,6 +191,34 @@ describe('OrganizationCommunityView', () => {
 });
 
 describe('OrganizationCommunitySettingsView', () => {
+  it('copies the configured router href with hash mode and deployment base intact', async () => {
+    const configuredHref = '/cricksy/#/community/org_0123456789abcdef01234567';
+    const resolve = vi.spyOn(router, 'resolve').mockReturnValue({
+      href: configuredHref,
+    } as ReturnType<typeof router.resolve>);
+    api.getOrganizationCommunitySettings.mockResolvedValue({
+      ...settings('school-a'),
+      publication_state: 'published',
+    });
+    const wrapper = mount(OrganizationCommunitySettingsView, {
+      global: {
+        provide: { [schoolContextKey as symbol]: context() },
+        stubs: routerStubs,
+      },
+    });
+    await flushPromises();
+
+    const absoluteUrl = new URL(configuredHref, window.location.origin).toString();
+    expect(wrapper.get('#community-link').attributes('value')).toBe(absoluteUrl);
+    expect(resolve).toHaveBeenCalledWith({
+      name: 'organization-community',
+      params: { publicIdentifier: 'org_0123456789abcdef01234567' },
+    });
+    await wrapper.get('.share-row button').trigger('click');
+    await flushPromises();
+    expect(navigator.clipboard.writeText).toHaveBeenCalledWith(absoluteUrl);
+  });
+
   it('shows enabled publication, branding, link, and competition controls only to managers', async () => {
     api.getOrganizationCommunitySettings.mockResolvedValue(settings('school-a'));
     api.publishOrganizationCommunity.mockResolvedValue({});
