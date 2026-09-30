@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
+from backend.config import settings as app_settings
 from backend.sql_app.models import (
     GameStatus,
     OrganizationEntitlement,
@@ -19,6 +21,7 @@ from backend.tests.test_school_competition_publication import (
 
 async def test_logo_url_scheme_is_normalized_before_postgresql_persistence(
     school_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     owner = register_user(school_client, "logo-normalization-owner@example.com")
     organization = create_school(school_client, owner, "Normalized Logo School")
@@ -83,7 +86,10 @@ async def test_logo_url_scheme_is_normalized_before_postgresql_persistence(
 
     accepted = school_client.put(
         endpoint,
-        json={"logo_url": "HTTPS://CDN.EXAMPLE.COM/logo.png"},
+        json={
+            "logo_url": "HTTPS://CDN.EXAMPLE.COM/logo.png",
+            "logo_alt_text": "Approved crest",
+        },
         headers=owner.headers,
     )
     assert accepted.status_code == 200, accepted.text
@@ -94,6 +100,26 @@ async def test_logo_url_scheme_is_normalized_before_postgresql_persistence(
         stored = await session.get(OrganizationPublicSettings, organization["id"])
         assert stored is not None
         assert stored.logo_url == "https://cdn.example.com/logo.png"
+
+    published = school_client.put(
+        f"/api/organizations/{organization['id']}/public-settings/publish",
+        headers=owner.headers,
+    )
+    assert published.status_code == 200, published.text
+    monkeypatch.setattr(
+        app_settings,
+        "ORGANIZATION_LOGO_ALLOWED_HOSTS",
+        "cricksy-ai.com,www.cricksy-ai.com",
+    )
+    public = school_client.get(
+        f"/api/public/organizations/{published.json()['public_identifier']}/community"
+    )
+    assert public.status_code == 200, public.text
+    assert public.json()["branding"] == {
+        "logo_url": None,
+        "logo_alt_text": "Normalized Logo School logo",
+        "fallback_text": "N",
+    }
 
 
 async def test_public_community_suppresses_standings_with_unresolved_completed_game(

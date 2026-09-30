@@ -495,6 +495,16 @@ async def get_public_community(
     if identity is None:
         return None
     settings, organization = identity
+    public_logo_url: str | None = None
+    if settings.logo_url is not None:
+        try:
+            public_logo_url = validate_logo_url(settings.logo_url)
+        except OrganizationServiceError:
+            logger.warning(
+                "organization.community_logo_suppressed",
+                organization_id=organization.id,
+                public_identifier=settings.public_identifier,
+            )
     public_scorecards_available = await organization_has_capability(
         db,
         organization_id=organization.id,
@@ -706,8 +716,12 @@ async def get_public_community(
         display_name=organization.name,
         organization_type=organization.organization_type,
         branding=PublicOrganizationBranding(
-            logo_url=settings.logo_url,
-            logo_alt_text=(settings.logo_alt_text or f"{organization.name} logo"),
+            logo_url=public_logo_url,
+            logo_alt_text=(
+                settings.logo_alt_text
+                if public_logo_url is not None and settings.logo_alt_text is not None
+                else f"{organization.name} logo"
+            ),
             fallback_text=_fallback_text(organization.name),
         ),
         competitions=[
