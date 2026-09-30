@@ -7,6 +7,7 @@ from backend.sql_app.models import (
     GameStatus,
     OrganizationEntitlement,
     OrganizationPublicSettings,
+    Tournament,
 )
 from backend.tests.school_test_helpers import create_school, register_user
 from backend.tests.test_school_competition_publication import (
@@ -200,3 +201,45 @@ async def test_public_community_hides_scorecard_link_when_capability_is_disabled
     disabled_fixture = school_client.get(community_url).json()["competitions"][0]["fixtures"][0]
     assert disabled_fixture["public_scorecard_path"] is None
     assert school_client.get(f"/public/school-scorecards/{game.id}").status_code == 404
+
+
+async def test_community_settings_controls_competitions_beyond_first_hundred(
+    school_client: TestClient,
+) -> None:
+    owner = register_user(school_client, "large-community-settings-owner@example.com")
+    organization = create_school(school_client, owner, "Large Community School")
+    session_maker = school_client.session_maker  # type: ignore[attr-defined]
+    async with session_maker() as session:
+        competitions = [
+            Tournament(name=f"Cup {index:03d}", organization_id=organization["id"])
+            for index in range(101)
+        ]
+        session.add_all(competitions)
+        await session.commit()
+        final_competition_id = competitions[-1].id
+
+    settings_url = f"/api/organizations/{organization['id']}/community-settings"
+    initial = school_client.get(settings_url, headers=owner.headers)
+    assert initial.status_code == 200, initial.text
+    assert len(initial.json()["competitions"]) == 101
+    assert initial.json()["competitions"][-1]["competition_id"] == final_competition_id
+
+    published = school_client.put(
+        f"/api/organizations/{organization['id']}/competitions/{final_competition_id}"
+        "/community-publication/publish",
+        headers=owner.headers,
+    )
+    assert published.status_code == 200, published.text
+    refreshed = school_client.get(settings_url, headers=owner.headers)
+    assert refreshed.status_code == 200, refreshed.text
+    assert refreshed.json()["competitions"][-1]["publication_state"] == "published"
+
+    unpublished = school_client.put(
+        f"/api/organizations/{organization['id']}/competitions/{final_competition_id}"
+        "/community-publication/unpublish",
+        headers=owner.headers,
+    )
+    assert unpublished.status_code == 200, unpublished.text
+    final = school_client.get(settings_url, headers=owner.headers)
+    assert final.status_code == 200, final.text
+    assert final.json()["competitions"][-1]["publication_state"] == "unpublished"

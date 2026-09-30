@@ -43,7 +43,6 @@ MAX_PUBLIC_COMPETITIONS = 8
 MAX_PUBLIC_TEAMS_PER_COMPETITION = 16
 MAX_PUBLIC_FIXTURES_PER_COMPETITION = 12
 MAX_PUBLIC_STANDING_GAMES_PER_COMPETITION = 64
-MAX_ADMIN_COMPETITIONS = 100
 SAFE_LOGO_EXTENSIONS = frozenset({".png", ".jpg", ".jpeg", ".webp", ".gif", ".avif"})
 
 
@@ -391,7 +390,6 @@ async def get_community_settings(
             )
             .where(models.Tournament.organization_id == organization_id)
             .order_by(models.Tournament.name, models.Tournament.id)
-            .limit(MAX_ADMIN_COMPETITIONS)
         )
     ).all()
     competitions = [
