@@ -47,6 +47,13 @@ class Settings(BaseSettings):
     )
     LOG_LEVEL: str = Field(default="INFO", alias="CRICKSY_LOG_LEVEL")
     ENV: str = Field(default="development", alias="CRICKSY_ENV")
+    ORGANIZATION_LOGO_ALLOWED_HOSTS: str = Field(
+        default=(
+            "cdn.example.com,cricksy-ai.com,www.cricksy-ai.com,"
+            "cricksy-ai.web.app,cricksy-ai-web.app"
+        ),
+        alias="CRICKSY_ORGANIZATION_LOGO_ALLOWED_HOSTS",
+    )
     COACH_REPORT_LLM_ENABLED: bool = Field(default=False, alias="CRICKSY_COACH_REPORT_LLM_ENABLED")
     COACH_REPORT_LLM_MODEL: str = Field(default="gpt-4", alias="CRICKSY_COACH_REPORT_LLM_MODEL")
     AWS_REGION: str = Field(default="us-east-1", alias="AWS_REGION")
@@ -113,6 +120,14 @@ class Settings(BaseSettings):
     @property
     def backend_cors_origins(self) -> str:
         return self.BACKEND_CORS_ORIGINS
+
+    @property
+    def organization_logo_allowed_hosts(self) -> frozenset[str]:
+        return frozenset(
+            host.strip().rstrip(".").lower()
+            for host in self.ORGANIZATION_LOGO_ALLOWED_HOSTS.split(",")
+            if host.strip()
+        )
 
     @property
     def aws_region(self) -> str:

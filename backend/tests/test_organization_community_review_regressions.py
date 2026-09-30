@@ -1,8 +1,13 @@
 from __future__ import annotations
 
 from fastapi.testclient import TestClient
+from sqlalchemy import select
 
-from backend.sql_app.models import GameStatus, OrganizationPublicSettings
+from backend.sql_app.models import (
+    GameStatus,
+    OrganizationEntitlement,
+    OrganizationPublicSettings,
+)
 from backend.tests.school_test_helpers import create_school, register_user
 from backend.tests.test_school_competition_publication import (
     _competition_with_fixture,
@@ -68,17 +73,16 @@ async def test_logo_url_scheme_is_normalized_before_postgresql_persistence(
     assert encoded_path.status_code == 200, encoded_path.text
     assert encoded_path.json()["logo_url"] == "https://cdn.example.com/school%20logos/logo.png"
 
-    unicode_public = school_client.put(
+    untrusted_host = school_client.put(
         endpoint,
-        json={"logo_url": "https://b\u00fccher.example/logo.png"},
+        json={"logo_url": "https://images.untrusted.example/logo.png"},
         headers=owner.headers,
     )
-    assert unicode_public.status_code == 200, unicode_public.text
-    assert unicode_public.json()["logo_url"] == "https://xn--bcher-kva.example/logo.png"
+    assert untrusted_host.status_code == 422
 
     accepted = school_client.put(
         endpoint,
-        json={"logo_url": "HTTPS://cdn.example.com/logo.png"},
+        json={"logo_url": "HTTPS://CDN.EXAMPLE.COM/logo.png"},
         headers=owner.headers,
     )
     assert accepted.status_code == 200, accepted.text
@@ -135,3 +139,64 @@ async def test_public_community_suppresses_standings_with_unresolved_completed_g
     public_competition = response.json()["competitions"][0]
     assert public_competition["fixtures"][0]["result"] == "Match abandoned"
     assert public_competition["standings"] == []
+
+
+async def test_public_community_hides_scorecard_link_when_capability_is_disabled(
+    school_client: TestClient,
+) -> None:
+    owner = register_user(school_client, "disabled-scorecard-capability-owner@example.com")
+    organization = create_school(school_client, owner, "Disabled Scorecard School")
+    team_a = await _team(school_client, organization["id"], owner.id, "First XI")
+    team_b = await _team(school_client, organization["id"], owner.id, "Second XI")
+    competition, fixture = await _competition_with_fixture(
+        school_client, owner, organization["id"], team_a, team_b
+    )
+    game = await _game(
+        school_client,
+        organization["id"],
+        owner.id,
+        team_a,
+        team_b,
+        status=GameStatus.completed,
+        result="First XI won by 8 runs",
+        publication_state="published_final",
+    )
+    linked = school_client.put(
+        f"/api/organizations/{organization['id']}/competitions/{competition['id']}"
+        f"/fixtures/{fixture['id']}/game",
+        json={"game_id": game.id},
+        headers=owner.headers,
+    )
+    assert linked.status_code == 200, linked.text
+    published_homepage = school_client.put(
+        f"/api/organizations/{organization['id']}/public-settings/publish",
+        headers=owner.headers,
+    )
+    assert published_homepage.status_code == 200, published_homepage.text
+    published_competition = school_client.put(
+        f"/api/organizations/{organization['id']}/competitions/{competition['id']}"
+        "/community-publication/publish",
+        headers=owner.headers,
+    )
+    assert published_competition.status_code == 200, published_competition.text
+
+    public_identifier = published_homepage.json()["public_identifier"]
+    community_url = f"/api/public/organizations/{public_identifier}/community"
+    initial_fixture = school_client.get(community_url).json()["competitions"][0]["fixtures"][0]
+    assert initial_fixture["public_scorecard_path"] == f"/school-scorecards/{game.id}"
+    assert school_client.get(f"/public/school-scorecards/{game.id}").status_code == 200
+
+    session_maker = school_client.session_maker  # type: ignore[attr-defined]
+    async with session_maker() as session:
+        entitlement = await session.scalar(
+            select(OrganizationEntitlement).where(
+                OrganizationEntitlement.organization_id == organization["id"]
+            )
+        )
+        assert entitlement is not None
+        entitlement.status = "disabled"
+        await session.commit()
+
+    disabled_fixture = school_client.get(community_url).json()["competitions"][0]["fixtures"][0]
+    assert disabled_fixture["public_scorecard_path"] is None
+    assert school_client.get(f"/public/school-scorecards/{game.id}").status_code == 404

@@ -19,7 +19,9 @@ from backend.api.schemas.organization_publication import (
     PublicOrganizationBranding,
     PublicOrganizationCommunityResponse,
 )
+from backend.config import settings
 from backend.services import school_competition_service
+from backend.services.organization_entitlement_service import organization_has_capability
 from backend.services.organization_service import (
     ACTIVE_MEMBERSHIP_STATUS,
     ACTIVE_ORGANIZATION_STATUS,
@@ -290,6 +292,8 @@ def validate_logo_url(value: str) -> str:
         hostname = str(literal_address)
     if not hostname:
         raise OrganizationServiceError(422, "Logo URL host is invalid")
+    if hostname not in settings.organization_logo_allowed_hosts:
+        raise OrganizationServiceError(422, "Logo URL host is not trusted")
     if hostname == "localhost" or hostname.endswith((".localhost", ".local", ".internal")):
         raise OrganizationServiceError(422, "Logo URL host is not public")
     address: ipaddress.IPv4Address | ipaddress.IPv6Address | None
@@ -493,6 +497,11 @@ async def get_public_community(
     if identity is None:
         return None
     settings, organization = identity
+    public_scorecards_available = await organization_has_capability(
+        db,
+        organization_id=organization.id,
+        capability="school_live_scorecards",
+    )
 
     competitions = list(
         (
@@ -613,7 +622,7 @@ async def get_public_community(
         for row in fixture_rows:
             game_status = getattr(row.game_status, "value", row.game_status)
             completed = game_status == models.GameStatus.completed.value
-            scorecard_is_public = row.game_publication_state in {
+            scorecard_is_public = public_scorecards_available and row.game_publication_state in {
                 "published_live",
                 "published_final",
             }
