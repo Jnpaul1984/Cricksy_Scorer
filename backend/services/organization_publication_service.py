@@ -215,7 +215,10 @@ def validate_logo_url(value: str) -> str:
         character in candidate for character in '<>"\\'
     ):
         raise OrganizationServiceError(422, "Logo URL contains unsafe characters")
-    parsed = urlsplit(candidate)
+    try:
+        parsed = urlsplit(candidate)
+    except ValueError as exc:
+        raise OrganizationServiceError(422, "Logo URL is invalid") from exc
     if parsed.scheme.lower() != "https" or not parsed.hostname:
         raise OrganizationServiceError(422, "Logo URL must use HTTPS")
     if parsed.username or parsed.password or parsed.fragment:

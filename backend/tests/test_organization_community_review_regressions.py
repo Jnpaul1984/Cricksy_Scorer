@@ -20,6 +20,13 @@ async def test_logo_url_scheme_is_normalized_before_postgresql_persistence(
     )
     assert invalid.status_code == 422
 
+    malformed = school_client.put(
+        endpoint,
+        json={"logo_url": "https://[invalid/logo.png"},
+        headers=owner.headers,
+    )
+    assert malformed.status_code == 422
+
     accepted = school_client.put(
         endpoint,
         json={"logo_url": "HTTPS://cdn.example.com/logo.png"},
