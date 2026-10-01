@@ -41,6 +41,13 @@ class Settings(BaseSettings):
     IN_MEMORY_DB: bool = Field(default=False, alias="CRICKSY_IN_MEMORY_DB")
     STATIC_ROOT: Path = Field(default=_ROOT / "static", alias="CRICKSY_STATIC_ROOT")
     SPONSORS_DIR: Path = Field(default=_ROOT / "static" / "sponsors", alias="CRICKSY_SPONSORS_DIR")
+    SPONSOR_PLACEMENTS_ENABLED: bool = Field(default=False, alias="CRICKSY_SPONSOR_PLACEMENTS_ENABLED")
+    # Owner-approved Block 4C categories. The global publication switch remains
+    # disabled until a separate release authorization.
+    SPONSOR_ALLOWED_CATEGORIES: str = Field(
+        default="sports-equipment,education,ordinary-food-businesses,local-services",
+        alias="CRICKSY_SPONSOR_ALLOWED_CATEGORIES",
+    )
     SIO_CORS_ALLOWED_ORIGINS: str | list[str] = Field(
         default="*",
         alias="CRICKSY_SIO_CORS_ORIGINS",

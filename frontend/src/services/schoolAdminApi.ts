@@ -85,6 +85,103 @@ export const getMySchoolMembership = (organizationId: string) =>
 export const getSchoolEntitlement = (organizationId: string) =>
   apiRequest<SchoolEntitlement>(orgPath(organizationId, '/entitlements'));
 
+export type PublicOrganizationSponsorPlacement = {
+  sponsor_name: string;
+  sponsor_url: string | null;
+  placement_surface: 'public_organization_homepage';
+};
+
+export type PlatformSponsorPlacement = {
+  id: string;
+  organization_id: string;
+  organization_label?: string | null;
+  sponsor_name: string;
+  category: string;
+  state: 'proposed' | 'approved';
+};
+
+export type PlatformPage = { page: number; page_size: number; total: number; pages: number };
+export type PlatformSponsorPlacementList = {
+  items: PlatformSponsorPlacement[];
+  page: PlatformPage;
+  states: Array<'proposed' | 'approved' | 'taken_down'>;
+};
+
+export type PlatformSponsorVisibilityOrganization = {
+  id: string;
+  label: string;
+  type: 'school' | 'club';
+  enabled: boolean;
+};
+
+export type PlatformSponsorVisibilityPlacement = {
+  id: string;
+  sponsor_name: string;
+  category: string;
+  orgid: string;
+  state: 'proposed' | 'approved' | 'taken_down';
+  enabled: boolean;
+};
+
+export type PlatformSponsorVisibility = {
+  global_enabled: boolean;
+  organizations: PlatformSponsorVisibilityOrganization[];
+  placements: PlatformSponsorVisibilityPlacement[];
+  page: { organizations: PlatformPage; placements: PlatformPage };
+  states: Array<'proposed' | 'approved' | 'taken_down'>;
+};
+
+export type PlatformSponsorVisibilityPageRequest = {
+  organizationPage: number;
+  placementPage: number;
+  pageSize: number;
+};
+
+const sponsorPageQuery = (params: Record<string, string | number>) => new URLSearchParams(
+  Object.entries(params).map(([key, value]) => [key, String(value)]),
+).toString();
+
+export const listPlatformSponsorPlacements = (page = 1, pageSize = 50) =>
+  apiRequest<PlatformSponsorPlacementList>(
+    `/api/platform/sponsor-placements?${sponsorPageQuery({ page, page_size: pageSize, states: 'proposed,approved' })}`,
+  );
+export const approvePlatformSponsorPlacement = (placementId: string) =>
+  apiRequest<{ id: string; state: 'approved' }>(
+    `/api/platform/sponsor-placements/${encodeURIComponent(placementId)}/approve`, { method: 'POST' },
+  );
+export const takedownPlatformSponsorPlacement = (placementId: string) =>
+  apiRequest<{ id: string; state: 'taken_down' }>(
+    `/api/platform/sponsor-placements/${encodeURIComponent(placementId)}/takedown`, { method: 'POST' },
+  );
+const visibilityQuery = ({ organizationPage, placementPage, pageSize }: PlatformSponsorVisibilityPageRequest) =>
+  sponsorPageQuery({ organization_page: organizationPage, placement_page: placementPage, page_size: pageSize, states: 'proposed,approved' });
+
+export const getPlatformSponsorVisibility = (organizationPage = 1, placementPage = 1, pageSize = 50) =>
+  apiRequest<PlatformSponsorVisibility>(
+    `/api/platform/sponsor-visibility?${visibilityQuery({ organizationPage, placementPage, pageSize })}`,
+  );
+export const setPlatformSponsorGlobalVisibility = (enabled: boolean, pageRequest: PlatformSponsorVisibilityPageRequest) =>
+  apiRequest<PlatformSponsorVisibility>(`/api/platform/sponsor-visibility/global?${visibilityQuery(pageRequest)}`, {
+    method: 'PATCH', body: JSON.stringify({ enabled }),
+  });
+export const setPlatformSponsorOrganizationVisibility = (organizationId: string, enabled: boolean, pageRequest: PlatformSponsorVisibilityPageRequest) =>
+  apiRequest<PlatformSponsorVisibility>(
+    `/api/platform/sponsor-visibility/organizations/${encodeURIComponent(organizationId)}?${visibilityQuery(pageRequest)}`,
+    { method: 'PATCH', body: JSON.stringify({ enabled }) },
+  );
+export const setPlatformSponsorPlacementVisibility = (placementId: string, enabled: boolean, pageRequest: PlatformSponsorVisibilityPageRequest) =>
+  apiRequest<PlatformSponsorVisibility>(
+    `/api/platform/sponsor-visibility/placements/${encodeURIComponent(placementId)}?${visibilityQuery(pageRequest)}`,
+    { method: 'PATCH', body: JSON.stringify({ enabled }) },
+  );
+
+export const getPublicOrganizationSponsorPlacement = (publicIdentifier: string) =>
+  apiRequest<PublicOrganizationSponsorPlacement>(
+    `/api/public/organizations/${encodeURIComponent(publicIdentifier)}/sponsor-placement`,
+  );
+export const proposeOrganizationSponsorPlacement = (organizationId: string, sponsorName: string, category: string, sponsorUrl?: string) =>
+  apiRequest<{ id: string; state: string }>(orgPath(organizationId, '/sponsor-placements'), { method: 'POST', body: JSON.stringify({ sponsor_name: sponsorName, category, sponsor_url: sponsorUrl || undefined }) });
+
 export const listOrganizationNotifications = (
   organizationId: string,
   options: {

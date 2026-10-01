@@ -8,12 +8,19 @@ import {
   createSchool,
   createSchoolMatch,
   getPublicSchoolScorecard,
+  getPlatformSponsorVisibility,
+  approvePlatformSponsorPlacement,
+  listPlatformSponsorPlacements,
   linkSchoolFixtureGame,
   listSchoolPlayerStatistics,
   listSchoolPlayers,
   listClubs,
   listSchools,
   previewPlayerImport,
+  setPlatformSponsorGlobalVisibility,
+  setPlatformSponsorOrganizationVisibility,
+  setPlatformSponsorPlacementVisibility,
+  takedownPlatformSponsorPlacement,
 } from '@/services/schoolAdminApi';
 
 vi.mock('@/services/api', () => ({ apiRequest: vi.fn() }));
@@ -143,5 +150,28 @@ describe('schoolAdminApi', () => {
     vi.mocked(apiRequest).mockResolvedValue({});
     await getPublicSchoolScorecard('game A/1');
     expect(apiRequest).toHaveBeenCalledWith('/public/school-scorecards/game%20A%2F1');
+  });
+
+  it('uses the platform-only sponsor review contracts', async () => {
+    vi.mocked(apiRequest).mockResolvedValue({});
+    await listPlatformSponsorPlacements();
+    expect(apiRequest).toHaveBeenLastCalledWith('/api/platform/sponsor-placements?page=1&page_size=50&states=proposed%2Capproved');
+    await approvePlatformSponsorPlacement('placement A/1');
+    expect(apiRequest).toHaveBeenLastCalledWith('/api/platform/sponsor-placements/placement%20A%2F1/approve', { method: 'POST' });
+    await takedownPlatformSponsorPlacement('placement A/1');
+    expect(apiRequest).toHaveBeenLastCalledWith('/api/platform/sponsor-placements/placement%20A%2F1/takedown', { method: 'POST' });
+  });
+
+  it('uses the platform visibility hierarchy contracts', async () => {
+    vi.mocked(apiRequest).mockResolvedValue({});
+    await getPlatformSponsorVisibility(2, 3, 25);
+    expect(apiRequest).toHaveBeenLastCalledWith('/api/platform/sponsor-visibility?organization_page=2&placement_page=3&page_size=25&states=proposed%2Capproved');
+    const context = { organizationPage: 2, placementPage: 3, pageSize: 25 };
+    await setPlatformSponsorGlobalVisibility(true, context);
+    expect(apiRequest).toHaveBeenLastCalledWith('/api/platform/sponsor-visibility/global?organization_page=2&placement_page=3&page_size=25&states=proposed%2Capproved', { method: 'PATCH', body: JSON.stringify({ enabled: true }) });
+    await setPlatformSponsorOrganizationVisibility('school A/1', false, context);
+    expect(apiRequest).toHaveBeenLastCalledWith('/api/platform/sponsor-visibility/organizations/school%20A%2F1?organization_page=2&placement_page=3&page_size=25&states=proposed%2Capproved', { method: 'PATCH', body: JSON.stringify({ enabled: false }) });
+    await setPlatformSponsorPlacementVisibility('placement A/1', true, context);
+    expect(apiRequest).toHaveBeenLastCalledWith('/api/platform/sponsor-visibility/placements/placement%20A%2F1?organization_page=2&placement_page=3&page_size=25&states=proposed%2Capproved', { method: 'PATCH', body: JSON.stringify({ enabled: true }) });
   });
 });

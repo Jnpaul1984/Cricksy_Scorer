@@ -58,6 +58,7 @@ from backend.routes.organization_selection_plans import (
 )
 from backend.routes.organizations import router as organizations_router
 from backend.routes.organization_publication import router as organization_publication_router
+from backend.routes.organization_sponsor_placements import router as organization_sponsor_placements_router
 from backend.routes.school_competitions import router as school_competitions_router
 from backend.routes.school_statistics import router as school_statistics_router
 from backend.routes.school_matches import router as school_matches_router
@@ -511,6 +512,7 @@ def create_app(
     fastapi_app.include_router(moment_markers_router)
     fastapi_app.include_router(organizations_router)
     fastapi_app.include_router(organization_publication_router)
+    fastapi_app.include_router(organization_sponsor_placements_router)
     fastapi_app.include_router(organization_events_router)
     fastapi_app.include_router(organization_announcements_router)
     fastapi_app.include_router(organization_availability_router)

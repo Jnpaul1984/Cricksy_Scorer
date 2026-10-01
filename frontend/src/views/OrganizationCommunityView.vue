@@ -1,17 +1,20 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { RouterLink } from 'vue-router';
 
 import { organizationTerminology } from '@/composables/useOrganizationTerminology';
-import { getPublicOrganizationCommunity } from '@/services/schoolAdminApi';
+import { getPublicOrganizationCommunity, getPublicOrganizationSponsorPlacement } from '@/services/schoolAdminApi';
+import type { PublicOrganizationSponsorPlacement } from '@/services/schoolAdminApi';
 import type { PublicOrganizationCommunity } from '@/types/schoolAdmin';
 
 const props = defineProps<{ publicIdentifier: string }>();
 const community = ref<PublicOrganizationCommunity | null>(null);
+const sponsor = ref<PublicOrganizationSponsorPlacement | null>(null);
 const loading = ref(true);
 const notFound = ref(false);
 const logoFailed = ref(false);
 let generation = 0;
+let refreshTimer: ReturnType<typeof setInterval> | undefined;
 
 const terminology = computed(() =>
   organizationTerminology(community.value?.organization_type || 'school'),
@@ -27,7 +30,8 @@ function formatDate(value: string | null) {
 async function load() {
   const currentGeneration = ++generation;
   const currentIdentifier = props.publicIdentifier;
-  community.value = null;
+    community.value = null;
+    sponsor.value = null;
   notFound.value = false;
   logoFailed.value = false;
   loading.value = true;
@@ -39,6 +43,15 @@ async function load() {
       return;
     }
     community.value = response;
+    try {
+      const placement = await getPublicOrganizationSponsorPlacement(currentIdentifier);
+      if (generation !== currentGeneration || props.publicIdentifier !== currentIdentifier) return;
+      sponsor.value = placement;
+    } catch {
+      if (generation !== currentGeneration || props.publicIdentifier !== currentIdentifier) return;
+      // An absent, revoked, or not-yet-approved placement is intentionally invisible.
+      sponsor.value = null;
+    }
   } catch {
     if (generation === currentGeneration && props.publicIdentifier === currentIdentifier) {
       notFound.value = true;
@@ -51,6 +64,9 @@ async function load() {
 }
 
 watch(() => props.publicIdentifier, load, { immediate: true });
+// Takedown is checked at most every 30 seconds while this public page is open.
+refreshTimer = setInterval(() => { void load(); }, 30_000);
+onBeforeUnmount(() => { if (refreshTimer) clearInterval(refreshTimer); });
 </script>
 
 <template>
@@ -79,6 +95,11 @@ watch(() => props.publicIdentifier, load, { immediate: true });
           <p>Public {{ terminology.kindLabelLower }} competitions, fixtures, results, and standings.</p>
         </div>
       </header>
+      <aside v-if="sponsor" class="sponsor-placement" aria-label="Organization sponsor">
+        <span>Supported by</span>
+        <a v-if="sponsor.sponsor_url" :href="sponsor.sponsor_url" rel="noopener noreferrer" target="_blank">{{ sponsor.sponsor_name }}</a>
+        <strong v-else>{{ sponsor.sponsor_name }}</strong>
+      </aside>
 
       <section v-if="community.competitions.length" aria-labelledby="public-competitions-title">
         <h2 id="public-competitions-title">Public competitions</h2>
@@ -150,6 +171,8 @@ watch(() => props.publicIdentifier, load, { immediate: true });
 .organization-logo, .logo-fallback { width: clamp(4.5rem, 14vw, 8rem); height: clamp(4.5rem, 14vw, 8rem); flex: 0 0 auto; border-radius: 1rem; background: #fff; object-fit: contain; }
 .logo-fallback { display: grid; place-items: center; color: #fff; background: #176b45; font-size: clamp(2rem, 7vw, 4rem); font-weight: 800; }
 .eyebrow, .competition-status { color: #3d596b; font-weight: 700; text-transform: capitalize; }
+.sponsor-placement { margin: 1rem 0; padding: 0.75rem 1rem; border-left: 4px solid #176b45; background: #f4f8f5; }
+.sponsor-placement span { margin-right: 0.5rem; color: #3d596b; }
 .competition-grid { display: grid; gap: 1rem; }
 .competition-card { border: 1px solid #d7e0e8; border-radius: 0.85rem; padding: clamp(1rem, 3vw, 1.5rem); min-width: 0; }
 .team-list { display: flex; flex-wrap: wrap; gap: 0.5rem; list-style: none; padding: 0; }

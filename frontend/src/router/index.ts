@@ -351,6 +351,12 @@ const router = createRouter({
       component: () => import('@/views/AdminUserManagementView.vue'),
       meta: { requiresAuth: true, requiresAdmin: true, title: 'Beta User Management — Cricksy' },
     },
+    {
+      path: '/admin/sponsor-placements',
+      name: 'platform-sponsor-placements',
+      component: () => import('@/views/PlatformSponsorPlacementsView.vue'),
+      meta: { requiresAuth: true, requiresAdmin: true, title: 'Sponsor Placements - Cricksy' },
+    },
 
     // --- Coach routes ---
     {
