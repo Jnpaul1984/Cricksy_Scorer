@@ -529,10 +529,9 @@ async def get_public_community(
         capability="school_live_scorecards",
     )
 
-    competitions = list(
-        (
-            await db.scalars(
-                select(models.Tournament)
+    competition_rows = (
+        await db.execute(
+            select(models.Tournament, models.OrganizationCompetitionPublication.public_key)
                 .join(
                     models.OrganizationCompetitionPublication,
                     models.OrganizationCompetitionPublication.competition_id
@@ -550,24 +549,11 @@ async def get_public_community(
                     models.Tournament.id,
                 )
                 .limit(MAX_PUBLIC_COMPETITIONS)
-            )
-        ).all()
-    )
-    competition_ids = [competition.id for competition in competitions]
-    competition_public_keys = (
-        dict(
-            (
-                await db.execute(
-                    select(
-                        models.OrganizationCompetitionPublication.competition_id,
-                        models.OrganizationCompetitionPublication.public_key,
-                    ).where(models.OrganizationCompetitionPublication.competition_id.in_(competition_ids))
-                )
-            ).all()
         )
-        if competition_ids
-        else {}
-    )
+    ).all()
+    competitions = [row[0] for row in competition_rows]
+    competition_ids = [competition.id for competition in competitions]
+    competition_public_keys = {competition.id: public_key for competition, public_key in competition_rows}
 
     entrants_by_competition: dict[str, list[tuple[str, str]]] = {
         competition_id: [] for competition_id in competition_ids
