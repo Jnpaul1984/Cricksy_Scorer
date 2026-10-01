@@ -1070,6 +1070,46 @@ class SponsorVisibilityAudit(Base):
     created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 
+class SponsorPlacementDailyMetric(Base):
+    """Anonymous, organization-scoped daily placement totals; never a viewer log."""
+    __tablename__ = "sponsor_placement_daily_metrics"
+    __table_args__ = (
+        UniqueConstraint("placement_id", "metric_date", name="uq_sponsor_placement_daily_metric"),
+        CheckConstraint("display_count >= 0 AND click_count >= 0", name="ck_sponsor_daily_metric_nonnegative"),
+    )
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    placement_id: Mapped[str] = mapped_column(ForeignKey("organization_sponsor_placements.id", ondelete="RESTRICT"), nullable=False, index=True)
+    metric_date: Mapped[dt.date] = mapped_column(Date, nullable=False, index=True)
+    display_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    click_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+
+
+class SponsorPlacementReportDedup(Base):
+    """Short-lived anonymous event nonce, retained two days only for replay protection."""
+    __tablename__ = "sponsor_placement_report_dedup"
+    event_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    placement_id: Mapped[str] = mapped_column(ForeignKey("organization_sponsor_placements.id", ondelete="RESTRICT"), nullable=False, index=True)
+    received_date: Mapped[dt.date] = mapped_column(Date, nullable=False, index=True)
+    received_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
+
+
+class SponsorPlacementReportingCapability(Base):
+    """Short-lived, one-time anonymous public reporting nonce."""
+    __tablename__ = "sponsor_placement_reporting_capabilities"
+    nonce: Mapped[str] = mapped_column(String(36), primary_key=True)
+    placement_id: Mapped[str] = mapped_column(ForeignKey("organization_sponsor_placements.id", ondelete="RESTRICT"), nullable=False, index=True)
+    event_type: Mapped[str] = mapped_column(String(8), nullable=False)
+    expires_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    consumed_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class SponsorPlacementReportRateBucket(Base):
+    __tablename__ = "sponsor_placement_report_rate_buckets"
+    placement_id: Mapped[str] = mapped_column(ForeignKey("organization_sponsor_placements.id", ondelete="RESTRICT"), primary_key=True)
+    bucket_start: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), primary_key=True)
+    event_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+
+
 # ===== Player Profiles =====
 
 

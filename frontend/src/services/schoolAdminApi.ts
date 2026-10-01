@@ -89,6 +89,7 @@ export type PublicOrganizationSponsorPlacement = {
   sponsor_name: string;
   sponsor_url: string | null;
   placement_surface: 'public_organization_homepage';
+  reporting?: { display_capability: string; click_capability: string; report_view_key: string };
 };
 
 export type PlatformSponsorPlacement = {
@@ -831,6 +832,24 @@ export const getPublicOrganizationCommunity = (publicIdentifier: string) =>
   apiRequest<PublicOrganizationCommunity>(
     `/api/public/organizations/${encodeURIComponent(publicIdentifier)}/community`,
   );
+
+export interface SponsorAggregateReport {
+  start_date: string;
+  end_date: string;
+  buckets: Array<{ date: string; displays: number; clicks: number }>;
+}
+
+export const getOrganizationSponsorReporting = (organizationId: string) =>
+  apiRequest<SponsorAggregateReport>(orgPath(organizationId, '/sponsor-reporting'));
+
+export const recordPublicSponsorPlacementEvent = (
+  capability: string,
+  eventId: string,
+) =>
+  apiRequest<{ accepted: boolean; duplicate: boolean }>('/api/public/sponsor-placement-events', {
+    method: 'POST',
+    body: JSON.stringify({ capability, event_id: eventId }),
+  });
 
 export const previewPlayerImport = (
   organizationId: string,

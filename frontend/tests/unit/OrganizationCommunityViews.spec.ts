@@ -19,6 +19,7 @@ const api = vi.hoisted(() => ({
   unpublishOrganizationCommunity: vi.fn(),
   updateOrganizationCommunityBranding: vi.fn(),
   setOrganizationCompetitionCommunityPublication: vi.fn(),
+  getOrganizationSponsorReporting: vi.fn(),
   getPublicOrganizationCommunity: vi.fn(),
 }));
 
@@ -142,6 +143,7 @@ function deferred<T>() {
 
 beforeEach(() => {
   vi.resetAllMocks();
+  api.getOrganizationSponsorReporting.mockResolvedValue(null);
   Object.defineProperty(navigator, 'clipboard', {
     configurable: true,
     value: { writeText: vi.fn().mockResolvedValue(undefined) },
@@ -191,6 +193,42 @@ describe('OrganizationCommunityView', () => {
 });
 
 describe('OrganizationCommunitySettingsView', () => {
+  it('shows only the current organization\'s aggregate report and its UTC date window', async () => {
+    const organizationId = ref('school-a');
+    api.getOrganizationCommunitySettings
+      .mockResolvedValueOnce(settings('school-a'))
+      .mockResolvedValueOnce(settings('school-b'));
+    api.getOrganizationSponsorReporting
+      .mockResolvedValueOnce({
+        start_date: '2026-09-01',
+        end_date: '2026-09-30',
+        buckets: [{ date: '2026-09-30', displays: 7, clicks: 2 }],
+      })
+      .mockResolvedValueOnce(null);
+    const wrapper = mount(OrganizationCommunitySettingsView, {
+      global: {
+        provide: { [schoolContextKey as symbol]: context(organizationId) },
+        stubs: routerStubs,
+      },
+    });
+    await flushPromises();
+
+    expect(api.getOrganizationSponsorReporting).toHaveBeenCalledWith('school-a');
+    expect(wrapper.get('[data-test="sponsor-aggregate-report"]').text()).toContain(
+      'UTC reporting window: 2026-09-01 to 2026-09-30',
+    );
+    expect(wrapper.text()).toContain('7 displays, 2 clicks');
+
+    organizationId.value = 'school-b';
+    await nextTick();
+    await flushPromises();
+    expect(api.getOrganizationSponsorReporting).toHaveBeenLastCalledWith('school-b');
+    expect(wrapper.get('[data-test="sponsor-aggregate-report"]').text()).toContain(
+      'Aggregate reporting is not enabled for this organization.',
+    );
+    expect(wrapper.text()).not.toContain('7 displays, 2 clicks');
+  });
+
   it('copies the configured router href with hash mode and deployment base intact', async () => {
     const configuredHref = '/cricksy/#/community/org_0123456789abcdef01234567';
     const resolve = vi.spyOn(router, 'resolve').mockReturnValue({

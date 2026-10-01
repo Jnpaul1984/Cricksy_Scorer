@@ -1,10 +1,15 @@
 from __future__ import annotations
 
 import datetime as dt
+import asyncio
+import os
+import uuid
 from pathlib import Path
 
 import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
+from sqlalchemy import select
 
 from backend.sql_app import models
 from backend.sql_app.models import OrganizationSponsorPlacement, OrganizationSponsorPlacementAudit, SponsorVisibilityAudit, User
@@ -217,3 +222,214 @@ def test_owner_approved_categories_are_the_only_defaults(
         headers=owner.headers,
     )
     assert denied.status_code == 503
+
+
+def test_aggregate_reporting_is_tenant_scoped_deduplicated_and_stops_on_takedown(
+    school_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(organization_sponsor_placements.settings, "SPONSOR_PLACEMENTS_ENABLED", True)
+    monkeypatch.setattr(organization_sponsor_placements.settings, "SPONSOR_AGGREGATE_REPORTING_ENABLED", True)
+    owner = register_user(school_client, "reporting-owner@example.com")
+    outsider = register_user(school_client, "reporting-outsider@example.com")
+    reviewer = register_user(school_client, "reporting-reviewer@example.com")
+    organization = create_school(school_client, owner, "Reporting School")
+    proposal = school_client.post(
+        f"/api/organizations/{organization['id']}/sponsor-placements",
+        json={"sponsor_name": "Local Cricket Shop", "category": "sports-equipment"}, headers=owner.headers,
+    )
+    placement_id = proposal.json()["id"]
+    import asyncio
+    asyncio.run(_make_platform_admin(school_client, reviewer.id))
+    assert school_client.post(f"/api/platform/sponsor-placements/{placement_id}/approve", headers=reviewer.headers).status_code == 200
+    assert school_client.patch("/api/platform/sponsor-visibility/global", json={"enabled": True}, headers=reviewer.headers).status_code == 200
+    assert school_client.patch(f"/api/platform/sponsor-visibility/organizations/{organization['id']}", json={"enabled": True}, headers=reviewer.headers).status_code == 200
+    assert school_client.patch(f"/api/platform/sponsor-visibility/placements/{placement_id}", json={"enabled": True}, headers=reviewer.headers).status_code == 200
+    assert school_client.put(f"/api/organizations/{organization['id']}/public-settings/publish", headers=owner.headers).status_code == 200
+    public_identifier = school_client.get(f"/api/organizations/{organization['id']}/public-settings", headers=owner.headers).json()["public_identifier"]
+    reporting = school_client.get(f"/api/public/organizations/{public_identifier}/sponsor-placement").json()["reporting"]
+    event = {"capability": reporting["display_capability"], "event_id": "123e4567-e89b-42d3-a456-426614174000"}
+    assert school_client.post("/api/public/sponsor-placement-events", json=event).json() == {"accepted": True, "duplicate": False}
+    assert school_client.post("/api/public/sponsor-placement-events", json=event).json() == {"accepted": True, "duplicate": True}
+    assert school_client.post("/api/public/sponsor-placement-events", json={**event, "event_id": "123e4567-e89b-42d3-a456-426614174009"}).status_code == 404
+    assert school_client.post("/api/public/sponsor-placement-events", json={"capability": reporting["click_capability"], "event_id": "123e4567-e89b-42d3-a456-426614174001"}).status_code == 202
+    report = school_client.get(f"/api/organizations/{organization['id']}/sponsor-reporting", headers=owner.headers)
+    assert report.status_code == 200 and report.json()["buckets"][0]["displays"] == 1 and report.json()["buckets"][0]["clicks"] == 1
+    assert school_client.get(f"/api/organizations/{organization['id']}/sponsor-reporting", headers=outsider.headers).status_code == 404
+    assert school_client.post(f"/api/platform/sponsor-placements/{placement_id}/takedown", headers=reviewer.headers).status_code == 200
+    assert school_client.post("/api/public/sponsor-placement-events", json={**event, "event_id": "123e4567-e89b-42d3-a456-426614174002"}).status_code == 404
+    retained = school_client.get(f"/api/organizations/{organization['id']}/sponsor-reporting", headers=owner.headers).json()["buckets"]
+    assert retained[0]["displays"] == 1 and retained[0]["clicks"] == 1
+
+
+def _live_reporting_placement(
+    school_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> tuple[str, object]:
+    """Create the minimum live public placement used by direct DB concurrency tests."""
+    monkeypatch.setattr(organization_sponsor_placements.settings, "SPONSOR_PLACEMENTS_ENABLED", True)
+    monkeypatch.setattr(
+        organization_sponsor_placements.settings,
+        "SPONSOR_AGGREGATE_REPORTING_ENABLED",
+        True,
+    )
+    owner = register_user(school_client, "concurrent-reporting-owner@example.com")
+    reviewer = register_user(school_client, "concurrent-reporting-reviewer@example.com")
+    organization = create_school(school_client, owner, "Concurrent Reporting School")
+    proposed = school_client.post(
+        f"/api/organizations/{organization['id']}/sponsor-placements",
+        json={"sponsor_name": "Concurrent Cricket Shop", "category": "sports-equipment"},
+        headers=owner.headers,
+    )
+    assert proposed.status_code == 201, proposed.text
+    placement_id = proposed.json()["id"]
+    asyncio.run(_make_platform_admin(school_client, reviewer.id))
+    assert school_client.post(
+        f"/api/platform/sponsor-placements/{placement_id}/approve", headers=reviewer.headers
+    ).status_code == 200
+    assert school_client.patch(
+        "/api/platform/sponsor-visibility/global", json={"enabled": True}, headers=reviewer.headers
+    ).status_code == 200
+    assert school_client.patch(
+        f"/api/platform/sponsor-visibility/organizations/{organization['id']}",
+        json={"enabled": True},
+        headers=reviewer.headers,
+    ).status_code == 200
+    assert school_client.patch(
+        f"/api/platform/sponsor-visibility/placements/{placement_id}",
+        json={"enabled": True},
+        headers=reviewer.headers,
+    ).status_code == 200
+    assert school_client.put(
+        f"/api/organizations/{organization['id']}/public-settings/publish", headers=owner.headers
+    ).status_code == 200
+    return placement_id, school_client.session_maker  # type: ignore[attr-defined]
+
+
+async def _issue_reporting_nonces(session_maker: object, placement_id: str, count: int) -> list[str]:
+    async with session_maker() as session:  # type: ignore[operator]
+        nonces = [
+            await organization_sponsor_placements._issue_reporting_capability(
+                session, placement_id, "display"
+            )
+            for _ in range(count)
+        ]
+        await session.commit()
+        return nonces
+
+
+async def _record_reporting_nonce(session_maker: object, nonce: str, event_id: str) -> tuple[int, object]:
+    async with session_maker() as session:  # type: ignore[operator]
+        try:
+            payload = organization_sponsor_placements.SponsorReportEventIn(
+                capability=nonce, event_id=event_id
+            )
+            return 202, await organization_sponsor_placements.record_public_placement_event(payload, session)
+        except HTTPException as exc:
+            await session.rollback()
+            return exc.status_code, exc.detail
+
+
+def _require_migrated_postgres(school_client: TestClient) -> None:
+    if os.getenv("PHASE7B_POSTGRES_MIGRATED_TESTS") != "1":
+        pytest.skip("requires the isolated migrated PostgreSQL acceptance database")
+    async def assert_postgres() -> None:
+        async with school_client.session_maker() as session:  # type: ignore[attr-defined]
+            assert session.bind is not None and session.bind.dialect.name == "postgresql"
+    asyncio.run(assert_postgres())
+
+
+def test_real_postgres_reporting_first_write_and_capability_consumption_are_atomic(
+    school_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _require_migrated_postgres(school_client)
+    placement_id, session_maker = _live_reporting_placement(school_client, monkeypatch)
+
+    async def exercise() -> None:
+        first, second = await _issue_reporting_nonces(session_maker, placement_id, 2)
+        first_results = await asyncio.gather(
+            _record_reporting_nonce(session_maker, first, str(uuid.uuid4())),
+            _record_reporting_nonce(session_maker, second, str(uuid.uuid4())),
+        )
+        assert [status for status, _ in first_results] == [202, 202]
+        async with session_maker() as session:  # type: ignore[operator]
+            metric = await session.scalar(
+                select(models.SponsorPlacementDailyMetric).where(
+                    models.SponsorPlacementDailyMetric.placement_id == placement_id
+                )
+            )
+            assert metric is not None and metric.display_count == 2 and metric.click_count == 0
+
+        one_time = (await _issue_reporting_nonces(session_maker, placement_id, 1))[0]
+        consumed = await asyncio.gather(
+            _record_reporting_nonce(session_maker, one_time, str(uuid.uuid4())),
+            _record_reporting_nonce(session_maker, one_time, str(uuid.uuid4())),
+        )
+        assert sorted(status for status, _ in consumed) == [202, 404]
+
+    asyncio.run(exercise())
+
+
+def test_real_postgres_reporting_rate_limit_replay_and_retention_boundary(
+    school_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _require_migrated_postgres(school_client)
+    placement_id, session_maker = _live_reporting_placement(school_client, monkeypatch)
+
+    async def exercise() -> None:
+        nonces = await _issue_reporting_nonces(session_maker, placement_id, 61)
+        event_ids = [str(uuid.uuid4()) for _ in nonces]
+        results = await asyncio.gather(
+            *(
+                _record_reporting_nonce(session_maker, nonce, event_id)
+                for nonce, event_id in zip(nonces, event_ids, strict=True)
+            )
+        )
+        assert sum(status == 202 for status, _ in results) == 60
+        assert sum(status == 429 for status, _ in results) == 1
+
+        # A duplicate must remain idempotent after the shared bucket is full and
+        # must not burn a newly-issued one-time capability.
+        replay_nonce = (await _issue_reporting_nonces(session_maker, placement_id, 1))[0]
+        replay_status, replay_body = await _record_reporting_nonce(session_maker, replay_nonce, event_ids[0])
+        assert (replay_status, replay_body) == (202, {"accepted": True, "duplicate": True})
+
+        now = dt.datetime.now(dt.UTC)
+        stale_nonce = str(uuid.uuid4())
+        retained_nonce = str(uuid.uuid4())
+        async with session_maker() as session:  # type: ignore[operator]
+            session.add_all(
+                [
+                    models.SponsorPlacementReportDedup(
+                        event_id=stale_nonce,
+                        placement_id=placement_id,
+                        received_date=(now - dt.timedelta(hours=48, seconds=1)).date(),
+                        received_at=now - dt.timedelta(hours=48, seconds=1),
+                    ),
+                    models.SponsorPlacementReportDedup(
+                        event_id=retained_nonce,
+                        placement_id=placement_id,
+                        received_date=(now - dt.timedelta(hours=47, minutes=59)).date(),
+                        received_at=now - dt.timedelta(hours=47, minutes=59),
+                    ),
+                    models.SponsorPlacementReportRateBucket(
+                        placement_id=placement_id,
+                        bucket_start=now - dt.timedelta(hours=48, seconds=1),
+                        event_count=1,
+                    ),
+                ]
+            )
+            await session.commit()
+
+        # This new event is intentionally rate-limited; the route's pre-rate
+        # cleanup must still remove data older than 48 hours while retaining newer data.
+        cleanup_nonce = (await _issue_reporting_nonces(session_maker, placement_id, 1))[0]
+        assert (await _record_reporting_nonce(session_maker, cleanup_nonce, str(uuid.uuid4())))[0] == 429
+        async with session_maker() as session:  # type: ignore[operator]
+            retained = await session.get(models.SponsorPlacementReportDedup, retained_nonce)
+            stale = await session.get(models.SponsorPlacementReportDedup, stale_nonce)
+            old_bucket = await session.get(
+                models.SponsorPlacementReportRateBucket,
+                {"placement_id": placement_id, "bucket_start": now - dt.timedelta(hours=48, seconds=1)},
+            )
+            assert retained is not None and stale is None and old_bucket is None
+
+    asyncio.run(exercise())
