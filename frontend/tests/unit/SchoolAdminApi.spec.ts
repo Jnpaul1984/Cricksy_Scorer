@@ -7,6 +7,7 @@ import {
   createClub,
   createSchool,
   createSchoolMatch,
+  recordPublicSponsorPlacementEvent,
   getPublicSchoolScorecard,
   getPlatformSponsorVisibility,
   approvePlatformSponsorPlacement,
@@ -160,6 +161,18 @@ describe('schoolAdminApi', () => {
     expect(apiRequest).toHaveBeenLastCalledWith('/api/platform/sponsor-placements/placement%20A%2F1/approve', { method: 'POST' });
     await takedownPlatformSponsorPlacement('placement A/1');
     expect(apiRequest).toHaveBeenLastCalledWith('/api/platform/sponsor-placements/placement%20A%2F1/takedown', { method: 'POST' });
+  });
+
+  it('sends public sponsor events with only the opaque capability and fresh event id', async () => {
+    vi.mocked(apiRequest).mockResolvedValue({ accepted: true, duplicate: false });
+    await recordPublicSponsorPlacementEvent('opaque-capability', '123e4567-e89b-42d3-a456-426614174000');
+    expect(apiRequest).toHaveBeenLastCalledWith('/api/public/sponsor-placement-events', {
+      method: 'POST',
+      body: JSON.stringify({
+        capability: 'opaque-capability',
+        event_id: '123e4567-e89b-42d3-a456-426614174000',
+      }),
+    });
   });
 
   it('uses the platform visibility hierarchy contracts', async () => {

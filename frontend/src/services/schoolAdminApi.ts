@@ -844,11 +844,11 @@ export const getOrganizationSponsorReporting = (organizationId: string) =>
 
 export const recordPublicSponsorPlacementEvent = (
   capability: string,
-  eventType: 'display' | 'click',
+  eventId: string,
 ) =>
   apiRequest<{ accepted: boolean; duplicate: boolean }>('/api/public/sponsor-placement-events', {
     method: 'POST',
-    body: JSON.stringify({ capability, event_id: crypto.randomUUID(), event_type: eventType }),
+    body: JSON.stringify({ capability, event_id: eventId }),
   });
 
 export const previewPlayerImport = (

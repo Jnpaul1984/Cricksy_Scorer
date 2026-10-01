@@ -62,6 +62,7 @@ async function load() {
   const currentId = organizationId.value;
   const currentType = organizationType.value;
   settings.value = null;
+  sponsorReport.value = null;
   logoUrl.value = '';
   logoAltText.value = '';
   error.value = '';
@@ -78,7 +79,9 @@ async function load() {
     logoUrl.value = response.logo_url || '';
     logoAltText.value = response.logo_alt_text || '';
     if (canManageCommunity.value) {
-      sponsorReport.value = await getOrganizationSponsorReporting(currentId).catch(() => null);
+      const report = await getOrganizationSponsorReporting(currentId).catch(() => null);
+      if (!isCurrent(currentGeneration, currentId, currentType)) return;
+      sponsorReport.value = report;
     }
   } catch (reason) {
     if (isCurrent(currentGeneration, currentId, currentType)) error.value = getErrorMessage(reason);

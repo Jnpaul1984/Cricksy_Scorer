@@ -15,12 +15,56 @@ const notFound = ref(false);
 const logoFailed = ref(false);
 let generation = 0;
 let refreshTimer: ReturnType<typeof setInterval> | undefined;
-let displayReportedFor: string | null = null;
-let reportIdentifier: string | null = null;
+const sponsorElement = ref<HTMLElement | null>(null);
+const reportedCapabilities = new Set<string>();
+let displayObserver: IntersectionObserver | null = null;
+let lastDisplayEntry: IntersectionObserverEntry | null = null;
 
-function reportSponsorEvent(capability: string | undefined, eventType: 'display' | 'click') {
+function eventId() {
+  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+  return `00000000-0000-4000-8000-${Date.now().toString(16).padStart(12, '0').slice(-12)}`;
+}
+
+function reportSponsorEvent(capability: string | undefined) {
+  if (!capability || reportedCapabilities.has(capability)) return;
+  reportedCapabilities.add(capability);
   // Reporting is anonymous and best-effort; public content never depends on it.
-  if (capability) void Promise.resolve(recordPublicSponsorPlacementEvent(capability, eventType)).catch(() => undefined);
+  void Promise.resolve(recordPublicSponsorPlacementEvent(capability, eventId())).catch(() => undefined);
+}
+
+function reportDisplayIfEligible(entry: IntersectionObserverEntry | null) {
+  if (document.visibilityState !== 'visible' || !entry?.isIntersecting || entry.intersectionRatio < 0.5) return;
+  reportSponsorEvent(sponsor.value?.reporting?.display_capability);
+}
+
+function clearDisplayObserver() {
+  displayObserver?.disconnect();
+  displayObserver = null;
+  lastDisplayEntry = null;
+  document.removeEventListener('visibilitychange', onDocumentVisibilityChange);
+}
+
+function onDocumentVisibilityChange() {
+  reportDisplayIfEligible(lastDisplayEntry);
+}
+
+function observeSponsorDisplay() {
+  clearDisplayObserver();
+  if (!sponsorElement.value || !sponsor.value?.reporting?.display_capability || !window.IntersectionObserver) return;
+  displayObserver = new window.IntersectionObserver((entries) => {
+    lastDisplayEntry = entries[0] ?? null;
+    reportDisplayIfEligible(lastDisplayEntry);
+  }, { threshold: [0.5] });
+  displayObserver.observe(sponsorElement.value);
+  document.addEventListener('visibilitychange', onDocumentVisibilityChange);
+}
+
+// A function ref runs only once the sponsor has actually been rendered. This
+// avoids treating a successful placement fetch as an impression.
+function setSponsorElement(element: Element | null) {
+  sponsorElement.value = element as HTMLElement | null;
+  if (sponsorElement.value) observeSponsorDisplay();
+  else clearDisplayObserver();
 }
 
 const terminology = computed(() =>
@@ -37,12 +81,9 @@ function formatDate(value: string | null) {
 async function load() {
   const currentGeneration = ++generation;
   const currentIdentifier = props.publicIdentifier;
-    community.value = null;
-    sponsor.value = null;
-  if (reportIdentifier !== currentIdentifier) {
-    reportIdentifier = currentIdentifier;
-    displayReportedFor = null;
-  }
+  clearDisplayObserver();
+  community.value = null;
+  sponsor.value = null;
   notFound.value = false;
   logoFailed.value = false;
   loading.value = true;
@@ -58,10 +99,6 @@ async function load() {
       const placement = await getPublicOrganizationSponsorPlacement(currentIdentifier);
       if (generation !== currentGeneration || props.publicIdentifier !== currentIdentifier) return;
       sponsor.value = placement;
-      if (displayReportedFor !== placement.reporting?.display_capability) {
-        displayReportedFor = placement.reporting?.display_capability || null;
-        reportSponsorEvent(placement.reporting?.display_capability, 'display');
-      }
     } catch {
       if (generation !== currentGeneration || props.publicIdentifier !== currentIdentifier) return;
       // An absent, revoked, or not-yet-approved placement is intentionally invisible.
@@ -81,7 +118,7 @@ async function load() {
 watch(() => props.publicIdentifier, load, { immediate: true });
 // Takedown is checked at most every 30 seconds while this public page is open.
 refreshTimer = setInterval(() => { void load(); }, 30_000);
-onBeforeUnmount(() => { if (refreshTimer) clearInterval(refreshTimer); });
+onBeforeUnmount(() => { if (refreshTimer) clearInterval(refreshTimer); clearDisplayObserver(); });
 </script>
 
 <template>
@@ -110,9 +147,9 @@ onBeforeUnmount(() => { if (refreshTimer) clearInterval(refreshTimer); });
           <p>Public {{ terminology.kindLabelLower }} competitions, fixtures, results, and standings.</p>
         </div>
       </header>
-      <aside v-if="sponsor" class="sponsor-placement" aria-label="Organization sponsor">
+      <aside v-if="sponsor" :ref="setSponsorElement" class="sponsor-placement" aria-label="Organization sponsor">
         <span>Supported by</span>
-        <a v-if="sponsor.sponsor_url" :href="sponsor.sponsor_url" rel="noopener noreferrer" target="_blank" @click="reportSponsorEvent(sponsor.reporting?.click_capability, 'click')">{{ sponsor.sponsor_name }}</a>
+        <a v-if="sponsor.sponsor_url" :href="sponsor.sponsor_url" rel="noopener noreferrer" target="_blank" @click="reportSponsorEvent(sponsor.reporting?.click_capability)">{{ sponsor.sponsor_name }}</a>
         <strong v-else>{{ sponsor.sponsor_name }}</strong>
       </aside>
 
