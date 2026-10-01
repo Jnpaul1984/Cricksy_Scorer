@@ -1,10 +1,12 @@
 import { flushPromises, mount } from '@vue/test-utils';
+import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, nextTick, ref } from 'vue';
 
 import { organizationBasePath, organizationTerminology } from '@/composables/useOrganizationTerminology';
 import { schoolContextKey, type SchoolContext } from '@/composables/useSchoolContext';
 import router from '@/router';
+import { useAuthStore } from '@/stores/authStore';
 import type {
   FreeOrganizationType,
   OrganizationCommunitySettings,
@@ -21,6 +23,9 @@ const api = vi.hoisted(() => ({
   setOrganizationCompetitionCommunityPublication: vi.fn(),
   getOrganizationSponsorReporting: vi.fn(),
   getPublicOrganizationCommunity: vi.fn(),
+  listAllMyPublicFavorites: vi.fn(),
+  removeMyPublicFavorite: vi.fn(),
+  saveMyPublicFavorite: vi.fn(),
 }));
 
 vi.mock('@/services/schoolAdminApi', () => api);
@@ -64,6 +69,7 @@ function community(organizationType: FreeOrganizationType): PublicOrganizationCo
     },
     competitions: [
       {
+        public_key: 'cmp_0123456789abcdef01234567',
         name: 'Community Cup',
         tournament_type: 'league',
         start_date: '2026-09-30T12:00:00Z',
@@ -143,7 +149,9 @@ function deferred<T>() {
 
 beforeEach(() => {
   vi.resetAllMocks();
+  setActivePinia(createPinia());
   api.getOrganizationSponsorReporting.mockResolvedValue(null);
+  api.listAllMyPublicFavorites.mockResolvedValue([]);
   Object.defineProperty(navigator, 'clipboard', {
     configurable: true,
     value: { writeText: vi.fn().mockResolvedValue(undefined) },
@@ -172,6 +180,7 @@ describe('OrganizationCommunityView', () => {
       expect(wrapper.text()).toContain('First XI won by 8 runs');
       expect(wrapper.text()).toContain('View published scorecard');
       expect(wrapper.find('table').exists()).toBe(true);
+      expect(wrapper.text()).not.toContain('No public competitions');
       expect(wrapper.text().toLowerCase()).not.toContain('roster');
       expect(wrapper.text().toLowerCase()).not.toContain('player profile');
       expect(wrapper.get('main').classes()).toContain('community-page');
@@ -189,6 +198,32 @@ describe('OrganizationCommunityView', () => {
     expect(router.resolve('/community/org_0123456789abcdef01234567').name).toBe(
       'organization-community',
     );
+  });
+
+  it('saves and removes each competition by its opaque public key', async () => {
+    useAuthStore().user = { id: 'staff-a' } as never;
+    api.getPublicOrganizationCommunity.mockResolvedValue(community('school'));
+    api.saveMyPublicFavorite.mockResolvedValue({ id: 'fav-competition' });
+    const wrapper = mount(OrganizationCommunityView, {
+      props: { publicIdentifier: 'org_0123456789abcdef01234567' },
+      global: { stubs: routerStubs },
+    });
+    await flushPromises();
+
+    const competitionButton = wrapper.findAll('button').find(button => button.text() === 'Save competition');
+    expect(competitionButton).toBeDefined();
+    await competitionButton!.trigger('click');
+    await flushPromises();
+    expect(api.saveMyPublicFavorite).toHaveBeenCalledWith(
+      'competition',
+      'cmp_0123456789abcdef01234567',
+    );
+
+    const removeButton = wrapper.findAll('button').find(button => button.text() === 'Saved competition');
+    expect(removeButton).toBeDefined();
+    await removeButton!.trigger('click');
+    await flushPromises();
+    expect(api.removeMyPublicFavorite).toHaveBeenCalledWith('fav-competition');
   });
 });
 

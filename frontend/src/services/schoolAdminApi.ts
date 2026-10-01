@@ -94,6 +94,39 @@ export type PublicOrganizationSponsorPlacement = {
   reporting?: { display_capability: string; click_capability: string; report_view_key: string };
 };
 
+export type PublicFavoriteKind = 'organization' | 'team' | 'competition';
+export type PublicFavorite = {
+  id: string;
+  subject_kind: PublicFavoriteKind;
+  public_key: string;
+  display_name: string;
+  canonical_path: string;
+  created_at: string;
+};
+export type PublicFavoriteList = { items: PublicFavorite[]; next_offset: number | null };
+
+export const listMyPublicFavorites = (offset = 0, limit = 20) =>
+  apiRequest<PublicFavoriteList>(`/api/me/public-favorites?offset=${offset}&limit=${limit}`);
+export const listAllMyPublicFavorites = async () => {
+  const items: PublicFavorite[] = [];
+  let offset: number | null = 0;
+  while (offset !== null) {
+    const page = await listMyPublicFavorites(offset);
+    items.push(...page.items);
+    offset = page.next_offset;
+  }
+  return items;
+};
+export const saveMyPublicFavorite = (subject_kind: PublicFavoriteKind, subject_public_key: string) =>
+  apiRequest<PublicFavorite>('/api/me/public-favorites', {
+    method: 'PUT',
+    body: JSON.stringify({ subject_kind, subject_public_key }),
+  });
+export const removeMyPublicFavorite = (favoriteId: string) =>
+  apiRequest<void>(`/api/me/public-favorites/${encodeURIComponent(favoriteId)}`, {
+    method: 'DELETE',
+  });
+
 export type PlatformSponsorPlacement = {
   id: string;
   organization_id: string;
@@ -854,6 +887,8 @@ export const getPublicTeam = (organizationPublicIdentifier: string, teamPublicId
   apiRequest<PublicTeam>(
     `/api/public/organizations/${encodeURIComponent(organizationPublicIdentifier)}/teams/${encodeURIComponent(teamPublicIdentifier)}`,
   );
+
+export const getPublicOrganizationTeam = getPublicTeam;
 
 export interface SponsorAggregateReport {
   start_date: string;

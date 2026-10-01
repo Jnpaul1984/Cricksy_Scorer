@@ -428,6 +428,7 @@ async def test_public_collections_are_bounded(school_client: TestClient) -> None
                 OrganizationCompetitionPublication(
                     competition_id=competition.id,
                     organization_id=organization["id"],
+                    public_key=organization_publication_service.public_competition_key_candidate(competition.id),
                     publication_state="published",
                 )
             )
@@ -715,7 +716,20 @@ async def test_postgres_migration_backfill_is_default_private(school_client: Tes
                 OrganizationCompetitionPublication.competition_id == competition["id"]
             )
         )
-        await session.execute(text(migration.COMPETITION_PUBLICATION_BACKFILL_SQL))
+        # The original migration ran before ``public_key`` existed.  This test
+        # intentionally exercises its default-private result against the
+        # current schema, so add the later migration's deterministic key while
+        # preserving the historical SQL's competition/organization selection.
+        # Do not change the historical migration: it must remain executable at
+        # its own revision, where the column does not exist yet.
+        current_schema_backfill_sql = migration.COMPETITION_PUBLICATION_BACKFILL_SQL.replace(
+            "(competition_id, organization_id)",
+            "(competition_id, organization_id, public_key)",
+        ).replace(
+            "SELECT id, organization_id",
+            "SELECT id, organization_id, 'cmp_' || substr(md5('cricksy-public-competition:' || id), 1, 24)",
+        )
+        await session.execute(text(current_schema_backfill_sql))
         await session.commit()
         assert await session.scalar(
             select(func.count(OrganizationCompetitionPublication.competition_id)).where(

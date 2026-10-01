@@ -9,10 +9,6 @@ from urllib.parse import unquote, urlsplit
 
 import idna
 import structlog
-from sqlalchemy import func, or_, select
-from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from backend.api.schemas.organization_publication import (
     OrganizationBrandingUpdate,
     OrganizationCommunitySettingsResponse,
@@ -33,13 +29,27 @@ from backend.services.organization_service import (
     OrganizationServiceError,
 )
 from backend.sql_app import models
+from sqlalchemy import func, or_, select
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = structlog.get_logger(__name__)
 
 PUBLIC_IDENTIFIER_PATTERN = re.compile(r"^org_[0-9a-f]{24}$")
+PUBLIC_COMPETITION_KEY_PATTERN = re.compile(r"^cmp_[0-9a-f]{24}$")
 PUBLICATION_MANAGERS = {"owner", "admin"}
 _PUBLIC_IDENTIFIER_NAMESPACE = uuid.UUID("f095452d-9128-46ac-9a82-d504819bcb64")
 _PUBLIC_IDENTIFIER_UNIQUE_CONSTRAINT = "uq_organization_public_settings_public_identifier"
+# SQLAlchemy's metadata-created PostgreSQL schema uses the server-generated
+# ``..._key`` name, while the Alembic migration names this constraint explicitly.
+# Both mean the same retryable collision; do not make correctness depend on which
+# schema creation path initialized the database.
+_PUBLIC_IDENTIFIER_UNIQUE_CONSTRAINT_NAMES = frozenset(
+    {
+        _PUBLIC_IDENTIFIER_UNIQUE_CONSTRAINT,
+        "organization_public_settings_public_identifier_key",
+    }
+)
 _PUBLIC_SETTINGS_PRIMARY_KEY_CONSTRAINT = "organization_public_settings_pkey"
 MAX_PUBLIC_COMPETITIONS = 8
 MAX_PUBLIC_TEAMS_PER_COMPETITION = 16
@@ -95,6 +105,11 @@ def public_identifier_candidate(organization_id: str, collision_attempt: int = 0
     return f"org_{uuid.uuid5(_PUBLIC_IDENTIFIER_NAMESPACE, seed).hex[:24]}"
 
 
+def public_competition_key_candidate(competition_id: str) -> str:
+    """Stable opaque reference; never expose a tournament database identifier."""
+    return f"cmp_{uuid.uuid5(_PUBLIC_IDENTIFIER_NAMESPACE, f'competition:{competition_id}').hex[:24]}"
+
+
 def _integrity_constraint_name(exc: IntegrityError) -> str | None:
     current: BaseException | None = exc.orig
     while current is not None:
@@ -125,7 +140,7 @@ async def create_default_settings(
                 existing = await db.get(models.OrganizationPublicSettings, organization_id)
                 if existing is not None:
                     return existing
-            if constraint_name == _PUBLIC_IDENTIFIER_UNIQUE_CONSTRAINT:
+            if constraint_name in _PUBLIC_IDENTIFIER_UNIQUE_CONSTRAINT_NAMES:
                 continue
             raise
         return settings
@@ -452,6 +467,7 @@ async def set_competition_publication_state(
         publication = models.OrganizationCompetitionPublication(
             competition_id=competition_id,
             organization_id=organization_id,
+            public_key=public_competition_key_candidate(competition_id),
             publication_state="unpublished",
         )
         db.add(publication)
@@ -513,10 +529,9 @@ async def get_public_community(
         capability="school_live_scorecards",
     )
 
-    competitions = list(
-        (
-            await db.scalars(
-                select(models.Tournament)
+    competition_rows = (
+        await db.execute(
+            select(models.Tournament, models.OrganizationCompetitionPublication.public_key)
                 .join(
                     models.OrganizationCompetitionPublication,
                     models.OrganizationCompetitionPublication.competition_id
@@ -534,10 +549,11 @@ async def get_public_community(
                     models.Tournament.id,
                 )
                 .limit(MAX_PUBLIC_COMPETITIONS)
-            )
-        ).all()
-    )
+        )
+    ).all()
+    competitions = [row[0] for row in competition_rows]
     competition_ids = [competition.id for competition in competitions]
+    competition_public_keys = {competition.id: public_key for competition, public_key in competition_rows}
 
     entrants_by_competition: dict[str, list[tuple[str, str]]] = {
         competition_id: [] for competition_id in competition_ids
@@ -728,6 +744,7 @@ async def get_public_community(
         ),
         competitions=[
             PublicCommunityCompetition(
+                public_key=competition_public_keys[competition.id],
                 name=competition.name,
                 tournament_type=competition.tournament_type,
                 start_date=competition.start_date,

@@ -1,20 +1,35 @@
 <script setup lang="ts">
+import { getActivePinia } from 'pinia';
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import type { ComponentPublicInstance } from 'vue';
 import { RouterLink } from 'vue-router';
 
 import { organizationTerminology } from '@/composables/useOrganizationTerminology';
-import { getPublicOrganizationCommunity, getPublicOrganizationSponsorPlacement, recordPublicSponsorPlacementEvent } from '@/services/schoolAdminApi';
+import {
+  getPublicOrganizationCommunity,
+  getPublicOrganizationSponsorPlacement,
+  listAllMyPublicFavorites,
+  recordPublicSponsorPlacementEvent,
+  removeMyPublicFavorite,
+  saveMyPublicFavorite,
+} from '@/services/schoolAdminApi';
 import type { PublicOrganizationSponsorPlacement } from '@/services/schoolAdminApi';
+import { useAuthStore } from '@/stores/authStore';
 import type { PublicOrganizationCommunity } from '@/types/schoolAdmin';
 
 const props = defineProps<{ publicIdentifier: string }>();
+const activePinia = getActivePinia();
+const auth = activePinia ? useAuthStore(activePinia) : { user: null };
 const community = ref<PublicOrganizationCommunity | null>(null);
+const favoriteId = ref<string | null>(null);
+const competitionFavoriteIds = ref<Record<string, string>>({});
+const favoriteError = ref('');
 const sponsor = ref<PublicOrganizationSponsorPlacement | null>(null);
 const loading = ref(true);
 const notFound = ref(false);
 const logoFailed = ref(false);
 let generation = 0;
+let favoriteGeneration = 0;
 let refreshTimer: ReturnType<typeof setInterval> | undefined;
 const sponsorElement = ref<HTMLElement | null>(null);
 const reportedCapabilities = new Set<string>();
@@ -93,6 +108,71 @@ function formatDate(value: string | null) {
   );
 }
 
+async function refreshFavorite() {
+  const current = ++favoriteGeneration;
+  const key = props.publicIdentifier;
+  favoriteId.value = null;
+  competitionFavoriteIds.value = {};
+  if (!auth.user?.id) return;
+  try {
+    const favorites = await listAllMyPublicFavorites();
+    if (current === favoriteGeneration && auth.user?.id && props.publicIdentifier === key) {
+      favoriteId.value = favorites.find(item => item.subject_kind === 'organization' && item.public_key === key)?.id || null;
+      competitionFavoriteIds.value = Object.fromEntries(
+        favorites
+          .filter(item => item.subject_kind === 'competition')
+          .map(item => [item.public_key, item.id]),
+      );
+    }
+  } catch { /* Private saved-state failures do not affect public content. */ }
+}
+
+async function toggleCompetitionFavorite(competitionPublicKey: string) {
+  const current = favoriteGeneration;
+  const organizationKey = props.publicIdentifier;
+  favoriteError.value = '';
+  try {
+    const existingId = competitionFavoriteIds.value[competitionPublicKey];
+    if (existingId) {
+      await removeMyPublicFavorite(existingId);
+      if (current === favoriteGeneration && props.publicIdentifier === organizationKey) {
+        const next = { ...competitionFavoriteIds.value };
+        delete next[competitionPublicKey];
+        competitionFavoriteIds.value = next;
+      }
+    } else {
+      const favorite = await saveMyPublicFavorite('competition', competitionPublicKey);
+      if (current === favoriteGeneration && props.publicIdentifier === organizationKey) {
+        competitionFavoriteIds.value = {
+          ...competitionFavoriteIds.value,
+          [competitionPublicKey]: favorite.id,
+        };
+      }
+    }
+  } catch {
+    if (current === favoriteGeneration && props.publicIdentifier === organizationKey) {
+      favoriteError.value = 'Sign in with an active staff membership to save public pages.';
+    }
+  }
+}
+
+async function toggleFavorite() {
+  const key = props.publicIdentifier;
+  const current = favoriteGeneration;
+  favoriteError.value = '';
+  try {
+    if (favoriteId.value) {
+      await removeMyPublicFavorite(favoriteId.value);
+      if (current === favoriteGeneration && props.publicIdentifier === key) favoriteId.value = null;
+    } else {
+      const favorite = await saveMyPublicFavorite('organization', key);
+      if (current === favoriteGeneration && props.publicIdentifier === key) favoriteId.value = favorite.id;
+    }
+  } catch {
+    if (current === favoriteGeneration && props.publicIdentifier === key) favoriteError.value = 'Sign in with an active staff membership to save public pages.';
+  }
+}
+
 async function load() {
   const currentGeneration = ++generation;
   const currentIdentifier = props.publicIdentifier;
@@ -110,6 +190,7 @@ async function load() {
       return;
     }
     community.value = response;
+    if (auth.user?.id) void refreshFavorite();
     try {
       const placement = await getPublicOrganizationSponsorPlacement(currentIdentifier);
       if (generation !== currentGeneration || props.publicIdentifier !== currentIdentifier) return;
@@ -131,6 +212,7 @@ async function load() {
 }
 
 watch(() => props.publicIdentifier, load, { immediate: true });
+watch(() => auth.user?.id, () => { ++favoriteGeneration; favoriteId.value = null; competitionFavoriteIds.value = {}; favoriteError.value = ''; if (auth.user?.id && community.value?.public_identifier === props.publicIdentifier) void refreshFavorite(); }, { immediate: true });
 // Takedown is checked at most every 30 seconds while this public page is open.
 refreshTimer = setInterval(() => { void load(); }, 30_000);
 onBeforeUnmount(() => { if (refreshTimer) clearInterval(refreshTimer); clearDisplayObserver(); });
@@ -160,6 +242,8 @@ onBeforeUnmount(() => { if (refreshTimer) clearInterval(refreshTimer); clearDisp
           <p class="eyebrow">{{ terminology.kindLabel }} cricket community</p>
           <h1>{{ community.display_name }}</h1>
           <p>Public {{ terminology.kindLabelLower }} competitions, fixtures, results, and standings.</p>
+          <button type="button" class="favorite-button" @click="toggleFavorite">{{ favoriteId ? 'Saved public page' : 'Save public page' }}</button>
+          <p v-if="favoriteError" class="favorite-error" role="status">{{ favoriteError }}</p>
         </div>
       </header>
       <aside v-if="sponsor" :ref="setSponsorElement" class="sponsor-placement" aria-label="Organization sponsor">
@@ -175,6 +259,11 @@ onBeforeUnmount(() => { if (refreshTimer) clearInterval(refreshTimer); clearDisp
             <header>
               <p class="competition-status">{{ competition.status }} · {{ competition.tournament_type }}</p>
               <h3>{{ competition.name }}</h3>
+              <button
+                type="button"
+                class="favorite-button competition-favorite-button"
+                @click="toggleCompetitionFavorite(competition.public_key)"
+              >{{ competitionFavoriteIds[competition.public_key] ? 'Saved competition' : 'Save competition' }}</button>
               <p v-if="competition.start_date || competition.end_date">
                 <span v-if="competition.start_date">Starts {{ formatDate(competition.start_date) }}</span>
                 <span v-if="competition.end_date"> · Ends {{ formatDate(competition.end_date) }}</span>

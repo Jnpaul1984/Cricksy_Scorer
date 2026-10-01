@@ -761,6 +761,7 @@ export interface PublicCommunityStanding {
 }
 
 export interface PublicCommunityCompetition {
+  public_key: string;
   name: string;
   tournament_type: string;
   start_date: string | null;

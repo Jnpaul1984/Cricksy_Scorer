@@ -201,6 +201,9 @@ class User(Base):
     fan_favorites: Mapped[list[FanFavorite]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
+    public_entity_favorites: Mapped[list[PublicEntityFavorite]] = relationship(
+        back_populates="user", cascade="all, delete-orphan", passive_deletes=True
+    )
     coach_assignments: Mapped[list[CoachPlayerAssignment]] = relationship(
         back_populates="coach_user", cascade="all, delete-orphan"
     )
@@ -383,6 +386,9 @@ class OrganizationCompetitionPublication(Base):
 
     competition_id: Mapped[str] = mapped_column(String, primary_key=True, nullable=False)
     organization_id: Mapped[str] = mapped_column(String, nullable=False)
+    public_key: Mapped[str] = mapped_column(
+        String(28), unique=True, default=lambda: f"cmp_{uuid.uuid4().hex[:24]}", nullable=False
+    )
     publication_state: Mapped[str] = mapped_column(
         String(16), default="unpublished", server_default="unpublished", nullable=False
     )
@@ -406,6 +412,38 @@ class OrganizationCompetitionPublication(Base):
     updated_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
+
+
+class PublicEntityFavorite(Base):
+    """A staff user's private reference to a currently-public entity only."""
+
+    __tablename__ = "public_entity_favorites"
+    __table_args__ = (
+        CheckConstraint(
+            "subject_kind IN ('organization', 'team', 'competition')",
+            name="ck_public_entity_favorites_subject_kind",
+        ),
+        UniqueConstraint(
+            "user_id",
+            "subject_kind",
+            "subject_public_key",
+            name="uq_public_entity_favorites_user_subject",
+        ),
+        Index("ix_public_entity_favorites_user_created", "user_id", "created_at", "id"),
+    )
+
+    id: Mapped[str] = mapped_column(
+        String, primary_key=True, default=lambda: str(uuid.uuid4()), nullable=False
+    )
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    subject_kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    subject_public_key: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    user: Mapped[User] = relationship(back_populates="public_entity_favorites")
 
 
 class OrganizationMembership(Base):
