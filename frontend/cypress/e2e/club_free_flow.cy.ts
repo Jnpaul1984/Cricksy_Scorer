@@ -195,6 +195,28 @@ describe('Club Free shared organization journey', () => {
     }).as('applyClubImport')
     cy.intercept('GET', '**/api/organizations/club-a/teams/team-a', team)
     cy.intercept('GET', '**/api/organizations/club-a/teams/team-a/players', playingRoster)
+    // The roster screen now loads publication state alongside roster data; keep
+    // this Club fixture complete so a missing optional response cannot mask the
+    // assignment form under its shared load error state.
+    cy.intercept('GET', '**/api/organizations/club-a/community-settings', {
+      organization_id: club.id,
+      public_identifier: 'org_0123456789abcdef01234567',
+      publication_state: 'unpublished',
+      logo_url: null,
+      logo_alt_text: null,
+      branding_version: 1,
+      branding_updated_at: null,
+      competitions: [],
+    })
+    cy.intercept('GET', '**/api/organizations/club-a/teams/team-a/public-publication', {
+      team_id: team.id,
+      organization_id: club.id,
+      public_identifier: 'team_0123456789abcdef01234567',
+      publication_state: 'unpublished',
+      publication_version: 1,
+      published_at: null,
+      unpublished_at: null,
+    })
     cy.intercept('POST', '**/api/organizations/club-a/teams/team-a/players', req => {
       expect(req.body).to.deep.equal({ school_player_membership_id: importedPlayer.id })
       req.reply({ statusCode: 201, body: { ...playingRoster[0], id: 'assigned-import' } })
