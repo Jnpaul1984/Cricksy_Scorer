@@ -3,13 +3,14 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { RouterLink } from 'vue-router';
 
 import { organizationTerminology } from '@/composables/useOrganizationTerminology';
-import { getPublicOrganizationCommunity, getPublicOrganizationSponsorPlacement } from '@/services/schoolAdminApi';
+import { getPublicOrganizationCommunity, getPublicOrganizationLeaderboards, getPublicOrganizationSponsorPlacement } from '@/services/schoolAdminApi';
 import type { PublicOrganizationSponsorPlacement } from '@/services/schoolAdminApi';
-import type { PublicOrganizationCommunity } from '@/types/schoolAdmin';
+import type { PublicAnonymousLeaderboards, PublicOrganizationCommunity } from '@/types/schoolAdmin';
 
 const props = defineProps<{ publicIdentifier: string }>();
 const community = ref<PublicOrganizationCommunity | null>(null);
 const sponsor = ref<PublicOrganizationSponsorPlacement | null>(null);
+const leaderboards = ref<PublicAnonymousLeaderboards | null>(null);
 const loading = ref(true);
 const notFound = ref(false);
 const logoFailed = ref(false);
@@ -32,6 +33,7 @@ async function load() {
   const currentIdentifier = props.publicIdentifier;
     community.value = null;
     sponsor.value = null;
+  leaderboards.value = null;
   notFound.value = false;
   logoFailed.value = false;
   loading.value = true;
@@ -43,6 +45,15 @@ async function load() {
       return;
     }
     community.value = response;
+    try {
+      const leaderboardResponse = await getPublicOrganizationLeaderboards(currentIdentifier);
+      if (generation !== currentGeneration || props.publicIdentifier !== currentIdentifier) return;
+      leaderboards.value = leaderboardResponse;
+    } catch {
+      if (generation !== currentGeneration || props.publicIdentifier !== currentIdentifier) return;
+      // A revoked or unavailable projection is intentionally absent from the page.
+      leaderboards.value = null;
+    }
     try {
       const placement = await getPublicOrganizationSponsorPlacement(currentIdentifier);
       if (generation !== currentGeneration || props.publicIdentifier !== currentIdentifier) return;
@@ -100,6 +111,21 @@ onBeforeUnmount(() => { if (refreshTimer) clearInterval(refreshTimer); });
         <a v-if="sponsor.sponsor_url" :href="sponsor.sponsor_url" rel="noopener noreferrer" target="_blank">{{ sponsor.sponsor_name }}</a>
         <strong v-else>{{ sponsor.sponsor_name }}</strong>
       </aside>
+
+      <section v-if="leaderboards && (leaderboards.runs.length || leaderboards.wickets.length)" class="leaderboards" aria-labelledby="leaderboards-title">
+        <h2 id="leaderboards-title">Anonymous leaderboards</h2>
+        <p>Final results from this community’s published competitions. Participant names are not shown.</p>
+        <div class="leaderboard-grid">
+          <section v-if="leaderboards.runs.length" aria-labelledby="runs-leaderboard-title">
+            <h3 id="runs-leaderboard-title">Most runs</h3>
+            <ol><li v-for="entry in leaderboards.runs" :key="`runs-${entry.participant_label}`"><span>{{ entry.rank }}. {{ entry.participant_label }}</span><strong>{{ entry.value }}</strong></li></ol>
+          </section>
+          <section v-if="leaderboards.wickets.length" aria-labelledby="wickets-leaderboard-title">
+            <h3 id="wickets-leaderboard-title">Most wickets</h3>
+            <ol><li v-for="entry in leaderboards.wickets" :key="`wickets-${entry.participant_label}`"><span>{{ entry.rank }}. {{ entry.participant_label }}</span><strong>{{ entry.value }}</strong></li></ol>
+          </section>
+        </div>
+      </section>
 
       <section v-if="community.competitions.length" aria-labelledby="public-competitions-title">
         <h2 id="public-competitions-title">Public competitions</h2>
@@ -173,6 +199,11 @@ onBeforeUnmount(() => { if (refreshTimer) clearInterval(refreshTimer); });
 .eyebrow, .competition-status { color: #3d596b; font-weight: 700; text-transform: capitalize; }
 .sponsor-placement { margin: 1rem 0; padding: 0.75rem 1rem; border-left: 4px solid #176b45; background: #f4f8f5; }
 .sponsor-placement span { margin-right: 0.5rem; color: #3d596b; }
+.leaderboards { margin: 1.5rem 0; padding: 1rem; border: 1px solid #d7e0e8; border-radius: 0.85rem; background: #fbfdff; }
+.leaderboards > p { color: #3d596b; }
+.leaderboard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: 1rem; }
+.leaderboard-grid ol { margin: 0; padding-left: 1.5rem; }
+.leaderboard-grid li { display: flex; justify-content: space-between; gap: 1rem; padding: 0.35rem 0; border-bottom: 1px solid #e4e9ee; }
 .competition-grid { display: grid; gap: 1rem; }
 .competition-card { border: 1px solid #d7e0e8; border-radius: 0.85rem; padding: clamp(1rem, 3vw, 1.5rem); min-width: 0; }
 .team-list { display: flex; flex-wrap: wrap; gap: 0.5rem; list-style: none; padding: 0; }

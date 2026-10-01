@@ -56,6 +56,7 @@ import type {
   OrganizationCommunitySettings,
   OrganizationCommunityCompetitionSettings,
   PublicOrganizationCommunity,
+  PublicAnonymousLeaderboards,
 } from '@/types/schoolAdmin';
 
 const orgPath = (organizationId: string, suffix = '') =>
@@ -830,6 +831,11 @@ export const setOrganizationCompetitionCommunityPublication = (
 export const getPublicOrganizationCommunity = (publicIdentifier: string) =>
   apiRequest<PublicOrganizationCommunity>(
     `/api/public/organizations/${encodeURIComponent(publicIdentifier)}/community`,
+  );
+
+export const getPublicOrganizationLeaderboards = (publicIdentifier: string) =>
+  apiRequest<PublicAnonymousLeaderboards>(
+    `/api/public/organizations/${encodeURIComponent(publicIdentifier)}/leaderboards`,
   );
 
 export const previewPlayerImport = (

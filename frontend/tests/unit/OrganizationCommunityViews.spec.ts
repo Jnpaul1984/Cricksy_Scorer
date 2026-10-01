@@ -20,6 +20,7 @@ const api = vi.hoisted(() => ({
   updateOrganizationCommunityBranding: vi.fn(),
   setOrganizationCompetitionCommunityPublication: vi.fn(),
   getPublicOrganizationCommunity: vi.fn(),
+  getPublicOrganizationLeaderboards: vi.fn(),
 }));
 
 vi.mock('@/services/schoolAdminApi', () => api);
@@ -157,6 +158,7 @@ describe('OrganizationCommunityView', () => {
     'renders one accessible responsive %s community component with public cricket only',
     async organizationType => {
       api.getPublicOrganizationCommunity.mockResolvedValue(community(organizationType));
+      api.getPublicOrganizationLeaderboards.mockResolvedValue({ runs: [], wickets: [] });
       const wrapper = mount(OrganizationCommunityView, {
         props: { publicIdentifier: 'org_0123456789abcdef01234567' },
         global: { stubs: routerStubs },
@@ -175,6 +177,48 @@ describe('OrganizationCommunityView', () => {
       expect(wrapper.get('main').classes()).toContain('community-page');
     },
   );
+
+  it('renders anonymous leaderboard labels and values without profile navigation', async () => {
+    api.getPublicOrganizationCommunity.mockResolvedValue(community('school'));
+    api.getPublicOrganizationLeaderboards.mockResolvedValue({
+      runs: [{ rank: 1, participant_label: 'Participant 1', value: 42 }],
+      wickets: [{ rank: 1, participant_label: 'Participant 1', value: 3 }],
+    });
+    const wrapper = mount(OrganizationCommunityView, {
+      props: { publicIdentifier: 'org_0123456789abcdef01234567' },
+      global: { stubs: routerStubs },
+    });
+    await flushPromises();
+
+    expect(wrapper.text()).toContain('Anonymous leaderboards');
+    expect(wrapper.text()).toContain('Participant 1');
+    expect(wrapper.text()).toContain('42');
+    expect(wrapper.text()).toContain('3');
+    expect(wrapper.html()).not.toContain('player-profile');
+  });
+
+  it('ignores a stale leaderboard response after the public route changes', async () => {
+    const first = deferred<{ runs: [{ rank: number; participant_label: string; value: number }]; wickets: [] }>();
+    api.getPublicOrganizationCommunity
+      .mockResolvedValueOnce(community('school'))
+      .mockResolvedValueOnce({ ...community('school'), public_identifier: 'org_111111111111111111111111', display_name: 'Current School' });
+    api.getPublicOrganizationLeaderboards
+      .mockImplementationOnce(() => first.promise)
+      .mockResolvedValueOnce({ runs: [], wickets: [] });
+    const wrapper = mount(OrganizationCommunityView, {
+      props: { publicIdentifier: 'org_0123456789abcdef01234567' },
+      global: { stubs: routerStubs },
+    });
+    await flushPromises();
+    await wrapper.setProps({ publicIdentifier: 'org_111111111111111111111111' });
+    await flushPromises();
+    first.resolve({ runs: [{ rank: 1, participant_label: 'Participant stale', value: 99 }], wickets: [] });
+    await flushPromises();
+
+    expect(wrapper.get('h1').text()).toBe('Current School');
+    expect(wrapper.vm.$props.publicIdentifier).toBe('org_111111111111111111111111');
+    expect(wrapper.text()).not.toContain('Participant stale');
+  });
 
   it('uses the same anonymous router component and a safe not-found state', async () => {
     api.getPublicOrganizationCommunity.mockRejectedValue(Object.assign(new Error('missing'), { status: 404 }));

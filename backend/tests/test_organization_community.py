@@ -14,11 +14,14 @@ from backend.api.schemas.organization_publication import OrganizationBrandingUpd
 from backend.api.schemas.organizations import OrganizationMembershipUpdate
 from backend.services import organization_publication_service
 from backend.services.organization_service import OrganizationServiceError, update_membership
+from backend.services.public_leaderboard_service import _rank
 from backend.sql_app.models import (
     Fixture,
+    Game,
     GameStatus,
     Organization,
     OrganizationCompetitionPublication,
+    OrganizationEntitlement,
     OrganizationMembership,
     OrganizationPublicSettings,
     PlayerProfile,
@@ -40,6 +43,7 @@ from backend.tests.test_school_competition_publication import (
     _game,
     _team,
 )
+from backend.tests.test_school_statistics import _seed
 
 
 def _publish_homepage(client: TestClient, owner: RegisteredUser, organization_id: str) -> str:
@@ -75,6 +79,154 @@ def test_public_community_has_no_enumeration_endpoint_and_safe_not_found_shape(
     malformed = school_client.get("/api/public/organizations/not-an-identifier/community")
     assert missing.status_code == malformed.status_code == 404
     assert missing.json() == malformed.json() == {"detail": "Public page not found"}
+
+
+def test_anonymous_leaderboard_ties_are_ranked_deterministically() -> None:
+    totals = {
+        "internal-b": {"runs": 40, "wickets": 2},
+        "internal-a": {"runs": 40, "wickets": 5},
+        "internal-c": {"runs": 10, "wickets": 5},
+    }
+    assert [entry.model_dump() for entry in _rank(totals, metric="runs")] == [
+        {"rank": 1, "participant_label": "Participant 1", "value": 40},
+        {"rank": 1, "participant_label": "Participant 2", "value": 40},
+        {"rank": 3, "participant_label": "Participant 3", "value": 10},
+    ]
+    assert [entry.model_dump() for entry in _rank(totals, metric="wickets")] == [
+        {"rank": 1, "participant_label": "Participant 1", "value": 5},
+        {"rank": 1, "participant_label": "Participant 2", "value": 5},
+        {"rank": 3, "participant_label": "Participant 3", "value": 2},
+    ]
+    bounded = {
+        f"internal-{index:02d}": {"runs": 100 - index, "wickets": 0}
+        for index in range(11)
+    }
+    rows = _rank(bounded, metric="runs")
+    assert len(rows) == 10
+    assert rows[-1].value == 91
+
+
+@pytest.mark.parametrize("organization_type", ["school", "club"])
+async def test_anonymous_leaderboards_are_final_only_scoped_and_revoke_immediately(
+    school_client: TestClient, organization_type: str
+) -> None:
+    owner = register_user(school_client, f"leaderboard-{organization_type}@example.com")
+    create = create_school if organization_type == "school" else create_club
+    organization = create(school_client, owner, f"Leaderboard {organization_type.title()}")
+    seed = await _seed(school_client, organization["id"], owner.id)
+    competition, fixture = await _competition_with_fixture(
+        school_client, owner, organization["id"], seed.team_a, seed.team_b
+    )
+    session_maker = school_client.session_maker  # type: ignore[attr-defined]
+    async with session_maker() as session:
+        linked_fixture = await session.get(Fixture, fixture["id"])
+        assert linked_fixture is not None
+        linked_fixture.game_id = seed.second_game.id
+        await session.commit()
+    public_identifier = _publish_homepage(school_client, owner, organization["id"])
+    path = f"/api/public/organizations/{public_identifier}/leaderboards"
+    # Homepage publication and an independently final scorecard are insufficient alone.
+    assert school_client.get(path).json() == {"runs": [], "wickets": []}
+    assert _set_competition_publication(
+        school_client, owner, organization["id"], competition["id"], publish=True
+    ).status_code == 200
+    response = school_client.get(path)
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-store"
+    body = response.json()
+    assert body["runs"] == [
+        {"rank": 1, "participant_label": "Participant 1", "value": 20}
+    ]
+    assert body["wickets"] == []
+    serialized = str(body).lower()
+    for private_value in (
+        seed.profile_a.player_id,
+        seed.profile_a.player_name,
+        seed.profile_same_name.player_id,
+        seed.profile_same_name.player_name,
+        organization["id"],
+        competition["id"],
+        "profile",
+        "player",
+        "school_player_membership",
+    ):
+        assert private_value.lower() not in serialized
+
+    # The projection has the same active scorecard capability gate as the
+    # public scorecard surface; disabling it removes the aggregate.
+    async with session_maker() as session:
+        entitlement = await session.scalar(
+            select(OrganizationEntitlement).where(
+                OrganizationEntitlement.organization_id == organization["id"]
+            )
+        )
+        assert entitlement is not None
+        entitlement.status = "disabled"
+        await session.commit()
+    assert school_client.get(path).json() == {"runs": [], "wickets": []}
+    async with session_maker() as session:
+        entitlement = await session.scalar(
+            select(OrganizationEntitlement).where(
+                OrganizationEntitlement.organization_id == organization["id"]
+            )
+        )
+        assert entitlement is not None
+        entitlement.status = "active"
+        await session.commit()
+
+    # A completed-looking foreign game joined through a bad fixture link cannot
+    # contribute because no frozen side claims this organization.
+    foreign_owner = register_user(school_client, f"foreign-leaderboard-{organization_type}@example.com")
+    foreign_organization = create(school_client, foreign_owner, f"Foreign {organization_type.title()}")
+    foreign_seed = await _seed(school_client, foreign_organization["id"], foreign_owner.id)
+    async with session_maker() as session:
+        foreign_game = await session.get(Game, foreign_seed.second_game.id)
+        assert foreign_game is not None
+        # Deliberately reuse the local canonical profile ID in a foreign frozen
+        # snapshot and delivery. It must still be excluded by per-game scope.
+        foreign_game.team_a["players"][0]["id"] = seed.profile_a.player_id
+        foreign_game.team_a["players"][0]["player_profile_id"] = seed.profile_a.player_id
+        foreign_game.team_a["playing_xi"] = [seed.profile_a.player_id]
+        for delivery in foreign_game.deliveries:
+            if delivery["striker_id"] == foreign_seed.profile_a.player_id:
+                delivery["striker_id"] = seed.profile_a.player_id
+                delivery["non_striker_id"] = seed.profile_a.player_id
+        session.add(
+            Fixture(
+                tournament_id=competition["id"],
+                team_a_name="Foreign A",
+                team_b_name="Foreign B",
+                game_id=foreign_seed.second_game.id,
+            )
+        )
+        await session.commit()
+    assert school_client.get(path).json() == body
+
+    # A completed draft/private result is not public leaderboard evidence.
+    async with session_maker() as session:
+        game = await session.get(Game, seed.second_game.id)
+        assert game is not None
+        game.publication_state = "private"
+        await session.commit()
+    assert school_client.get(path).json() == {"runs": [], "wickets": []}
+    async with session_maker() as session:
+        game = await session.get(Game, seed.second_game.id)
+        assert game is not None
+        game.publication_state = "published_final"
+        game.status = GameStatus.in_progress
+        await session.commit()
+    assert school_client.get(path).json() == {"runs": [], "wickets": []}
+
+    # Competition revocation removes the statistics without needing scorecard mutation.
+    assert _set_competition_publication(
+        school_client, owner, organization["id"], competition["id"], publish=False
+    ).status_code == 200
+    assert school_client.get(path).json() == {"runs": [], "wickets": []}
+    assert school_client.put(
+        f"/api/organizations/{organization['id']}/public-settings/unpublish",
+        headers=owner.headers,
+    ).status_code == 200
+    assert school_client.get(path).status_code == 404
 
 
 @pytest.mark.parametrize("organization_type", ["school", "club"])

@@ -771,6 +771,17 @@ export interface PublicOrganizationCommunity {
   competitions: PublicCommunityCompetition[];
 }
 
+export interface PublicAnonymousLeaderboardEntry {
+  rank: number;
+  participant_label: string;
+  value: number;
+}
+
+export interface PublicAnonymousLeaderboards {
+  runs: PublicAnonymousLeaderboardEntry[];
+  wickets: PublicAnonymousLeaderboardEntry[];
+}
+
 export type ImportClassification =
   | 'create_new'
   | 'duplicate_existing_school_membership'
