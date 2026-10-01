@@ -67,13 +67,12 @@ async def _issue_reporting_capability(db: AsyncSession, placement_id: str, event
     return nonce
 
 
-async def _consume_rate_bucket(db: AsyncSession, placement_id: str, now: dt.datetime) -> None:
+async def _consume_rate_bucket(db: AsyncSession, placement_id: str, now: dt.datetime) -> bool:
     table = models.SponsorPlacementReportRateBucket.__table__
     bucket = now.replace(second=0, microsecond=0)
     insert = pg_insert if db.bind and db.bind.dialect.name == "postgresql" else sqlite_insert
     statement = insert(table).values(placement_id=placement_id, bucket_start=bucket, event_count=1).on_conflict_do_update(index_elements=["placement_id", "bucket_start"], set_={"event_count": table.c.event_count + 1}, where=table.c.event_count < _REPORT_MAX_PER_WINDOW).returning(table.c.event_count)
-    if (await db.execute(statement)).first() is None:
-        raise HTTPException(status_code=429, detail="Sponsor event rate limit exceeded")
+    return (await db.execute(statement)).first() is not None
 
 async def _audit(db: AsyncSession, placement: models.OrganizationSponsorPlacement, action: str, actor: str) -> None:
     db.add(models.OrganizationSponsorPlacementAudit(placement_id=placement.id, organization_id=placement.organization_id, action=action, actor_user_id=actor))
@@ -248,6 +247,10 @@ async def record_public_placement_event(payload: SponsorReportEventIn, db: Annot
     ``event_id`` is an opaque one-event nonce retained for two days solely to reject replays.
     """
     _reporting_enabled()
+    # Idempotent retries never consume a fresh one-time nonce or rate quota.
+    # The UUID has no viewer semantics; it is an anonymous event nonce only.
+    if await db.get(models.SponsorPlacementReportDedup, payload.event_id) is not None:
+        return {"accepted": True, "duplicate": True}
     now = dt.datetime.now(dt.UTC)
     try:
         consumed = await db.execute(update(models.SponsorPlacementReportingCapability).where(
@@ -275,7 +278,10 @@ async def record_public_placement_event(payload: SponsorReportEventIn, db: Annot
     # The nonce has no subject semantics and is deliberately pruned on every write.
     await db.execute(delete(models.SponsorPlacementReportDedup).where(models.SponsorPlacementReportDedup.received_at < now - dt.timedelta(hours=48)))
     await db.execute(delete(models.SponsorPlacementReportRateBucket).where(models.SponsorPlacementReportRateBucket.bucket_start < now - dt.timedelta(hours=48)))
-    await _consume_rate_bucket(db, placement.id, now)
+    if not await _consume_rate_bucket(db, placement.id, now):
+        # Retention cleanup is intentionally durable even when a new event is rejected.
+        await db.commit()
+        raise HTTPException(status_code=429, detail="Sponsor event rate limit exceeded")
     db.add(models.SponsorPlacementReportDedup(event_id=payload.event_id, placement_id=placement.id, received_date=today))
     try:
         await db.flush()
