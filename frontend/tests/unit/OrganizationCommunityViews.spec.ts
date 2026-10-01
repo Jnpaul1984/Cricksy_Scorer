@@ -1,10 +1,12 @@
 import { flushPromises, mount } from '@vue/test-utils';
+import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, nextTick, ref } from 'vue';
 
 import { organizationBasePath, organizationTerminology } from '@/composables/useOrganizationTerminology';
 import { schoolContextKey, type SchoolContext } from '@/composables/useSchoolContext';
 import router from '@/router';
+import { useAuthStore } from '@/stores/authStore';
 import type {
   FreeOrganizationType,
   OrganizationCommunitySettings,
@@ -19,8 +21,11 @@ const api = vi.hoisted(() => ({
   unpublishOrganizationCommunity: vi.fn(),
   updateOrganizationCommunityBranding: vi.fn(),
   setOrganizationCompetitionCommunityPublication: vi.fn(),
+  getOrganizationSponsorReporting: vi.fn(),
   getPublicOrganizationCommunity: vi.fn(),
-  getPublicOrganizationLeaderboards: vi.fn(),
+  listAllMyPublicFavorites: vi.fn(),
+  removeMyPublicFavorite: vi.fn(),
+  saveMyPublicFavorite: vi.fn(),
 }));
 
 vi.mock('@/services/schoolAdminApi', () => api);
@@ -64,6 +69,7 @@ function community(organizationType: FreeOrganizationType): PublicOrganizationCo
     },
     competitions: [
       {
+        public_key: 'cmp_0123456789abcdef01234567',
         name: 'Community Cup',
         tournament_type: 'league',
         start_date: '2026-09-30T12:00:00Z',
@@ -143,6 +149,9 @@ function deferred<T>() {
 
 beforeEach(() => {
   vi.resetAllMocks();
+  setActivePinia(createPinia());
+  api.getOrganizationSponsorReporting.mockResolvedValue(null);
+  api.listAllMyPublicFavorites.mockResolvedValue([]);
   Object.defineProperty(navigator, 'clipboard', {
     configurable: true,
     value: { writeText: vi.fn().mockResolvedValue(undefined) },
@@ -158,7 +167,6 @@ describe('OrganizationCommunityView', () => {
     'renders one accessible responsive %s community component with public cricket only',
     async organizationType => {
       api.getPublicOrganizationCommunity.mockResolvedValue(community(organizationType));
-      api.getPublicOrganizationLeaderboards.mockResolvedValue({ runs: [], wickets: [] });
       const wrapper = mount(OrganizationCommunityView, {
         props: { publicIdentifier: 'org_0123456789abcdef01234567' },
         global: { stubs: routerStubs },
@@ -172,53 +180,12 @@ describe('OrganizationCommunityView', () => {
       expect(wrapper.text()).toContain('First XI won by 8 runs');
       expect(wrapper.text()).toContain('View published scorecard');
       expect(wrapper.find('table').exists()).toBe(true);
+      expect(wrapper.text()).not.toContain('No public competitions');
       expect(wrapper.text().toLowerCase()).not.toContain('roster');
       expect(wrapper.text().toLowerCase()).not.toContain('player profile');
       expect(wrapper.get('main').classes()).toContain('community-page');
     },
   );
-
-  it('renders anonymous leaderboard labels and values without profile navigation', async () => {
-    api.getPublicOrganizationCommunity.mockResolvedValue(community('school'));
-    api.getPublicOrganizationLeaderboards.mockResolvedValue({
-      runs: [{ rank: 1, participant_label: 'Participant 1', value: 42 }],
-      wickets: [{ rank: 1, participant_label: 'Participant 1', value: 3 }],
-    });
-    const wrapper = mount(OrganizationCommunityView, {
-      props: { publicIdentifier: 'org_0123456789abcdef01234567' },
-      global: { stubs: routerStubs },
-    });
-    await flushPromises();
-
-    expect(wrapper.text()).toContain('Anonymous leaderboards');
-    expect(wrapper.text()).toContain('Participant 1');
-    expect(wrapper.text()).toContain('42');
-    expect(wrapper.text()).toContain('3');
-    expect(wrapper.html()).not.toContain('player-profile');
-  });
-
-  it('ignores a stale leaderboard response after the public route changes', async () => {
-    const first = deferred<{ runs: [{ rank: number; participant_label: string; value: number }]; wickets: [] }>();
-    api.getPublicOrganizationCommunity
-      .mockResolvedValueOnce(community('school'))
-      .mockResolvedValueOnce({ ...community('school'), public_identifier: 'org_111111111111111111111111', display_name: 'Current School' });
-    api.getPublicOrganizationLeaderboards
-      .mockImplementationOnce(() => first.promise)
-      .mockResolvedValueOnce({ runs: [], wickets: [] });
-    const wrapper = mount(OrganizationCommunityView, {
-      props: { publicIdentifier: 'org_0123456789abcdef01234567' },
-      global: { stubs: routerStubs },
-    });
-    await flushPromises();
-    await wrapper.setProps({ publicIdentifier: 'org_111111111111111111111111' });
-    await flushPromises();
-    first.resolve({ runs: [{ rank: 1, participant_label: 'Participant stale', value: 99 }], wickets: [] });
-    await flushPromises();
-
-    expect(wrapper.get('h1').text()).toBe('Current School');
-    expect(wrapper.vm.$props.publicIdentifier).toBe('org_111111111111111111111111');
-    expect(wrapper.text()).not.toContain('Participant stale');
-  });
 
   it('uses the same anonymous router component and a safe not-found state', async () => {
     api.getPublicOrganizationCommunity.mockRejectedValue(Object.assign(new Error('missing'), { status: 404 }));
@@ -232,9 +199,71 @@ describe('OrganizationCommunityView', () => {
       'organization-community',
     );
   });
+
+  it('saves and removes each competition by its opaque public key', async () => {
+    useAuthStore().user = { id: 'staff-a' } as never;
+    api.getPublicOrganizationCommunity.mockResolvedValue(community('school'));
+    api.saveMyPublicFavorite.mockResolvedValue({ id: 'fav-competition' });
+    const wrapper = mount(OrganizationCommunityView, {
+      props: { publicIdentifier: 'org_0123456789abcdef01234567' },
+      global: { stubs: routerStubs },
+    });
+    await flushPromises();
+
+    const competitionButton = wrapper.findAll('button').find(button => button.text() === 'Save competition');
+    expect(competitionButton).toBeDefined();
+    await competitionButton!.trigger('click');
+    await flushPromises();
+    expect(api.saveMyPublicFavorite).toHaveBeenCalledWith(
+      'competition',
+      'cmp_0123456789abcdef01234567',
+    );
+
+    const removeButton = wrapper.findAll('button').find(button => button.text() === 'Saved competition');
+    expect(removeButton).toBeDefined();
+    await removeButton!.trigger('click');
+    await flushPromises();
+    expect(api.removeMyPublicFavorite).toHaveBeenCalledWith('fav-competition');
+  });
 });
 
 describe('OrganizationCommunitySettingsView', () => {
+  it('shows only the current organization\'s aggregate report and its UTC date window', async () => {
+    const organizationId = ref('school-a');
+    api.getOrganizationCommunitySettings
+      .mockResolvedValueOnce(settings('school-a'))
+      .mockResolvedValueOnce(settings('school-b'));
+    api.getOrganizationSponsorReporting
+      .mockResolvedValueOnce({
+        start_date: '2026-09-01',
+        end_date: '2026-09-30',
+        buckets: [{ date: '2026-09-30', displays: 7, clicks: 2 }],
+      })
+      .mockResolvedValueOnce(null);
+    const wrapper = mount(OrganizationCommunitySettingsView, {
+      global: {
+        provide: { [schoolContextKey as symbol]: context(organizationId) },
+        stubs: routerStubs,
+      },
+    });
+    await flushPromises();
+
+    expect(api.getOrganizationSponsorReporting).toHaveBeenCalledWith('school-a');
+    expect(wrapper.get('[data-test="sponsor-aggregate-report"]').text()).toContain(
+      'UTC reporting window: 2026-09-01 to 2026-09-30',
+    );
+    expect(wrapper.text()).toContain('7 displays, 2 clicks');
+
+    organizationId.value = 'school-b';
+    await nextTick();
+    await flushPromises();
+    expect(api.getOrganizationSponsorReporting).toHaveBeenLastCalledWith('school-b');
+    expect(wrapper.get('[data-test="sponsor-aggregate-report"]').text()).toContain(
+      'Aggregate reporting is not enabled for this organization.',
+    );
+    expect(wrapper.text()).not.toContain('7 displays, 2 clicks');
+  });
+
   it('copies the configured router href with hash mode and deployment base intact', async () => {
     const configuredHref = '/cricksy/#/community/org_0123456789abcdef01234567';
     const resolve = vi.spyOn(router, 'resolve').mockReturnValue({

@@ -39,6 +39,24 @@ class PublicOrganizationResponse(BaseModel):
     model_config = {"extra": "forbid"}
 
 
+class PublicTeamAggregateStats(BaseModel):
+    """Team-only totals derived exclusively from published final games."""
+
+    published_games: int = Field(ge=0)
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class PublicTeamResponse(BaseModel):
+    """Deliberate anonymous allowlist; no membership or player data."""
+
+    public_identifier: str
+    display_name: str
+    aggregate_stats: PublicTeamAggregateStats
+
+    model_config = ConfigDict(extra="forbid")
+
+
 class OrganizationBrandingUpdate(BaseModel):
     logo_url: str | None = Field(default=None, max_length=2048)
     logo_alt_text: str | None = Field(default=None, max_length=120)
@@ -110,6 +128,7 @@ class PublicCommunityFixture(BaseModel):
 
 
 class PublicCommunityCompetition(BaseModel):
+    public_key: str
     name: str
     tournament_type: str
     start_date: dt.datetime | None
@@ -143,7 +162,7 @@ class PublicAnonymousLeaderboardEntry(BaseModel):
 
 
 class PublicAnonymousLeaderboardsResponse(BaseModel):
-    """Small, anonymous projection of final cricket evidence only."""
+    """Small anonymous projection of final cricket evidence only."""
 
     runs: list[PublicAnonymousLeaderboardEntry]
     wickets: list[PublicAnonymousLeaderboardEntry]

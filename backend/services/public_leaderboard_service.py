@@ -1,14 +1,6 @@
-"""Anonymous public leaderboards derived from the canonical statistics aggregator.
-
-This projection deliberately never resolves player profiles or roster memberships.  The
-only internal values used are frozen match snapshot IDs, and they are discarded before
-the response is formed.
-"""
+"""Anonymous public leaderboards derived from canonical statistics."""
 
 from __future__ import annotations
-
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.api.schemas.organization_publication import (
     PublicAnonymousLeaderboardEntry,
@@ -18,6 +10,8 @@ from backend.services import school_statistics_service
 from backend.services.organization_entitlement_service import organization_has_capability
 from backend.services.organization_service import ACTIVE_ORGANIZATION_STATUS
 from backend.sql_app import models
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 MAX_PUBLIC_LEADERBOARD_ROWS = 10
 
@@ -25,12 +19,7 @@ MAX_PUBLIC_LEADERBOARD_ROWS = 10
 async def get_public_leaderboards(
     db: AsyncSession, *, organization_id: str
 ) -> PublicAnonymousLeaderboardsResponse:
-    """Return totals from published competitions' completed, final-public games.
-
-    Competition publication is the governing scope.  A scorecard's final-public state
-    is required as additional authoritative evidence, but is not used to disclose a
-    name or create a player profile.
-    """
+    """Return anonymous totals from published competitions' completed final games."""
     if not await organization_has_capability(
         db, organization_id=organization_id, capability="school_live_scorecards"
     ):
@@ -68,19 +57,14 @@ async def get_public_leaderboards(
 
     totals: dict[str, dict[str, int]] = {}
     for game in rows:
-        # Never infer eligibility from a fixture link alone.  Only frozen sides that
-        # explicitly declare this organization contribute participant totals.
-        game_participant_ids: set[str] = set()
+        participant_ids: set[str] = set()
         for side in (game.team_a, game.team_b):
             source_organization_id, _ = school_statistics_service._source(side)
             if source_organization_id == organization_id:
-                game_participant_ids.update(school_statistics_service._canonical_xi(side))
-        if not game_participant_ids:
+                participant_ids.update(school_statistics_service._canonical_xi(side))
+        if not participant_ids:
             continue
-        # Scope IDs before each canonical aggregation. A profile ID that appears in
-        # another tenant's frozen snapshot must never make that game's deliveries
-        # eligible through a global cross-game participant set.
-        game_totals = school_statistics_service._aggregate_players([game], game_participant_ids)
+        game_totals = school_statistics_service._aggregate_players([game], participant_ids)
         for profile_id, values in game_totals.items():
             target = totals.setdefault(profile_id, {"runs": 0, "wickets": 0})
             target["runs"] += int(values["runs"])
@@ -88,21 +72,16 @@ async def get_public_leaderboards(
     if not totals:
         return PublicAnonymousLeaderboardsResponse(runs=[], wickets=[])
     return PublicAnonymousLeaderboardsResponse(
-        runs=_rank(totals, metric="runs"),
-        wickets=_rank(totals, metric="wickets"),
+        runs=_rank(totals, metric="runs"), wickets=_rank(totals, metric="wickets")
     )
 
 
 def _rank(
     totals: dict[str, dict[str, int]], *, metric: str
 ) -> list[PublicAnonymousLeaderboardEntry]:
-    """Rank by value, with a hidden stable secondary key and no identity output."""
+    """Rank by value with a hidden stable tie-breaker; never emit an identity."""
     ordered = sorted(
-        (
-            (profile_id, int(values[metric]))
-            for profile_id, values in totals.items()
-            if int(values[metric]) > 0
-        ),
+        ((profile_id, int(values[metric])) for profile_id, values in totals.items() if int(values[metric]) > 0),
         key=lambda item: (-item[1], item[0]),
     )[:MAX_PUBLIC_LEADERBOARD_ROWS]
     entries: list[PublicAnonymousLeaderboardEntry] = []
@@ -112,10 +91,7 @@ def _rank(
         rank = position if previous_value != value else previous_rank
         entries.append(
             PublicAnonymousLeaderboardEntry(
-                rank=rank,
-                # This position-only label is not a durable player identifier.
-                participant_label=f"Participant {position}",
-                value=value,
+                rank=rank, participant_label=f"Participant {position}", value=value
             )
         )
         previous_value, previous_rank = value, rank

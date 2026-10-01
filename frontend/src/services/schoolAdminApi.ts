@@ -55,8 +55,10 @@ import type {
   OrganizationSelectionNotificationResult,
   OrganizationCommunitySettings,
   OrganizationCommunityCompetitionSettings,
-  PublicOrganizationCommunity,
   PublicAnonymousLeaderboards,
+  PublicOrganizationCommunity,
+  PublicTeam,
+  TeamPublicPublication,
 } from '@/types/schoolAdmin';
 
 const orgPath = (organizationId: string, suffix = '') =>
@@ -90,7 +92,41 @@ export type PublicOrganizationSponsorPlacement = {
   sponsor_name: string;
   sponsor_url: string | null;
   placement_surface: 'public_organization_homepage';
+  reporting?: { display_capability: string; click_capability: string; report_view_key: string };
 };
+
+export type PublicFavoriteKind = 'organization' | 'team' | 'competition';
+export type PublicFavorite = {
+  id: string;
+  subject_kind: PublicFavoriteKind;
+  public_key: string;
+  display_name: string;
+  canonical_path: string;
+  created_at: string;
+};
+export type PublicFavoriteList = { items: PublicFavorite[]; next_offset: number | null };
+
+export const listMyPublicFavorites = (offset = 0, limit = 20) =>
+  apiRequest<PublicFavoriteList>(`/api/me/public-favorites?offset=${offset}&limit=${limit}`);
+export const listAllMyPublicFavorites = async () => {
+  const items: PublicFavorite[] = [];
+  let offset: number | null = 0;
+  while (offset !== null) {
+    const page = await listMyPublicFavorites(offset);
+    items.push(...page.items);
+    offset = page.next_offset;
+  }
+  return items;
+};
+export const saveMyPublicFavorite = (subject_kind: PublicFavoriteKind, subject_public_key: string) =>
+  apiRequest<PublicFavorite>('/api/me/public-favorites', {
+    method: 'PUT',
+    body: JSON.stringify({ subject_kind, subject_public_key }),
+  });
+export const removeMyPublicFavorite = (favoriteId: string) =>
+  apiRequest<void>(`/api/me/public-favorites/${encodeURIComponent(favoriteId)}`, {
+    method: 'DELETE',
+  });
 
 export type PlatformSponsorPlacement = {
   id: string;
@@ -832,11 +868,50 @@ export const getPublicOrganizationCommunity = (publicIdentifier: string) =>
   apiRequest<PublicOrganizationCommunity>(
     `/api/public/organizations/${encodeURIComponent(publicIdentifier)}/community`,
   );
-
 export const getPublicOrganizationLeaderboards = (publicIdentifier: string) =>
   apiRequest<PublicAnonymousLeaderboards>(
     `/api/public/organizations/${encodeURIComponent(publicIdentifier)}/leaderboards`,
   );
+export const setTeamPublicPublication = (
+  organizationId: string,
+  teamId: string,
+  publish: boolean,
+) =>
+  apiRequest<TeamPublicPublication>(
+    orgPath(
+      organizationId,
+      `/teams/${encodeURIComponent(teamId)}/public-publication/${publish ? 'publish' : 'unpublish'}`,
+    ),
+    { method: 'PUT' },
+  );
+export const getTeamPublicPublication = (organizationId: string, teamId: string) =>
+  apiRequest<TeamPublicPublication>(
+    orgPath(organizationId, `/teams/${encodeURIComponent(teamId)}/public-publication`),
+  );
+export const getPublicTeam = (organizationPublicIdentifier: string, teamPublicIdentifier: string) =>
+  apiRequest<PublicTeam>(
+    `/api/public/organizations/${encodeURIComponent(organizationPublicIdentifier)}/teams/${encodeURIComponent(teamPublicIdentifier)}`,
+  );
+
+export const getPublicOrganizationTeam = getPublicTeam;
+
+export interface SponsorAggregateReport {
+  start_date: string;
+  end_date: string;
+  buckets: Array<{ date: string; displays: number; clicks: number }>;
+}
+
+export const getOrganizationSponsorReporting = (organizationId: string) =>
+  apiRequest<SponsorAggregateReport>(orgPath(organizationId, '/sponsor-reporting'));
+
+export const recordPublicSponsorPlacementEvent = (
+  capability: string,
+  eventId: string,
+) =>
+  apiRequest<{ accepted: boolean; duplicate: boolean }>('/api/public/sponsor-placement-events', {
+    method: 'POST',
+    body: JSON.stringify({ capability, event_id: eventId }),
+  });
 
 export const previewPlayerImport = (
   organizationId: string,

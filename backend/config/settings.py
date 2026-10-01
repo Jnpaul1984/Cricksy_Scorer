@@ -42,6 +42,8 @@ class Settings(BaseSettings):
     STATIC_ROOT: Path = Field(default=_ROOT / "static", alias="CRICKSY_STATIC_ROOT")
     SPONSORS_DIR: Path = Field(default=_ROOT / "static" / "sponsors", alias="CRICKSY_SPONSORS_DIR")
     SPONSOR_PLACEMENTS_ENABLED: bool = Field(default=False, alias="CRICKSY_SPONSOR_PLACEMENTS_ENABLED")
+    # Reporting is a separate, default-off pilot gate.  It never enables display.
+    SPONSOR_AGGREGATE_REPORTING_ENABLED: bool = Field(default=False, alias="CRICKSY_SPONSOR_AGGREGATE_REPORTING_ENABLED")
     # Owner-approved Block 4C categories. The global publication switch remains
     # disabled until a separate release authorization.
     SPONSOR_ALLOWED_CATEGORIES: str = Field(

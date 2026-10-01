@@ -237,6 +237,17 @@ const router = createRouter({
       component: () => import('@/views/OrganizationCommunityView.vue'),
       props: true,
     },
+    {
+      path: '/community/:publicIdentifier/teams/:teamPublicIdentifier',
+      name: 'public-team',
+      component: () => import('@/views/PublicTeamView.vue'),
+      props: true,
+    },
+    {
+      path: '/saved-public-pages',
+      name: 'saved-public-pages',
+      component: () => import('@/views/SavedPublicPagesView.vue'),
+    },
 
     // --- Help route ---
     {
@@ -430,7 +441,7 @@ router.beforeEach(async (to, _from, next) => {
     'pricing',
     'viewer-scoreboard',
     'embed-scoreboard',
-    'school-public-scorecard', 'organization-community', 'register', 'school-free', 'club-free',
+    'school-public-scorecard', 'organization-community', 'public-team', 'register', 'school-free', 'club-free',
   ]
 
   const isPublic = publicPaths.includes(to.path) || (to.name != null && publicNames.includes(String(to.name)))
