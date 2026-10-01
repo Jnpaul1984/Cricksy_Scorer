@@ -1006,6 +1006,70 @@ class SponsorImpression(Base):
     )
 
 
+# Block 4C: an organization may propose one conservative public-homepage sponsor.
+# A proposal is never itself a publication; only a platform-superuser approval can
+# make it eligible for the public projection, and takedown is append-only audited.
+class OrganizationSponsorPlacement(Base):
+    __tablename__ = "organization_sponsor_placements"
+    __table_args__ = (
+        CheckConstraint("placement_surface = 'public_organization_homepage'", name="ck_org_sponsor_placement_surface"),
+        CheckConstraint("state IN ('proposed', 'approved', 'taken_down')", name="ck_org_sponsor_placement_state"),
+        CheckConstraint("length(category) BETWEEN 1 AND 64", name="ck_org_sponsor_placement_category"),
+        Index("ix_org_sponsor_placement_public", "organization_id", "state", "placement_surface"),
+        Index("uq_org_sponsor_one_approved", "organization_id", "placement_surface", unique=True, postgresql_where=text("state = 'approved'"), sqlite_where=text("state = 'approved'")),
+    )
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True)
+    sponsor_name: Mapped[str] = mapped_column(String(160), nullable=False)
+    category: Mapped[str] = mapped_column(String(64), nullable=False)
+    sponsor_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
+    placement_surface: Mapped[str] = mapped_column(String(64), nullable=False, default="public_organization_homepage")
+    state: Mapped[str] = mapped_column(String(16), nullable=False, default="proposed")
+    visibility_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
+    proposed_by_user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
+    approved_by_user_id: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"))
+    taken_down_by_user_id: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"))
+    approved_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    taken_down_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class OrganizationSponsorPlacementAudit(Base):
+    __tablename__ = "organization_sponsor_placement_audit"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    placement_id: Mapped[str] = mapped_column(ForeignKey("organization_sponsor_placements.id", ondelete="RESTRICT"), nullable=False, index=True)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True)
+    action: Mapped[str] = mapped_column(String(16), nullable=False)
+    actor_user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class SponsorVisibilityGlobalSetting(Base):
+    __tablename__ = "sponsor_visibility_global_settings"
+    key: Mapped[str] = mapped_column(String(32), primary_key=True, default="global")
+    visibility_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
+    updated_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
+class OrganizationSponsorVisibilitySetting(Base):
+    __tablename__ = "organization_sponsor_visibility_settings"
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="RESTRICT"), primary_key=True)
+    visibility_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
+    updated_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
+class SponsorVisibilityAudit(Base):
+    __tablename__ = "sponsor_visibility_audit"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    scope: Mapped[str] = mapped_column(String(16), nullable=False)
+    organization_id: Mapped[str | None] = mapped_column(ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=True, index=True)
+    placement_id: Mapped[str | None] = mapped_column(ForeignKey("organization_sponsor_placements.id", ondelete="RESTRICT"), nullable=True, index=True)
+    visibility_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    actor_user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
 # ===== Player Profiles =====
 
 

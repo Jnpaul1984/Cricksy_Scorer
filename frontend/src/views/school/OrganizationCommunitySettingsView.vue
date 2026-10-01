@@ -12,6 +12,7 @@ import {
   setOrganizationCompetitionCommunityPublication,
   unpublishOrganizationCommunity,
   updateOrganizationCommunityBranding,
+  proposeOrganizationSponsorPlacement,
 } from '@/services/schoolAdminApi';
 import type { OrganizationCommunitySettings } from '@/types/schoolAdmin';
 
@@ -23,6 +24,9 @@ const loading = ref(true);
 const saving = ref(false);
 const error = ref('');
 const notice = ref('');
+const sponsorName = ref('');
+const sponsorCategory = ref('');
+const sponsorUrl = ref('');
 let generation = 0;
 
 const communityLocation = computed<RouteLocationRaw | null>(() =>
@@ -129,6 +133,10 @@ function removeLogo() {
   logoAltText.value = '';
   saveBranding();
 }
+function proposeSponsor() {
+  if (!canManageCommunity.value) return;
+  void mutate(id => proposeOrganizationSponsorPlacement(id, sponsorName.value.trim(), sponsorCategory.value.trim(), sponsorUrl.value.trim()), 'Sponsor proposal submitted for Cricksy review.');
+}
 
 function setCompetitionPublished(competitionId: string, publish: boolean) {
   if (!canManageCommunity.value) return;
@@ -210,6 +218,16 @@ watch([organizationId, organizationType], load, { immediate: true });
             Open public page
           </RouterLink>
         </div>
+      </article>
+      <article class="panel">
+        <h3>Homepage sponsor proposal</h3>
+        <p>Proposals are private until Cricksy approves them. Unapproved categories remain disabled.</p>
+        <form v-if="canManageCommunity" @submit.prevent="proposeSponsor">
+          <label>Sponsor name <input v-model="sponsorName" required maxlength="160" /></label>
+          <label>Category <input v-model="sponsorCategory" required maxlength="64" /></label>
+          <label>Website (optional) <input v-model="sponsorUrl" type="url" /></label>
+          <button type="submit" :disabled="saving">Submit for Cricksy review</button>
+        </form>
       </article>
 
       <article class="panel">
