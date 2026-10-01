@@ -60,13 +60,13 @@ describe('OrganizationCommunityView sponsor placement', () => {
 
   it('reports one anonymous display per placement and a click without making public rendering depend on reporting', async () => {
     api.getPublicOrganizationCommunity.mockResolvedValue(community('north'));
-    api.getPublicOrganizationSponsorPlacement.mockResolvedValue({ id: 'placement-1', sponsor_name: 'Local sponsor', sponsor_url: 'https://example.org', placement_surface: 'public_organization_homepage' });
+    api.getPublicOrganizationSponsorPlacement.mockResolvedValue({ id: 'placement-1', sponsor_name: 'Local sponsor', sponsor_url: 'https://example.org', placement_surface: 'public_organization_homepage', reporting: { event_capability: 'opaque-capability' } });
     const wrapper = mount(OrganizationCommunityView, { props: { publicIdentifier: 'north' } });
     await flushPromises();
-    expect(api.recordPublicSponsorPlacementEvent).toHaveBeenCalledWith('placement-1', 'display');
+    expect(api.recordPublicSponsorPlacementEvent).toHaveBeenCalledWith('opaque-capability', 'display');
     await vi.advanceTimersByTimeAsync(30_000); await flushPromises();
     expect(api.recordPublicSponsorPlacementEvent).toHaveBeenCalledTimes(1);
     await wrapper.get('.sponsor-placement a').trigger('click');
-    expect(api.recordPublicSponsorPlacementEvent).toHaveBeenLastCalledWith('placement-1', 'click');
+    expect(api.recordPublicSponsorPlacementEvent).toHaveBeenLastCalledWith('opaque-capability', 'click');
   });
 });
