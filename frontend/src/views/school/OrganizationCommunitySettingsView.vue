@@ -13,7 +13,9 @@ import {
   unpublishOrganizationCommunity,
   updateOrganizationCommunityBranding,
   proposeOrganizationSponsorPlacement,
+  getOrganizationSponsorReporting,
 } from '@/services/schoolAdminApi';
+import type { SponsorAggregateReport } from '@/services/schoolAdminApi';
 import type { OrganizationCommunitySettings } from '@/types/schoolAdmin';
 
 const { organizationId, organizationType, terminology, canManageCommunity } = useSchoolContext();
@@ -27,6 +29,7 @@ const notice = ref('');
 const sponsorName = ref('');
 const sponsorCategory = ref('');
 const sponsorUrl = ref('');
+const sponsorReport = ref<SponsorAggregateReport | null>(null);
 let generation = 0;
 
 const communityLocation = computed<RouteLocationRaw | null>(() =>
@@ -74,6 +77,9 @@ async function load() {
     settings.value = response;
     logoUrl.value = response.logo_url || '';
     logoAltText.value = response.logo_alt_text || '';
+    if (canManageCommunity.value) {
+      sponsorReport.value = await getOrganizationSponsorReporting(currentId).catch(() => null);
+    }
   } catch (reason) {
     if (isCurrent(currentGeneration, currentId, currentType)) error.value = getErrorMessage(reason);
   } finally {
@@ -228,6 +234,21 @@ watch([organizationId, organizationType], load, { immediate: true });
           <label>Website (optional) <input v-model="sponsorUrl" type="url" /></label>
           <button type="submit" :disabled="saving">Submit for Cricksy review</button>
         </form>
+      </article>
+
+      <article v-if="canManageCommunity" class="panel" data-test="sponsor-aggregate-report">
+        <h3>Sponsor aggregate reporting</h3>
+        <p>Approved, visible public placements only. No audience or player information is collected.</p>
+        <template v-if="sponsorReport">
+          <p>UTC reporting window: {{ sponsorReport.start_date }} to {{ sponsorReport.end_date }}</p>
+          <ul>
+            <li v-for="bucket in sponsorReport.buckets" :key="bucket.date">
+              {{ bucket.date }}: {{ bucket.displays }} displays, {{ bucket.clicks }} clicks
+            </li>
+          </ul>
+          <p v-if="!sponsorReport.buckets.length">No eligible aggregate activity in this window.</p>
+        </template>
+        <p v-else>Aggregate reporting is not enabled for this organization.</p>
       </article>
 
       <article class="panel">

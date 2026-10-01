@@ -1,10 +1,14 @@
 """Block 4C sponsor proposal, independent Cricksy approval, and immediate takedown."""
 from __future__ import annotations
 
-from typing import Annotated
+import datetime as dt
+import time
+from collections import defaultdict, deque
+from typing import Annotated, Literal
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, HttpUrl
-from sqlalchemy import func, select
+from pydantic import BaseModel, Field, HttpUrl
+from sqlalchemy import delete, func, select
+from sqlalchemy.exc import IntegrityError
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,6 +21,9 @@ from backend.sql_app import models
 
 router = APIRouter(tags=["organization-sponsors"])
 SURFACE = "public_organization_homepage"
+_REPORT_WINDOW_SECONDS = 60
+_REPORT_MAX_PER_WINDOW = 60
+_report_windows: dict[str, deque[float]] = defaultdict(deque)
 
 def _allowed_categories() -> set[str]:
     return {item.strip().lower() for item in settings.SPONSOR_ALLOWED_CATEGORIES.split(",") if item.strip()}
@@ -36,9 +43,30 @@ class ProposalIn(BaseModel):
 class VisibilityIn(BaseModel):
     enabled: bool
 
+
+class SponsorReportEventIn(BaseModel):
+    placement_id: str
+    event_id: str = Field(pattern=r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$")
+    event_type: Literal["display", "click"]
+
 def _platform_admin(user: models.User) -> None:
     if not user.is_superuser:
         raise HTTPException(status_code=403, detail="Platform administrator authority required")
+
+
+def _reporting_enabled() -> None:
+    if not settings.SPONSOR_AGGREGATE_REPORTING_ENABLED:
+        raise HTTPException(status_code=503, detail="Sponsor aggregate reporting is not enabled by policy")
+
+
+def _allow_report_event(placement_id: str) -> None:
+    now = time.monotonic()
+    window = _report_windows[placement_id]
+    while window and window[0] <= now - _REPORT_WINDOW_SECONDS:
+        window.popleft()
+    if len(window) >= _REPORT_MAX_PER_WINDOW:
+        raise HTTPException(status_code=429, detail="Sponsor event rate limit exceeded")
+    window.append(now)
 
 async def _audit(db: AsyncSession, placement: models.OrganizationSponsorPlacement, action: str, actor: str) -> None:
     db.add(models.OrganizationSponsorPlacementAudit(placement_id=placement.id, organization_id=placement.organization_id, action=action, actor_user_id=actor))
@@ -203,6 +231,96 @@ async def takedown(placement_id: str, user: Annotated[models.User, Depends(get_c
     placement.state = "taken_down"; placement.taken_down_by_user_id = user.id
     placement.taken_down_at = await db.scalar(select(func.now())); await _audit(db, placement, "taken_down", user.id); await db.commit()
     return {"id": placement.id, "state": placement.state}
+
+
+@router.post("/api/public/sponsor-placement-events", status_code=202)
+async def record_public_placement_event(payload: SponsorReportEventIn, db: Annotated[AsyncSession, Depends(get_db)]):
+    """Accept a bounded anonymous display/click event only for a live public placement.
+
+    No cookies, IP addresses, user agents, user IDs, or player data are accepted or stored.
+    ``event_id`` is an opaque one-event nonce retained for two days solely to reject replays.
+    """
+    _reporting_enabled()
+    _allow_report_event(payload.placement_id)
+    placement = await db.scalar(select(models.OrganizationSponsorPlacement).where(
+        models.OrganizationSponsorPlacement.id == payload.placement_id,
+        models.OrganizationSponsorPlacement.state == "approved",
+        models.OrganizationSponsorPlacement.visibility_enabled.is_(True),
+    ))
+    if placement is None or not settings.SPONSOR_PLACEMENTS_ENABLED or placement.category.strip().lower() not in _allowed_categories() or not await _global_visibility(db) or not await _organization_visibility(db, placement.organization_id):
+        raise HTTPException(status_code=404, detail="No eligible sponsor placement")
+    public_settings = await db.get(models.OrganizationPublicSettings, placement.organization_id)
+    if public_settings is None or public_settings.publication_state != "published":
+        raise HTTPException(status_code=404, detail="No eligible sponsor placement")
+    today = dt.datetime.now(dt.UTC).date()
+    # The nonce has no subject semantics and is deliberately pruned on every write.
+    await db.execute(delete(models.SponsorPlacementReportDedup).where(
+        models.SponsorPlacementReportDedup.received_date < today - dt.timedelta(days=2)
+    ))
+    db.add(models.SponsorPlacementReportDedup(event_id=payload.event_id, received_date=today))
+    try:
+        await db.flush()
+    except IntegrityError:
+        await db.rollback()
+        return {"accepted": True, "duplicate": True}
+    metric = await db.scalar(select(models.SponsorPlacementDailyMetric).where(
+        models.SponsorPlacementDailyMetric.organization_id == placement.organization_id,
+        models.SponsorPlacementDailyMetric.placement_id == placement.id,
+        models.SponsorPlacementDailyMetric.metric_date == today,
+    ).with_for_update())
+    if metric is None:
+        metric = models.SponsorPlacementDailyMetric(organization_id=placement.organization_id, placement_id=placement.id, metric_date=today, display_count=0, click_count=0)
+        db.add(metric)
+    if payload.event_type == "display":
+        metric.display_count += 1
+    else:
+        metric.click_count += 1
+    await db.commit()
+    return {"accepted": True, "duplicate": False}
+
+
+async def _aggregate_report(db: AsyncSession, organization_id: str | None, start: dt.date, end: dt.date) -> dict[str, object]:
+    query = select(
+        models.SponsorPlacementDailyMetric.metric_date,
+        func.coalesce(func.sum(models.SponsorPlacementDailyMetric.display_count), 0),
+        func.coalesce(func.sum(models.SponsorPlacementDailyMetric.click_count), 0),
+    ).join(models.OrganizationSponsorPlacement, models.OrganizationSponsorPlacement.id == models.SponsorPlacementDailyMetric.placement_id).where(
+        models.OrganizationSponsorPlacement.state == "approved",
+        models.SponsorPlacementDailyMetric.metric_date >= start,
+        models.SponsorPlacementDailyMetric.metric_date <= end,
+    )
+    if organization_id is not None:
+        query = query.where(models.SponsorPlacementDailyMetric.organization_id == organization_id)
+    rows = (await db.execute(query.group_by(models.SponsorPlacementDailyMetric.metric_date).order_by(models.SponsorPlacementDailyMetric.metric_date))).all()
+    return {"start_date": start.isoformat(), "end_date": end.isoformat(), "buckets": [
+        {"date": day.isoformat(), "displays": int(displays), "clicks": int(clicks)} for day, displays, clicks in rows
+    ]}
+
+
+def _report_range(start: dt.date | None, end: dt.date | None) -> tuple[dt.date, dt.date]:
+    last = end or dt.datetime.now(dt.UTC).date()
+    first = start or last - dt.timedelta(days=30)
+    if first > last or (last - first).days > 31:
+        raise HTTPException(status_code=422, detail="Reporting window must be between zero and 31 days")
+    return first, last
+
+
+@router.get("/api/organizations/{organization_id}/sponsor-reporting")
+async def organization_sponsor_reporting(organization_id: str, user: Annotated[models.User, Depends(get_current_active_user)], db: Annotated[AsyncSession, Depends(get_db)], start_date: dt.date | None = None, end_date: dt.date | None = None):
+    _reporting_enabled()
+    try:
+        await _current_membership(db, organization_id=organization_id, actor_user_id=user.id, manage=True)
+    except OrganizationServiceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    start, end = _report_range(start_date, end_date)
+    return await _aggregate_report(db, organization_id, start, end)
+
+
+@router.get("/api/platform/sponsor-reporting")
+async def platform_sponsor_reporting(user: Annotated[models.User, Depends(get_current_active_user)], db: Annotated[AsyncSession, Depends(get_db)], start_date: dt.date | None = None, end_date: dt.date | None = None):
+    _reporting_enabled(); _platform_admin(user)
+    start, end = _report_range(start_date, end_date)
+    return await _aggregate_report(db, None, start, end)
 
 @router.get("/api/public/organizations/{public_identifier}/sponsor-placement")
 async def public_placement(public_identifier: str, db: Annotated[AsyncSession, Depends(get_db)]):

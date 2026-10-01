@@ -832,6 +832,15 @@ export const getPublicOrganizationCommunity = (publicIdentifier: string) =>
     `/api/public/organizations/${encodeURIComponent(publicIdentifier)}/community`,
   );
 
+export interface SponsorAggregateReport {
+  start_date: string;
+  end_date: string;
+  buckets: Array<{ date: string; displays: number; clicks: number }>;
+}
+
+export const getOrganizationSponsorReporting = (organizationId: string) =>
+  apiRequest<SponsorAggregateReport>(orgPath(organizationId, '/sponsor-reporting'));
+
 export const previewPlayerImport = (
   organizationId: string,
   file: File,

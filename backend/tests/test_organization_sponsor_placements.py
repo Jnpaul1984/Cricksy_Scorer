@@ -217,3 +217,36 @@ def test_owner_approved_categories_are_the_only_defaults(
         headers=owner.headers,
     )
     assert denied.status_code == 503
+
+
+def test_aggregate_reporting_is_tenant_scoped_deduplicated_and_stops_on_takedown(
+    school_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(organization_sponsor_placements.settings, "SPONSOR_PLACEMENTS_ENABLED", True)
+    monkeypatch.setattr(organization_sponsor_placements.settings, "SPONSOR_AGGREGATE_REPORTING_ENABLED", True)
+    owner = register_user(school_client, "reporting-owner@example.com")
+    outsider = register_user(school_client, "reporting-outsider@example.com")
+    reviewer = register_user(school_client, "reporting-reviewer@example.com")
+    organization = create_school(school_client, owner, "Reporting School")
+    proposal = school_client.post(
+        f"/api/organizations/{organization['id']}/sponsor-placements",
+        json={"sponsor_name": "Local Cricket Shop", "category": "sports-equipment"}, headers=owner.headers,
+    )
+    placement_id = proposal.json()["id"]
+    import asyncio
+    asyncio.run(_make_platform_admin(school_client, reviewer.id))
+    assert school_client.post(f"/api/platform/sponsor-placements/{placement_id}/approve", headers=reviewer.headers).status_code == 200
+    assert school_client.patch("/api/platform/sponsor-visibility/global", json={"enabled": True}, headers=reviewer.headers).status_code == 200
+    assert school_client.patch(f"/api/platform/sponsor-visibility/organizations/{organization['id']}", json={"enabled": True}, headers=reviewer.headers).status_code == 200
+    assert school_client.patch(f"/api/platform/sponsor-visibility/placements/{placement_id}", json={"enabled": True}, headers=reviewer.headers).status_code == 200
+    assert school_client.put(f"/api/organizations/{organization['id']}/public-settings/publish", headers=owner.headers).status_code == 200
+    event = {"placement_id": placement_id, "event_id": "123e4567-e89b-42d3-a456-426614174000", "event_type": "display"}
+    assert school_client.post("/api/public/sponsor-placement-events", json=event).json() == {"accepted": True, "duplicate": False}
+    assert school_client.post("/api/public/sponsor-placement-events", json=event).json() == {"accepted": True, "duplicate": True}
+    assert school_client.post("/api/public/sponsor-placement-events", json={**event, "event_id": "123e4567-e89b-42d3-a456-426614174001", "event_type": "click"}).status_code == 202
+    report = school_client.get(f"/api/organizations/{organization['id']}/sponsor-reporting", headers=owner.headers)
+    assert report.status_code == 200 and report.json()["buckets"][0]["displays"] == 1 and report.json()["buckets"][0]["clicks"] == 1
+    assert school_client.get(f"/api/organizations/{organization['id']}/sponsor-reporting", headers=outsider.headers).status_code == 404
+    assert school_client.post(f"/api/platform/sponsor-placements/{placement_id}/takedown", headers=reviewer.headers).status_code == 200
+    assert school_client.post("/api/public/sponsor-placement-events", json={**event, "event_id": "123e4567-e89b-42d3-a456-426614174002"}).status_code == 404
+    assert school_client.get(f"/api/organizations/{organization['id']}/sponsor-reporting", headers=owner.headers).json()["buckets"] == []
