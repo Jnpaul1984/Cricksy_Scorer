@@ -128,6 +128,7 @@ class PublicCommunityFixture(BaseModel):
 
 
 class PublicCommunityCompetition(BaseModel):
+    public_key: str
     name: str
     tournament_type: str
     start_date: dt.datetime | None

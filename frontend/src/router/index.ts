@@ -243,6 +243,11 @@ const router = createRouter({
       component: () => import('@/views/PublicTeamView.vue'),
       props: true,
     },
+    {
+      path: '/saved-public-pages',
+      name: 'saved-public-pages',
+      component: () => import('@/views/SavedPublicPagesView.vue'),
+    },
 
     // --- Help route ---
     {
