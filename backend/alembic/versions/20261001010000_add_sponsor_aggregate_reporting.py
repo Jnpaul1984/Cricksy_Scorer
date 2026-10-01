@@ -47,9 +47,11 @@ def upgrade() -> None:
     )
     op.create_index("ix_sponsor_placement_reporting_capabilities_placement_id", "sponsor_placement_reporting_capabilities", ["placement_id"])
     op.create_index("ix_sponsor_placement_reporting_capabilities_expires_at", "sponsor_placement_reporting_capabilities", ["expires_at"])
+    op.create_table("sponsor_placement_report_rate_buckets", sa.Column("placement_id", sa.String(), sa.ForeignKey("organization_sponsor_placements.id", ondelete="RESTRICT"), primary_key=True), sa.Column("bucket_start", sa.DateTime(timezone=True), primary_key=True), sa.Column("event_count", sa.Integer(), nullable=False, server_default="0"), sa.CheckConstraint("event_count >= 0", name="ck_sponsor_report_rate_bucket_nonnegative"))
 
 
 def downgrade() -> None:
+    op.drop_table("sponsor_placement_report_rate_buckets")
     op.drop_table("sponsor_placement_reporting_capabilities")
     op.drop_table("sponsor_placement_report_dedup")
     op.drop_table("sponsor_placement_daily_metrics")

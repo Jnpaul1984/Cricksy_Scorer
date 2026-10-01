@@ -1103,6 +1103,13 @@ class SponsorPlacementReportingCapability(Base):
     consumed_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+class SponsorPlacementReportRateBucket(Base):
+    __tablename__ = "sponsor_placement_report_rate_buckets"
+    placement_id: Mapped[str] = mapped_column(ForeignKey("organization_sponsor_placements.id", ondelete="RESTRICT"), primary_key=True)
+    bucket_start: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), primary_key=True)
+    event_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+
+
 # ===== Player Profiles =====
 
 

@@ -66,6 +66,15 @@ async def _issue_reporting_capability(db: AsyncSession, placement_id: str, event
     db.add(models.SponsorPlacementReportingCapability(nonce=nonce, placement_id=placement_id, event_type=event_type, expires_at=now + dt.timedelta(seconds=_REPORT_CAPABILITY_SECONDS)))
     return nonce
 
+
+async def _consume_rate_bucket(db: AsyncSession, placement_id: str, now: dt.datetime) -> None:
+    table = models.SponsorPlacementReportRateBucket.__table__
+    bucket = now.replace(second=0, microsecond=0)
+    insert = pg_insert if db.bind and db.bind.dialect.name == "postgresql" else sqlite_insert
+    statement = insert(table).values(placement_id=placement_id, bucket_start=bucket, event_count=1).on_conflict_do_update(index_elements=["placement_id", "bucket_start"], set_={"event_count": table.c.event_count + 1}, where=table.c.event_count < _REPORT_MAX_PER_WINDOW).returning(table.c.event_count)
+    if (await db.execute(statement)).first() is None:
+        raise HTTPException(status_code=429, detail="Sponsor event rate limit exceeded")
+
 async def _audit(db: AsyncSession, placement: models.OrganizationSponsorPlacement, action: str, actor: str) -> None:
     db.add(models.OrganizationSponsorPlacementAudit(placement_id=placement.id, organization_id=placement.organization_id, action=action, actor_user_id=actor))
 
@@ -264,12 +273,9 @@ async def record_public_placement_event(payload: SponsorReportEventIn, db: Annot
         raise HTTPException(status_code=404, detail="No eligible sponsor placement")
     today = dt.datetime.now(dt.UTC).date()
     # The nonce has no subject semantics and is deliberately pruned on every write.
-    await db.execute(delete(models.SponsorPlacementReportDedup).where(
-        models.SponsorPlacementReportDedup.received_date < today - dt.timedelta(days=2)
-    ))
-    recent = await db.scalar(select(func.count()).select_from(models.SponsorPlacementReportDedup).where(models.SponsorPlacementReportDedup.placement_id == placement.id, models.SponsorPlacementReportDedup.received_at >= now - dt.timedelta(seconds=_REPORT_WINDOW_SECONDS))) or 0
-    if recent >= _REPORT_MAX_PER_WINDOW:
-        raise HTTPException(status_code=429, detail="Sponsor event rate limit exceeded")
+    await db.execute(delete(models.SponsorPlacementReportDedup).where(models.SponsorPlacementReportDedup.received_at < now - dt.timedelta(hours=48)))
+    await db.execute(delete(models.SponsorPlacementReportRateBucket).where(models.SponsorPlacementReportRateBucket.bucket_start < now - dt.timedelta(hours=48)))
+    await _consume_rate_bucket(db, placement.id, now)
     db.add(models.SponsorPlacementReportDedup(event_id=payload.event_id, placement_id=placement.id, received_date=today))
     try:
         await db.flush()
