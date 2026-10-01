@@ -14,6 +14,7 @@ from backend.services.organization_entitlement_service import (
     require_organization_capability,
 )
 from backend.sql_app.models import (
+    Organization,
     OrganizationTeamPublication,
     OrganizationTeamPublicationAudit,
     Team,
@@ -39,6 +40,22 @@ def _team_not_found() -> OrganizationTeamServiceError:
 
 def _forbidden() -> OrganizationTeamServiceError:
     return OrganizationTeamServiceError(403, "Insufficient organization role")
+
+
+async def _lock_active_organization(
+    db: AsyncSession, *, organization_id: str
+) -> Organization:
+    organization = await db.scalar(
+        select(Organization)
+        .where(
+            Organization.id == organization_id,
+            Organization.status == organization_service.ACTIVE_ORGANIZATION_STATUS,
+        )
+        .with_for_update()
+    )
+    if organization is None:
+        raise _team_not_found()
+    return organization
 
 
 async def _require_team_role(
@@ -200,6 +217,9 @@ async def archive_team(
     team_id: str,
     actor_user_id: str,
 ) -> None:
+    # Keep archive serialized with publication transitions: organization, then
+    # tenant-owned team, then its publication row.
+    await _lock_active_organization(db, organization_id=organization_id)
     await _require_team_role(
         db,
         organization_id=organization_id,
@@ -210,7 +230,7 @@ async def archive_team(
         select(Team).where(
             Team.id == team_id,
             Team.organization_id == organization_id,
-        )
+        ).with_for_update()
     )
     team = result.scalar_one_or_none()
     if team is None:

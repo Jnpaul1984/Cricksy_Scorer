@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import importlib
+import os
 
 import pytest
 from fastapi.testclient import TestClient
@@ -9,7 +10,7 @@ from sqlalchemy import delete, func, select, text
 from sqlalchemy.exc import IntegrityError
 
 from backend.api.schemas.organizations import OrganizationMembershipUpdate
-from backend.services import organization_publication_service
+from backend.services import organization_publication_service, organization_team_service
 from backend.services.organization_publication_service import (
     PUBLIC_IDENTIFIER_PATTERN,
     public_identifier_candidate,
@@ -24,7 +25,9 @@ from backend.sql_app.models import (
     OrganizationEntitlement,
     OrganizationMembership,
     OrganizationPublicSettings,
+    OrganizationTeamPublication,
     OrganizationTeamPublicationAudit,
+    Team,
     Tournament,
 )
 from backend.tests.school_test_helpers import (
@@ -581,6 +584,91 @@ def test_archiving_team_revokes_publication_and_cannot_be_republished(
         ("published", owner.id, 2),
         ("archived", owner.id, 3),
     ]
+
+
+@pytest.mark.skipif(
+    os.getenv("PHASE7B_POSTGRES_MIGRATED_TESTS") != "1",
+    reason="requires migrated PostgreSQL row-lock semantics",
+)
+def test_postgres_archive_publish_race_never_leaves_archived_team_published(
+    school_client: TestClient,
+) -> None:
+    owner = register_user(school_client, "team-archive-race-owner@example.com")
+    organization = create_school(school_client, owner, "Archive Race School")
+    team = school_client.post(
+        f"/api/organizations/{organization['id']}/teams",
+        json={"name": "Race XI"},
+        headers=owner.headers,
+    ).json()
+    assert school_client.put(
+        f"/api/organizations/{organization['id']}/public-settings/publish",
+        headers=owner.headers,
+    ).status_code == 200
+    session_maker = school_client.session_maker  # type: ignore[attr-defined]
+
+    async def race() -> tuple[object | None, object | None]:
+        gate = asyncio.Event()
+
+        async def publish() -> object | None:
+            async with session_maker() as session:
+                await gate.wait()
+                try:
+                    return await organization_publication_service.set_team_publication_state(
+                        session,
+                        organization_id=organization["id"],
+                        team_id=team["id"],
+                        actor_user_id=owner.id,
+                        publish=True,
+                    )
+                except OrganizationServiceError as exc:
+                    return exc
+
+        async def archive() -> object | None:
+            async with session_maker() as session:
+                await gate.wait()
+                try:
+                    await organization_team_service.archive_team(
+                        session,
+                        organization_id=organization["id"],
+                        team_id=team["id"],
+                        actor_user_id=owner.id,
+                    )
+                    return None
+                except organization_team_service.OrganizationTeamServiceError as exc:
+                    return exc
+
+        gate.set()
+        return tuple(await asyncio.gather(publish(), archive()))
+
+    publish_result, archive_result = asyncio.run(race())
+    assert archive_result is None
+    assert isinstance(publish_result, OrganizationTeamPublication) or (
+        isinstance(publish_result, OrganizationServiceError)
+        and publish_result.status_code == 409
+    )
+
+    async def final_state() -> tuple[Team, OrganizationTeamPublication | None, list[str]]:
+        async with session_maker() as session:
+            persisted_team = await session.get(Team, team["id"])
+            publication = await session.get(OrganizationTeamPublication, team["id"])
+            actions = list(
+                await session.scalars(
+                    select(OrganizationTeamPublicationAudit.action)
+                    .where(OrganizationTeamPublicationAudit.team_id == team["id"])
+                    .order_by(OrganizationTeamPublicationAudit.id)
+                )
+            )
+            assert persisted_team is not None
+            return persisted_team, publication, actions
+
+    persisted_team, publication, actions = asyncio.run(final_state())
+    assert persisted_team.status == "archived"
+    assert publication is None or publication.publication_state == "unpublished"
+    assert actions in ([], ["published", "archived"])
+    assert school_client.get(
+        f"/api/public/organizations/{public_identifier_candidate(organization['id'])}"
+        f"/teams/{team_public_identifier_candidate(team['id'])}"
+    ).status_code == 404
 
 
 async def test_public_team_aggregate_counts_only_published_final_games(school_client: TestClient) -> None:
