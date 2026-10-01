@@ -45,12 +45,15 @@ describe('PublicTeamView', () => {
   });
 
   it('clears Team saved state on logout and ignores a delayed prior-session favorite response', async () => {
+    const pending = deferred<Array<{ id: string; subject_kind: string; public_key: string }>>();
     useAuthStore().user = { id: 'staff-a' } as never;
     api.getPublicTeam.mockResolvedValue({ public_identifier: 'team_0123456789abcdef01234567', display_name: 'First XI', aggregate_stats: { published_games: 3 } });
-    api.listAllMyPublicFavorites.mockResolvedValue([{ id: 'a-team', subject_kind: 'team', public_key: 'team_0123456789abcdef01234567' }]);
+    api.listAllMyPublicFavorites.mockReturnValue(pending.promise);
     const wrapper = mount(PublicTeamView, { props: { publicIdentifier: 'org_0123456789abcdef01234567', teamPublicIdentifier: 'team_0123456789abcdef01234567' }, global: { stubs } });
-    await flushPromises(); expect(wrapper.get('.favorite-button').text()).toBe('Saved');
+    await nextTick();
     useAuthStore().user = null; await nextTick();
+    pending.resolve([{ id: 'a-team', subject_kind: 'team', public_key: 'team_0123456789abcdef01234567' }]);
+    await flushPromises();
     expect(wrapper.get('.favorite-button').text()).toBe('Save this team');
   });
 

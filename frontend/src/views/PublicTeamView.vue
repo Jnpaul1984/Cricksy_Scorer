@@ -8,7 +8,8 @@ import { useAuthStore } from '@/stores/authStore';
 import type { PublicTeam } from '@/types/schoolAdmin';
 
 const props = defineProps<{ publicIdentifier: string; teamPublicIdentifier: string }>();
-const auth = getActivePinia() ? useAuthStore() : { user: null };
+const activePinia = getActivePinia();
+const auth = activePinia ? useAuthStore(activePinia) : { user: null };
 const team = ref<PublicTeam | null>(null);
 const favoriteId = ref<string | null>(null);
 const favoriteError = ref('');
