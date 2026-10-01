@@ -241,11 +241,11 @@ def test_aggregate_reporting_is_tenant_scoped_deduplicated_and_stops_on_takedown
     assert school_client.patch(f"/api/platform/sponsor-visibility/placements/{placement_id}", json={"enabled": True}, headers=reviewer.headers).status_code == 200
     assert school_client.put(f"/api/organizations/{organization['id']}/public-settings/publish", headers=owner.headers).status_code == 200
     public_identifier = school_client.get(f"/api/organizations/{organization['id']}/public-settings", headers=owner.headers).json()["public_identifier"]
-    capability = school_client.get(f"/api/public/organizations/{public_identifier}/sponsor-placement").json()["reporting"]["event_capability"]
-    event = {"capability": capability, "event_id": "123e4567-e89b-42d3-a456-426614174000", "event_type": "display"}
+    reporting = school_client.get(f"/api/public/organizations/{public_identifier}/sponsor-placement").json()["reporting"]
+    event = {"capability": reporting["display_capability"], "event_id": "123e4567-e89b-42d3-a456-426614174000"}
     assert school_client.post("/api/public/sponsor-placement-events", json=event).json() == {"accepted": True, "duplicate": False}
-    assert school_client.post("/api/public/sponsor-placement-events", json=event).json() == {"accepted": True, "duplicate": True}
-    assert school_client.post("/api/public/sponsor-placement-events", json={**event, "event_id": "123e4567-e89b-42d3-a456-426614174001", "event_type": "click"}).status_code == 202
+    assert school_client.post("/api/public/sponsor-placement-events", json=event).status_code == 404
+    assert school_client.post("/api/public/sponsor-placement-events", json={"capability": reporting["click_capability"], "event_id": "123e4567-e89b-42d3-a456-426614174001"}).status_code == 202
     report = school_client.get(f"/api/organizations/{organization['id']}/sponsor-reporting", headers=owner.headers)
     assert report.status_code == 200 and report.json()["buckets"][0]["displays"] == 1 and report.json()["buckets"][0]["clicks"] == 1
     assert school_client.get(f"/api/organizations/{organization['id']}/sponsor-reporting", headers=outsider.headers).status_code == 404
