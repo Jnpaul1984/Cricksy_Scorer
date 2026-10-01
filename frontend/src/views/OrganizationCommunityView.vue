@@ -3,7 +3,7 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { RouterLink } from 'vue-router';
 
 import { organizationTerminology } from '@/composables/useOrganizationTerminology';
-import { getPublicOrganizationCommunity, getPublicOrganizationSponsorPlacement } from '@/services/schoolAdminApi';
+import { getPublicOrganizationCommunity, getPublicOrganizationSponsorPlacement, recordPublicSponsorPlacementEvent } from '@/services/schoolAdminApi';
 import type { PublicOrganizationSponsorPlacement } from '@/services/schoolAdminApi';
 import type { PublicOrganizationCommunity } from '@/types/schoolAdmin';
 
@@ -15,6 +15,13 @@ const notFound = ref(false);
 const logoFailed = ref(false);
 let generation = 0;
 let refreshTimer: ReturnType<typeof setInterval> | undefined;
+let displayReportedFor: string | null = null;
+let reportIdentifier: string | null = null;
+
+function reportSponsorEvent(capability: string | undefined, eventType: 'display' | 'click') {
+  // Reporting is anonymous and best-effort; public content never depends on it.
+  if (capability) void Promise.resolve(recordPublicSponsorPlacementEvent(capability, eventType)).catch(() => undefined);
+}
 
 const terminology = computed(() =>
   organizationTerminology(community.value?.organization_type || 'school'),
@@ -32,6 +39,10 @@ async function load() {
   const currentIdentifier = props.publicIdentifier;
     community.value = null;
     sponsor.value = null;
+  if (reportIdentifier !== currentIdentifier) {
+    reportIdentifier = currentIdentifier;
+    displayReportedFor = null;
+  }
   notFound.value = false;
   logoFailed.value = false;
   loading.value = true;
@@ -47,6 +58,10 @@ async function load() {
       const placement = await getPublicOrganizationSponsorPlacement(currentIdentifier);
       if (generation !== currentGeneration || props.publicIdentifier !== currentIdentifier) return;
       sponsor.value = placement;
+      if (displayReportedFor !== placement.id) {
+        displayReportedFor = placement.id;
+        reportSponsorEvent(placement.reporting?.event_capability, 'display');
+      }
     } catch {
       if (generation !== currentGeneration || props.publicIdentifier !== currentIdentifier) return;
       // An absent, revoked, or not-yet-approved placement is intentionally invisible.
@@ -97,7 +112,7 @@ onBeforeUnmount(() => { if (refreshTimer) clearInterval(refreshTimer); });
       </header>
       <aside v-if="sponsor" class="sponsor-placement" aria-label="Organization sponsor">
         <span>Supported by</span>
-        <a v-if="sponsor.sponsor_url" :href="sponsor.sponsor_url" rel="noopener noreferrer" target="_blank">{{ sponsor.sponsor_name }}</a>
+        <a v-if="sponsor.sponsor_url" :href="sponsor.sponsor_url" rel="noopener noreferrer" target="_blank" @click="reportSponsorEvent(sponsor.reporting?.event_capability, 'click')">{{ sponsor.sponsor_name }}</a>
         <strong v-else>{{ sponsor.sponsor_name }}</strong>
       </aside>
 

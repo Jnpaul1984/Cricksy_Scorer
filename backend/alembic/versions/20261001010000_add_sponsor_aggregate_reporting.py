@@ -17,23 +17,25 @@ def upgrade() -> None:
     op.create_table(
         "sponsor_placement_daily_metrics",
         sa.Column("id", sa.Integer(), primary_key=True),
-        sa.Column("organization_id", sa.String(), sa.ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False),
         sa.Column("placement_id", sa.String(), sa.ForeignKey("organization_sponsor_placements.id", ondelete="RESTRICT"), nullable=False),
         sa.Column("metric_date", sa.Date(), nullable=False),
         sa.Column("display_count", sa.Integer(), nullable=False, server_default="0"),
         sa.Column("click_count", sa.Integer(), nullable=False, server_default="0"),
         sa.CheckConstraint("display_count >= 0 AND click_count >= 0", name="ck_sponsor_daily_metric_nonnegative"),
-        sa.UniqueConstraint("organization_id", "placement_id", "metric_date", name="uq_sponsor_placement_daily_metric"),
+        sa.UniqueConstraint("placement_id", "metric_date", name="uq_sponsor_placement_daily_metric"),
     )
-    op.create_index("ix_sponsor_placement_daily_metrics_organization_id", "sponsor_placement_daily_metrics", ["organization_id"])
     op.create_index("ix_sponsor_placement_daily_metrics_placement_id", "sponsor_placement_daily_metrics", ["placement_id"])
     op.create_index("ix_sponsor_placement_daily_metrics_metric_date", "sponsor_placement_daily_metrics", ["metric_date"])
     op.create_table(
         "sponsor_placement_report_dedup",
         sa.Column("event_id", sa.String(36), primary_key=True),
+        sa.Column("placement_id", sa.String(), sa.ForeignKey("organization_sponsor_placements.id", ondelete="RESTRICT"), nullable=False),
         sa.Column("received_date", sa.Date(), nullable=False),
+        sa.Column("received_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
     )
     op.create_index("ix_sponsor_placement_report_dedup_received_date", "sponsor_placement_report_dedup", ["received_date"])
+    op.create_index("ix_sponsor_placement_report_dedup_placement_id", "sponsor_placement_report_dedup", ["placement_id"])
+    op.create_index("ix_sponsor_placement_report_dedup_received_at", "sponsor_placement_report_dedup", ["received_at"])
 
 
 def downgrade() -> None:

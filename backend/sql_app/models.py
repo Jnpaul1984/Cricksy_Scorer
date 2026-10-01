@@ -1074,11 +1074,10 @@ class SponsorPlacementDailyMetric(Base):
     """Anonymous, organization-scoped daily placement totals; never a viewer log."""
     __tablename__ = "sponsor_placement_daily_metrics"
     __table_args__ = (
-        UniqueConstraint("organization_id", "placement_id", "metric_date", name="uq_sponsor_placement_daily_metric"),
+        UniqueConstraint("placement_id", "metric_date", name="uq_sponsor_placement_daily_metric"),
         CheckConstraint("display_count >= 0 AND click_count >= 0", name="ck_sponsor_daily_metric_nonnegative"),
     )
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True)
     placement_id: Mapped[str] = mapped_column(ForeignKey("organization_sponsor_placements.id", ondelete="RESTRICT"), nullable=False, index=True)
     metric_date: Mapped[dt.date] = mapped_column(Date, nullable=False, index=True)
     display_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
@@ -1089,7 +1088,9 @@ class SponsorPlacementReportDedup(Base):
     """Short-lived anonymous event nonce, retained two days only for replay protection."""
     __tablename__ = "sponsor_placement_report_dedup"
     event_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    placement_id: Mapped[str] = mapped_column(ForeignKey("organization_sponsor_placements.id", ondelete="RESTRICT"), nullable=False, index=True)
     received_date: Mapped[dt.date] = mapped_column(Date, nullable=False, index=True)
+    received_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
 
 
 # ===== Player Profiles =====
