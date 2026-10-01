@@ -86,11 +86,10 @@ export const getSchoolEntitlement = (organizationId: string) =>
   apiRequest<SchoolEntitlement>(orgPath(organizationId, '/entitlements'));
 
 export type PublicOrganizationSponsorPlacement = {
-  id: string;
   sponsor_name: string;
   sponsor_url: string | null;
   placement_surface: 'public_organization_homepage';
-  reporting?: { event_capability: string };
+  reporting?: { display_capability: string; click_capability: string };
 };
 
 export type PlatformSponsorPlacement = {

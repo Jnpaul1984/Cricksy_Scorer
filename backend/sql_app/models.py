@@ -1093,6 +1093,16 @@ class SponsorPlacementReportDedup(Base):
     received_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
 
 
+class SponsorPlacementReportingCapability(Base):
+    """Short-lived, one-time anonymous public reporting nonce."""
+    __tablename__ = "sponsor_placement_reporting_capabilities"
+    nonce: Mapped[str] = mapped_column(String(36), primary_key=True)
+    placement_id: Mapped[str] = mapped_column(ForeignKey("organization_sponsor_placements.id", ondelete="RESTRICT"), nullable=False, index=True)
+    event_type: Mapped[str] = mapped_column(String(8), nullable=False)
+    expires_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    consumed_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 # ===== Player Profiles =====
 
 

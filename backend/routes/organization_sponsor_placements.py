@@ -2,14 +2,11 @@
 from __future__ import annotations
 
 import datetime as dt
-import base64
-import hashlib
-import hmac
-import json
+import uuid
 from typing import Annotated, Literal
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field, HttpUrl
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
@@ -51,7 +48,6 @@ class VisibilityIn(BaseModel):
 class SponsorReportEventIn(BaseModel):
     capability: str = Field(min_length=32, max_length=1024)
     event_id: str = Field(pattern=r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$")
-    event_type: Literal["display", "click"]
 
 def _platform_admin(user: models.User) -> None:
     if not user.is_superuser:
@@ -63,27 +59,12 @@ def _reporting_enabled() -> None:
         raise HTTPException(status_code=503, detail="Sponsor aggregate reporting is not enabled by policy")
 
 
-def _b64(data: bytes) -> str:
-    return base64.urlsafe_b64encode(data).rstrip(b"=").decode()
-
-
-def _public_report_capability(placement_id: str, public_identifier: str) -> str:
-    body = _b64(json.dumps({"p": placement_id, "o": public_identifier, "e": int(dt.datetime.now(dt.UTC).timestamp()) + _REPORT_CAPABILITY_SECONDS}, separators=(",", ":")).encode())
-    signature = _b64(hmac.new(settings.app_secret_key.encode(), body.encode(), hashlib.sha256).digest())
-    return f"{body}.{signature}"
-
-
-def _read_public_report_capability(capability: str) -> tuple[str, str]:
-    try:
-        body, signature = capability.split(".")
-        expected = _b64(hmac.new(settings.app_secret_key.encode(), body.encode(), hashlib.sha256).digest())
-        padded = body + "=" * (-len(body) % 4)
-        claims = json.loads(base64.urlsafe_b64decode(padded))
-        if not hmac.compare_digest(signature, expected) or int(claims["e"]) < int(dt.datetime.now(dt.UTC).timestamp()):
-            raise ValueError
-        return str(claims["p"]), str(claims["o"])
-    except (KeyError, ValueError, TypeError, json.JSONDecodeError):
-        raise HTTPException(status_code=404, detail="No eligible sponsor placement") from None
+async def _issue_reporting_capability(db: AsyncSession, placement_id: str, event_type: Literal["display", "click"]) -> str:
+    now = dt.datetime.now(dt.UTC)
+    await db.execute(delete(models.SponsorPlacementReportingCapability).where(models.SponsorPlacementReportingCapability.expires_at < now))
+    nonce = str(uuid.uuid4())
+    db.add(models.SponsorPlacementReportingCapability(nonce=nonce, placement_id=placement_id, event_type=event_type, expires_at=now + dt.timedelta(seconds=_REPORT_CAPABILITY_SECONDS)))
+    return nonce
 
 async def _audit(db: AsyncSession, placement: models.OrganizationSponsorPlacement, action: str, actor: str) -> None:
     db.add(models.OrganizationSponsorPlacementAudit(placement_id=placement.id, organization_id=placement.organization_id, action=action, actor_user_id=actor))
@@ -258,7 +239,19 @@ async def record_public_placement_event(payload: SponsorReportEventIn, db: Annot
     ``event_id`` is an opaque one-event nonce retained for two days solely to reject replays.
     """
     _reporting_enabled()
-    placement_id, public_identifier = _read_public_report_capability(payload.capability)
+    now = dt.datetime.now(dt.UTC)
+    try:
+        consumed = await db.execute(update(models.SponsorPlacementReportingCapability).where(
+            models.SponsorPlacementReportingCapability.nonce == payload.capability,
+            models.SponsorPlacementReportingCapability.expires_at >= now,
+            models.SponsorPlacementReportingCapability.consumed_at.is_(None),
+        ).values(consumed_at=now).returning(models.SponsorPlacementReportingCapability.placement_id, models.SponsorPlacementReportingCapability.event_type))
+        capability = consumed.first()
+    except Exception:
+        capability = None
+    if capability is None:
+        raise HTTPException(status_code=404, detail="No eligible sponsor placement")
+    placement_id, event_type = capability
     placement = await db.scalar(select(models.OrganizationSponsorPlacement).where(
         models.OrganizationSponsorPlacement.id == placement_id,
         models.OrganizationSponsorPlacement.state == "approved",
@@ -267,10 +260,9 @@ async def record_public_placement_event(payload: SponsorReportEventIn, db: Annot
     if placement is None or not settings.SPONSOR_PLACEMENTS_ENABLED or placement.category.strip().lower() not in _allowed_categories() or not await _global_visibility(db) or not await _organization_visibility(db, placement.organization_id):
         raise HTTPException(status_code=404, detail="No eligible sponsor placement")
     public_settings = await db.get(models.OrganizationPublicSettings, placement.organization_id)
-    if public_settings is None or public_settings.publication_state != "published" or public_settings.public_identifier != public_identifier:
+    if public_settings is None or public_settings.publication_state != "published":
         raise HTTPException(status_code=404, detail="No eligible sponsor placement")
     today = dt.datetime.now(dt.UTC).date()
-    now = dt.datetime.now(dt.UTC)
     # The nonce has no subject semantics and is deliberately pruned on every write.
     await db.execute(delete(models.SponsorPlacementReportDedup).where(
         models.SponsorPlacementReportDedup.received_date < today - dt.timedelta(days=2)
@@ -286,8 +278,8 @@ async def record_public_placement_event(payload: SponsorReportEventIn, db: Annot
         return {"accepted": True, "duplicate": True}
     table = models.SponsorPlacementDailyMetric.__table__
     insert = pg_insert if db.bind and db.bind.dialect.name == "postgresql" else sqlite_insert
-    increment = {"display_count": table.c.display_count + (1 if payload.event_type == "display" else 0), "click_count": table.c.click_count + (1 if payload.event_type == "click" else 0)}
-    await db.execute(insert(table).values(placement_id=placement.id, metric_date=today, display_count=1 if payload.event_type == "display" else 0, click_count=1 if payload.event_type == "click" else 0).on_conflict_do_update(index_elements=["placement_id", "metric_date"], set_=increment))
+    increment = {"display_count": table.c.display_count + (1 if event_type == "display" else 0), "click_count": table.c.click_count + (1 if event_type == "click" else 0)}
+    await db.execute(insert(table).values(placement_id=placement.id, metric_date=today, display_count=1 if event_type == "display" else 0, click_count=1 if event_type == "click" else 0).on_conflict_do_update(index_elements=["placement_id", "metric_date"], set_=increment))
     await db.commit()
     return {"accepted": True, "duplicate": False}
 
@@ -345,7 +337,8 @@ async def public_placement(public_identifier: str, db: Annotated[AsyncSession, D
     placement = await db.scalar(select(models.OrganizationSponsorPlacement).where(models.OrganizationSponsorPlacement.organization_id == public_settings.organization_id, models.OrganizationSponsorPlacement.state == "approved", models.OrganizationSponsorPlacement.visibility_enabled.is_(True), models.OrganizationSponsorPlacement.placement_surface == SURFACE).order_by(models.OrganizationSponsorPlacement.approved_at.desc()))
     if placement is None or not settings.SPONSOR_PLACEMENTS_ENABLED or placement.category.strip().lower() not in _allowed_categories():
         return absent()
-    response = {"id": placement.id, "sponsor_name": placement.sponsor_name, "sponsor_url": placement.sponsor_url, "placement_surface": SURFACE}
+    response = {"sponsor_name": placement.sponsor_name, "sponsor_url": placement.sponsor_url, "placement_surface": SURFACE}
     if settings.SPONSOR_AGGREGATE_REPORTING_ENABLED:
-        response["reporting"] = {"event_capability": _public_report_capability(placement.id, public_identifier)}
+        response["reporting"] = {"display_capability": await _issue_reporting_capability(db, placement.id, "display"), "click_capability": await _issue_reporting_capability(db, placement.id, "click")}
+        await db.commit()
     return JSONResponse(response, headers={"Cache-Control": "no-store, max-age=0"})

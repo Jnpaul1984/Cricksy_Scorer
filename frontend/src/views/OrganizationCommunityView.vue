@@ -58,9 +58,9 @@ async function load() {
       const placement = await getPublicOrganizationSponsorPlacement(currentIdentifier);
       if (generation !== currentGeneration || props.publicIdentifier !== currentIdentifier) return;
       sponsor.value = placement;
-      if (displayReportedFor !== placement.id) {
-        displayReportedFor = placement.id;
-        reportSponsorEvent(placement.reporting?.event_capability, 'display');
+      if (displayReportedFor !== placement.reporting?.display_capability) {
+        displayReportedFor = placement.reporting?.display_capability || null;
+        reportSponsorEvent(placement.reporting?.display_capability, 'display');
       }
     } catch {
       if (generation !== currentGeneration || props.publicIdentifier !== currentIdentifier) return;
@@ -112,7 +112,7 @@ onBeforeUnmount(() => { if (refreshTimer) clearInterval(refreshTimer); });
       </header>
       <aside v-if="sponsor" class="sponsor-placement" aria-label="Organization sponsor">
         <span>Supported by</span>
-        <a v-if="sponsor.sponsor_url" :href="sponsor.sponsor_url" rel="noopener noreferrer" target="_blank" @click="reportSponsorEvent(sponsor.reporting?.event_capability, 'click')">{{ sponsor.sponsor_name }}</a>
+        <a v-if="sponsor.sponsor_url" :href="sponsor.sponsor_url" rel="noopener noreferrer" target="_blank" @click="reportSponsorEvent(sponsor.reporting?.click_capability, 'click')">{{ sponsor.sponsor_name }}</a>
         <strong v-else>{{ sponsor.sponsor_name }}</strong>
       </aside>
 
