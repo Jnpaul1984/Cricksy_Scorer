@@ -2,6 +2,9 @@
 from __future__ import annotations
 
 import datetime as dt
+import base64
+import hashlib
+import hmac
 import uuid
 from typing import Annotated, Literal
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -65,6 +68,13 @@ async def _issue_reporting_capability(db: AsyncSession, placement_id: str, event
     nonce = str(uuid.uuid4())
     db.add(models.SponsorPlacementReportingCapability(nonce=nonce, placement_id=placement_id, event_type=event_type, expires_at=now + dt.timedelta(seconds=_REPORT_CAPABILITY_SECONDS)))
     return nonce
+
+
+def _public_report_view_key(placement: models.OrganizationSponsorPlacement) -> str:
+    """Stable opaque per-placement revision key; never a viewer identifier."""
+    revision = placement.approved_at.isoformat() if placement.approved_at else "unapproved"
+    digest = hmac.new(settings.app_secret_key.encode(), f"{placement.id}:{revision}".encode(), hashlib.sha256).digest()
+    return base64.urlsafe_b64encode(digest[:18]).rstrip(b"=").decode()
 
 
 async def _consume_rate_bucket(db: AsyncSession, placement_id: str, now: dt.datetime) -> bool:
@@ -351,6 +361,6 @@ async def public_placement(public_identifier: str, db: Annotated[AsyncSession, D
         return absent()
     response = {"sponsor_name": placement.sponsor_name, "sponsor_url": placement.sponsor_url, "placement_surface": SURFACE}
     if settings.SPONSOR_AGGREGATE_REPORTING_ENABLED:
-        response["reporting"] = {"display_capability": await _issue_reporting_capability(db, placement.id, "display"), "click_capability": await _issue_reporting_capability(db, placement.id, "click")}
+        response["reporting"] = {"report_view_key": _public_report_view_key(placement), "display_capability": await _issue_reporting_capability(db, placement.id, "display"), "click_capability": await _issue_reporting_capability(db, placement.id, "click")}
         await db.commit()
     return JSONResponse(response, headers={"Cache-Control": "no-store, max-age=0"})
