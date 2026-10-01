@@ -149,3 +149,22 @@ class PublicOrganizationCommunityResponse(BaseModel):
     competitions: list[PublicCommunityCompetition]
 
     model_config = ConfigDict(extra="forbid")
+
+
+class PublicAnonymousLeaderboardEntry(BaseModel):
+    """A deliberately non-linkable public leaderboard row."""
+
+    rank: int = Field(ge=1)
+    participant_label: str
+    value: int = Field(ge=0)
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class PublicAnonymousLeaderboardsResponse(BaseModel):
+    """Small anonymous projection of final cricket evidence only."""
+
+    runs: list[PublicAnonymousLeaderboardEntry]
+    wickets: list[PublicAnonymousLeaderboardEntry]
+
+    model_config = ConfigDict(extra="forbid")

@@ -55,6 +55,7 @@ import type {
   OrganizationSelectionNotificationResult,
   OrganizationCommunitySettings,
   OrganizationCommunityCompetitionSettings,
+  PublicAnonymousLeaderboards,
   PublicOrganizationCommunity,
   PublicTeam,
   TeamPublicPublication,
@@ -866,6 +867,10 @@ export const setOrganizationCompetitionCommunityPublication = (
 export const getPublicOrganizationCommunity = (publicIdentifier: string) =>
   apiRequest<PublicOrganizationCommunity>(
     `/api/public/organizations/${encodeURIComponent(publicIdentifier)}/community`,
+  );
+export const getPublicOrganizationLeaderboards = (publicIdentifier: string) =>
+  apiRequest<PublicAnonymousLeaderboards>(
+    `/api/public/organizations/${encodeURIComponent(publicIdentifier)}/leaderboards`,
   );
 export const setTeamPublicPublication = (
   organizationId: string,

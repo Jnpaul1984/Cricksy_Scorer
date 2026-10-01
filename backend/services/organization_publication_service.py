@@ -266,6 +266,27 @@ async def get_public_organization(
     return None if row is None else (row[0], row[1], row[2])
 
 
+async def get_organization_id_for_public_identifier(
+    db: AsyncSession, *, public_identifier: str
+) -> str | None:
+    """Resolve an eligible public identifier without exposing the private UUID."""
+    if not PUBLIC_IDENTIFIER_PATTERN.fullmatch(public_identifier):
+        return None
+    return await db.scalar(
+        select(models.Organization.id)
+        .join(
+            models.OrganizationPublicSettings,
+            models.OrganizationPublicSettings.organization_id == models.Organization.id,
+        )
+        .where(
+            models.OrganizationPublicSettings.public_identifier == public_identifier,
+            models.OrganizationPublicSettings.publication_state == "published",
+            models.Organization.status == ACTIVE_ORGANIZATION_STATUS,
+        )
+        .limit(1)
+    )
+
+
 def validate_logo_url(value: str) -> str:
     """Validate a passive HTTPS raster-image URL without fetching it server-side."""
     candidate = value.strip()

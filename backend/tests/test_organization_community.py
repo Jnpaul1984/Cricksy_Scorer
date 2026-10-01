@@ -14,6 +14,7 @@ from backend.api.schemas.organization_publication import OrganizationBrandingUpd
 from backend.api.schemas.organizations import OrganizationMembershipUpdate
 from backend.services import organization_publication_service
 from backend.services.organization_service import OrganizationServiceError, update_membership
+from backend.services.public_leaderboard_service import _rank
 from backend.sql_app.models import (
     Fixture,
     GameStatus,
@@ -49,6 +50,24 @@ def _publish_homepage(client: TestClient, owner: RegisteredUser, organization_id
     )
     assert response.status_code == 200, response.text
     return response.json()["public_identifier"]
+
+
+def test_anonymous_leaderboard_ties_are_ranked_deterministically() -> None:
+    totals = {
+        "internal-b": {"runs": 40, "wickets": 2},
+        "internal-a": {"runs": 40, "wickets": 5},
+        "internal-c": {"runs": 10, "wickets": 5},
+    }
+    assert [entry.model_dump() for entry in _rank(totals, metric="runs")] == [
+        {"rank": 1, "participant_label": "Participant 1", "value": 40},
+        {"rank": 1, "participant_label": "Participant 2", "value": 40},
+        {"rank": 3, "participant_label": "Participant 3", "value": 10},
+    ]
+    assert [entry.model_dump() for entry in _rank(totals, metric="wickets")] == [
+        {"rank": 1, "participant_label": "Participant 1", "value": 5},
+        {"rank": 1, "participant_label": "Participant 2", "value": 5},
+        {"rank": 3, "participant_label": "Participant 3", "value": 2},
+    ]
 
 
 def _set_competition_publication(

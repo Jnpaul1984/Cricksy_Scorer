@@ -4,23 +4,23 @@ from __future__ import annotations
 
 from typing import Annotated, NoReturn
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from backend.api.schemas.organization_publication import (
     OrganizationBrandingUpdate,
     OrganizationCommunitySettingsResponse,
     OrganizationCompetitionPublicationResponse,
     OrganizationPublicationSettingsResponse,
+    PublicAnonymousLeaderboardsResponse,
     PublicOrganizationCommunityResponse,
     PublicOrganizationResponse,
     PublicTeamResponse,
 )
 from backend.security import get_current_active_user
-from backend.services import organization_publication_service
+from backend.services import organization_publication_service, public_leaderboard_service
 from backend.services.organization_service import OrganizationServiceError
 from backend.sql_app.database import get_db
 from backend.sql_app.models import User
+from fastapi import APIRouter, Depends, HTTPException, Response, status
+from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(tags=["organization-publication"])
 
@@ -234,6 +234,32 @@ async def public_organization_community(
     if projection is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Public page not found")
     return projection
+
+
+@router.get(
+    "/api/public/organizations/{public_identifier}/leaderboards",
+    response_model=PublicAnonymousLeaderboardsResponse,
+)
+async def public_organization_leaderboards(
+    public_identifier: str,
+    response: Response,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> PublicAnonymousLeaderboardsResponse:
+    """Anonymous final-only cricket totals for the public community page."""
+    identity = await organization_publication_service.get_public_organization(
+        db, public_identifier=public_identifier
+    )
+    if identity is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Public page not found")
+    response.headers["Cache-Control"] = "no-store"
+    organization_id = await organization_publication_service.get_organization_id_for_public_identifier(
+        db, public_identifier=public_identifier
+    )
+    if organization_id is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Public page not found")
+    return await public_leaderboard_service.get_public_leaderboards(
+        db, organization_id=organization_id
+    )
 
 
 @router.put("/api/organizations/{organization_id}/teams/{team_id}/public-publication/publish")
