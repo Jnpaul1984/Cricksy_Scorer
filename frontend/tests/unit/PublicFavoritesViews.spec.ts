@@ -8,7 +8,7 @@ import PublicTeamView from '@/views/PublicTeamView.vue';
 import SavedPublicPagesView from '@/views/SavedPublicPagesView.vue';
 
 const api = vi.hoisted(() => ({
-  getPublicOrganizationTeam: vi.fn(), listAllMyPublicFavorites: vi.fn(), listMyPublicFavorites: vi.fn(),
+  getPublicTeam: vi.fn(), listAllMyPublicFavorites: vi.fn(), listMyPublicFavorites: vi.fn(),
   saveMyPublicFavorite: vi.fn(), removeMyPublicFavorite: vi.fn(),
 }));
 vi.mock('@/services/schoolAdminApi', () => api);
@@ -20,12 +20,12 @@ beforeEach(() => { vi.resetAllMocks(); setActivePinia(createPinia()); });
 describe('PublicTeamView', () => {
   it('saves and removes an opaque public Team reference', async () => {
     useAuthStore().user = { id: 'staff-a' } as never;
-    api.getPublicOrganizationTeam.mockResolvedValue({ public_identifier: 'team_0123456789abcdef01234567', display_name: 'First XI', aggregate_stats: { published_games: 3 } });
+    api.getPublicTeam.mockResolvedValue({ public_identifier: 'team_0123456789abcdef01234567', display_name: 'First XI', aggregate_stats: { published_games: 3 } });
     api.listAllMyPublicFavorites.mockResolvedValue([]);
     api.saveMyPublicFavorite.mockResolvedValue({ id: 'fav-team' });
     const wrapper = mount(PublicTeamView, { props: { publicIdentifier: 'org_0123456789abcdef01234567', teamPublicIdentifier: 'team_0123456789abcdef01234567' }, global: { stubs } });
     await flushPromises();
-    expect(wrapper.text()).toContain('3 published final games');
+    expect(wrapper.text()).toContain('Published games3');
     await wrapper.get('.favorite-button').trigger('click'); await flushPromises();
     expect(api.saveMyPublicFavorite).toHaveBeenCalledWith('team', 'team_0123456789abcdef01234567');
     await wrapper.get('.favorite-button').trigger('click'); await flushPromises();
@@ -35,7 +35,7 @@ describe('PublicTeamView', () => {
   it('does not render a stale Team response after route change', async () => {
     let resolve!: (value: object) => void;
     const first = new Promise<object>(done => { resolve = done; });
-    api.getPublicOrganizationTeam.mockImplementation((_org: string, team: string) => team === 'team_aaaaaaaaaaaaaaaaaaaaaaaa' ? first : Promise.resolve({ public_identifier: 'team_bbbbbbbbbbbbbbbbbbbbbbbb', display_name: 'Current XI', aggregate_stats: { published_games: 0 } }));
+    api.getPublicTeam.mockImplementation((_org: string, team: string) => team === 'team_aaaaaaaaaaaaaaaaaaaaaaaa' ? first : Promise.resolve({ public_identifier: 'team_bbbbbbbbbbbbbbbbbbbbbbbb', display_name: 'Current XI', aggregate_stats: { published_games: 0 } }));
     const wrapper = mount(PublicTeamView, { props: { publicIdentifier: 'org_0123456789abcdef01234567', teamPublicIdentifier: 'team_aaaaaaaaaaaaaaaaaaaaaaaa' }, global: { stubs } });
     await wrapper.setProps({ teamPublicIdentifier: 'team_bbbbbbbbbbbbbbbbbbbbbbbb' });
     resolve({ public_identifier: 'team_aaaaaaaaaaaaaaaaaaaaaaaa', display_name: 'Stale XI', aggregate_stats: { published_games: 9 } });
@@ -46,7 +46,7 @@ describe('PublicTeamView', () => {
 
   it('clears Team saved state on logout and ignores a delayed prior-session favorite response', async () => {
     useAuthStore().user = { id: 'staff-a' } as never;
-    api.getPublicOrganizationTeam.mockResolvedValue({ public_identifier: 'team_0123456789abcdef01234567', display_name: 'First XI', aggregate_stats: { published_games: 3 } });
+    api.getPublicTeam.mockResolvedValue({ public_identifier: 'team_0123456789abcdef01234567', display_name: 'First XI', aggregate_stats: { published_games: 3 } });
     api.listAllMyPublicFavorites.mockResolvedValue([{ id: 'a-team', subject_kind: 'team', public_key: 'team_0123456789abcdef01234567' }]);
     const wrapper = mount(PublicTeamView, { props: { publicIdentifier: 'org_0123456789abcdef01234567', teamPublicIdentifier: 'team_0123456789abcdef01234567' }, global: { stubs } });
     await flushPromises(); expect(wrapper.get('.favorite-button').text()).toBe('Saved');
@@ -57,7 +57,7 @@ describe('PublicTeamView', () => {
   it('ignores a delayed Team save after an account switch', async () => {
     const pending = deferred<{ id: string }>();
     useAuthStore().user = { id: 'staff-a' } as never;
-    api.getPublicOrganizationTeam.mockResolvedValue({ public_identifier: 'team_0123456789abcdef01234567', display_name: 'First XI', aggregate_stats: { published_games: 3 } });
+    api.getPublicTeam.mockResolvedValue({ public_identifier: 'team_0123456789abcdef01234567', display_name: 'First XI', aggregate_stats: { published_games: 3 } });
     api.listAllMyPublicFavorites.mockResolvedValue([]);
     api.saveMyPublicFavorite.mockReturnValue(pending.promise);
     const wrapper = mount(PublicTeamView, { props: { publicIdentifier: 'org_0123456789abcdef01234567', teamPublicIdentifier: 'team_0123456789abcdef01234567' }, global: { stubs } });

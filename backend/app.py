@@ -58,8 +58,8 @@ from backend.routes.organization_selection_plans import (
 )
 from backend.routes.organizations import router as organizations_router
 from backend.routes.organization_publication import router as organization_publication_router
-from backend.routes.public_favorites import router as public_favorites_router
 from backend.routes.organization_sponsor_placements import router as organization_sponsor_placements_router
+from backend.routes.public_favorites import router as public_favorites_router
 from backend.routes.school_competitions import router as school_competitions_router
 from backend.routes.school_statistics import router as school_statistics_router
 from backend.routes.school_matches import router as school_matches_router

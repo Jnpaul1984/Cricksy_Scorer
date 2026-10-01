@@ -1,13 +1,14 @@
 <script setup lang="ts">
+import { getActivePinia } from 'pinia';
 import { ref, watch } from 'vue';
 import { RouterLink } from 'vue-router';
-import { getPublicTeam } from '@/services/schoolAdminApi';
-import { listAllMyPublicFavorites, removeMyPublicFavorite, saveMyPublicFavorite } from '@/services/schoolAdminApi';
+
+import { getPublicTeam , listAllMyPublicFavorites, removeMyPublicFavorite, saveMyPublicFavorite } from '@/services/schoolAdminApi';
 import { useAuthStore } from '@/stores/authStore';
 import type { PublicTeam } from '@/types/schoolAdmin';
 
 const props = defineProps<{ publicIdentifier: string; teamPublicIdentifier: string }>();
-const auth = useAuthStore();
+const auth = getActivePinia() ? useAuthStore() : { user: null };
 const team = ref<PublicTeam | null>(null);
 const favoriteId = ref<string | null>(null);
 const favoriteError = ref('');

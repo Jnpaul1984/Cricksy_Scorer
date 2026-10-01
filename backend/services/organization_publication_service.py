@@ -9,10 +9,6 @@ from urllib.parse import unquote, urlsplit
 
 import idna
 import structlog
-from sqlalchemy import func, or_, select
-from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from backend.api.schemas.organization_publication import (
     OrganizationBrandingUpdate,
     OrganizationCommunitySettingsResponse,
@@ -33,6 +29,9 @@ from backend.services.organization_service import (
     OrganizationServiceError,
 )
 from backend.sql_app import models
+from sqlalchemy import func, or_, select
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = structlog.get_logger(__name__)
 
@@ -41,6 +40,16 @@ PUBLIC_COMPETITION_KEY_PATTERN = re.compile(r"^cmp_[0-9a-f]{24}$")
 PUBLICATION_MANAGERS = {"owner", "admin"}
 _PUBLIC_IDENTIFIER_NAMESPACE = uuid.UUID("f095452d-9128-46ac-9a82-d504819bcb64")
 _PUBLIC_IDENTIFIER_UNIQUE_CONSTRAINT = "uq_organization_public_settings_public_identifier"
+# SQLAlchemy's metadata-created PostgreSQL schema uses the server-generated
+# ``..._key`` name, while the Alembic migration names this constraint explicitly.
+# Both mean the same retryable collision; do not make correctness depend on which
+# schema creation path initialized the database.
+_PUBLIC_IDENTIFIER_UNIQUE_CONSTRAINT_NAMES = frozenset(
+    {
+        _PUBLIC_IDENTIFIER_UNIQUE_CONSTRAINT,
+        "organization_public_settings_public_identifier_key",
+    }
+)
 _PUBLIC_SETTINGS_PRIMARY_KEY_CONSTRAINT = "organization_public_settings_pkey"
 MAX_PUBLIC_COMPETITIONS = 8
 MAX_PUBLIC_TEAMS_PER_COMPETITION = 16
@@ -131,7 +140,7 @@ async def create_default_settings(
                 existing = await db.get(models.OrganizationPublicSettings, organization_id)
                 if existing is not None:
                     return existing
-            if constraint_name == _PUBLIC_IDENTIFIER_UNIQUE_CONSTRAINT:
+            if constraint_name in _PUBLIC_IDENTIFIER_UNIQUE_CONSTRAINT_NAMES:
                 continue
             raise
         return settings

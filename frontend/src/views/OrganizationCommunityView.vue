@@ -1,17 +1,17 @@
 <script setup lang="ts">
+import { getActivePinia } from 'pinia';
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import type { ComponentPublicInstance } from 'vue';
 import { RouterLink } from 'vue-router';
 
 import { organizationTerminology } from '@/composables/useOrganizationTerminology';
-import { getPublicOrganizationCommunity, getPublicOrganizationSponsorPlacement, recordPublicSponsorPlacementEvent } from '@/services/schoolAdminApi';
-import { listAllMyPublicFavorites, removeMyPublicFavorite, saveMyPublicFavorite } from '@/services/schoolAdminApi';
+import { getPublicOrganizationCommunity, getPublicOrganizationSponsorPlacement, recordPublicSponsorPlacementEvent , listAllMyPublicFavorites, removeMyPublicFavorite, saveMyPublicFavorite } from '@/services/schoolAdminApi';
 import type { PublicOrganizationSponsorPlacement } from '@/services/schoolAdminApi';
 import { useAuthStore } from '@/stores/authStore';
 import type { PublicOrganizationCommunity } from '@/types/schoolAdmin';
 
 const props = defineProps<{ publicIdentifier: string }>();
-const auth = useAuthStore();
+const auth = getActivePinia() ? useAuthStore() : { user: null };
 const community = ref<PublicOrganizationCommunity | null>(null);
 const favoriteId = ref<string | null>(null);
 const favoriteError = ref('');
