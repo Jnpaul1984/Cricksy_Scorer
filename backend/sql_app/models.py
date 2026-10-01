@@ -2650,7 +2650,8 @@ class OrganizationTeamPublicationAudit(Base):
             name="fk_org_team_publication_audit_team_org",
         ),
         CheckConstraint(
-            "action IN ('published', 'unpublished')", name="ck_org_team_publication_audit_action"
+            "action IN ('published', 'unpublished', 'archived')",
+            name="ck_org_team_publication_audit_action",
         ),
         CheckConstraint("publication_version >= 1", name="ck_org_team_publication_audit_version"),
         Index("ix_org_team_publication_audit_team_time", "team_id", "occurred_at"),

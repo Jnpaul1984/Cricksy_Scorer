@@ -17,14 +17,14 @@ from backend.services.organization_publication_service import (
 )
 from backend.services.organization_service import OrganizationServiceError, update_membership
 from backend.sql_app.models import (
-    Organization,
-    OrganizationEntitlement,
-    OrganizationTeamPublicationAudit,
-    OrganizationMembership,
-    OrganizationPublicSettings,
     Fixture,
     Game,
     GameStatus,
+    Organization,
+    OrganizationEntitlement,
+    OrganizationMembership,
+    OrganizationPublicSettings,
+    OrganizationTeamPublicationAudit,
     Tournament,
 )
 from backend.tests.school_test_helpers import (
@@ -506,6 +506,80 @@ def test_team_publication_is_owner_admin_only_tenant_bound_and_revocable(
     history = asyncio.run(audit_rows())
     assert [(row.action, row.actor_user_id, row.publication_version) for row in history] == [
         ("published", admin.id, 2), ("unpublished", owner.id, 3)
+    ]
+
+
+@pytest.mark.parametrize("organization_kind", ["school", "club"])
+def test_archiving_team_revokes_publication_and_cannot_be_republished(
+    school_client: TestClient, organization_kind: str
+) -> None:
+    owner = register_user(school_client, f"team-archive-owner-{organization_kind}@example.com")
+    create = create_school if organization_kind == "school" else create_club
+    organization = create(school_client, owner, f"{organization_kind} Archive Public")
+    other_organization = create(school_client, owner, f"Other {organization_kind} Archive")
+    team = school_client.post(
+        f"/api/organizations/{organization['id']}/teams",
+        json={"name": "Archive XI"},
+        headers=owner.headers,
+    ).json()
+    other_team = school_client.post(
+        f"/api/organizations/{other_organization['id']}/teams",
+        json={"name": "Other Archive XI"},
+        headers=owner.headers,
+    ).json()
+    public_path = (
+        f"/api/public/organizations/{public_identifier_candidate(organization['id'])}"
+        f"/teams/{team_public_identifier_candidate(team['id'])}"
+    )
+    other_public_path = (
+        f"/api/public/organizations/{public_identifier_candidate(other_organization['id'])}"
+        f"/teams/{team_public_identifier_candidate(other_team['id'])}"
+    )
+    for organization_item, team_item in ((organization, team), (other_organization, other_team)):
+        assert school_client.put(
+            f"/api/organizations/{organization_item['id']}/public-settings/publish",
+            headers=owner.headers,
+        ).status_code == 200
+        assert school_client.put(
+            f"/api/organizations/{organization_item['id']}/teams/{team_item['id']}"
+            "/public-publication/publish",
+            headers=owner.headers,
+        ).status_code == 200
+    assert school_client.get(public_path).status_code == 200
+    assert school_client.get(other_public_path).status_code == 200
+
+    # Tenant binding is checked before archival side effects.
+    assert school_client.delete(
+        f"/api/organizations/{organization['id']}/teams/{other_team['id']}",
+        headers=owner.headers,
+    ).status_code == 404
+    assert school_client.get(other_public_path).status_code == 200
+
+    assert school_client.delete(
+        f"/api/organizations/{organization['id']}/teams/{team['id']}", headers=owner.headers
+    ).status_code == 204
+    assert school_client.get(public_path).status_code == 404
+    assert school_client.put(
+        f"/api/organizations/{organization['id']}/teams/{team['id']}/public-publication/publish",
+        headers=owner.headers,
+    ).status_code == 409
+
+    session_maker = school_client.session_maker  # type: ignore[attr-defined]
+
+    async def audit_rows() -> list[OrganizationTeamPublicationAudit]:
+        async with session_maker() as session:
+            return (
+                await session.scalars(
+                    select(OrganizationTeamPublicationAudit)
+                    .where(OrganizationTeamPublicationAudit.team_id == team["id"])
+                    .order_by(OrganizationTeamPublicationAudit.id)
+                )
+            ).all()
+
+    history = asyncio.run(audit_rows())
+    assert [(row.action, row.actor_user_id, row.publication_version) for row in history] == [
+        ("published", owner.id, 2),
+        ("archived", owner.id, 3),
     ]
 
 

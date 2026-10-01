@@ -5,14 +5,19 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import structlog
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from backend.api.schemas.organizations import SchoolTeamCreate, SchoolTeamUpdate
 from backend.services import organization_service
 from backend.services.organization_entitlement_service import (
     require_organization_capability,
 )
-from backend.sql_app.models import Team
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from backend.sql_app.models import (
+    OrganizationTeamPublication,
+    OrganizationTeamPublicationAudit,
+    Team,
+)
 
 logger = structlog.get_logger(__name__)
 
@@ -210,5 +215,32 @@ async def archive_team(
     team = result.scalar_one_or_none()
     if team is None:
         raise _team_not_found()
+
+    # Revoke a public projection atomically with archival without importing the
+    # publication service here and introducing a service-module cycle.
+    publication = await db.scalar(
+        select(OrganizationTeamPublication)
+        .where(
+            OrganizationTeamPublication.team_id == team_id,
+            OrganizationTeamPublication.organization_id == organization_id,
+        )
+        .with_for_update()
+    )
     team.status = "archived"
+    if publication is not None and publication.publication_state == "published":
+        now = await db.scalar(select(func.now()))
+        publication.publication_state = "unpublished"
+        publication.publication_version += 1
+        publication.unpublished_at = now
+        publication.unpublished_by_user_id = actor_user_id
+        publication.updated_by_user_id = actor_user_id
+        db.add(
+            OrganizationTeamPublicationAudit(
+                team_id=team_id,
+                organization_id=organization_id,
+                action="archived",
+                actor_user_id=actor_user_id,
+                publication_version=publication.publication_version,
+            )
+        )
     await db.commit()

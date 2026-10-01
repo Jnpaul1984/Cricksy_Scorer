@@ -4,6 +4,7 @@ Revision ID: 20261001020000
 Revises: 20261001010001
 """
 from collections.abc import Sequence
+
 import sqlalchemy as sa
 from alembic import op
 
@@ -18,6 +19,8 @@ def upgrade() -> None:
     op.create_index("ix_org_team_publication_public_lookup", "organization_team_publications", ["organization_id", "publication_state"])
     op.create_table("organization_team_publication_audit", sa.Column("id", sa.Integer(), primary_key=True, autoincrement=True), sa.Column("team_id", sa.String(), nullable=False), sa.Column("organization_id", sa.String(), nullable=False), sa.Column("action", sa.String(16), nullable=False), sa.Column("actor_user_id", sa.String(), sa.ForeignKey("users.id", ondelete="RESTRICT"), nullable=False), sa.Column("publication_version", sa.Integer(), nullable=False), sa.Column("occurred_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()), sa.ForeignKeyConstraint(["team_id", "organization_id"], ["teams.id", "teams.organization_id"], ondelete="RESTRICT", name="fk_org_team_publication_audit_team_org"), sa.CheckConstraint("action IN ('published', 'unpublished')", name="ck_org_team_publication_audit_action"), sa.CheckConstraint("publication_version >= 1", name="ck_org_team_publication_audit_version"))
     op.create_index("ix_org_team_publication_audit_team_time", "organization_team_publication_audit", ["team_id", "occurred_at"])
+    op.drop_constraint("ck_org_team_publication_audit_action", "organization_team_publication_audit", type_="check")
+    op.create_check_constraint("ck_org_team_publication_audit_action", "organization_team_publication_audit", "action IN ('published', 'unpublished', 'archived')")
 
 
 def downgrade() -> None:

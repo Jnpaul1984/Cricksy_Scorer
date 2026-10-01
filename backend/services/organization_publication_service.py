@@ -794,6 +794,8 @@ async def set_team_publication_state(
     )
     if team is None:
         raise OrganizationServiceError(404, "Team not found")
+    if publish and team.status != "active":
+        raise OrganizationServiceError(409, "Archived teams cannot be published")
     publication = await db.scalar(
         select(models.OrganizationTeamPublication)
         .where(models.OrganizationTeamPublication.team_id == team_id)
@@ -864,6 +866,7 @@ async def get_public_team(
                 models.OrganizationTeamPublication.public_identifier == team_public_identifier,
                 models.OrganizationTeamPublication.publication_state == "published",
                 models.Organization.status == ACTIVE_ORGANIZATION_STATUS,
+                models.Team.status == "active",
             )
             .limit(1)
         )
