@@ -80,9 +80,12 @@ describe('OrganizationCommunityView sponsor placement', () => {
     expect(api.getPublicOrganizationSponsorPlacement).toHaveBeenCalledTimes(2);
   });
 
-  it('reports a display only after a visible threshold, once per capability, and uses the separate click capability', async () => {
+  it('reports a display only after a visible threshold, once per public placement despite polling, and uses the separate click capability', async () => {
     api.getPublicOrganizationCommunity.mockResolvedValue(community('north'));
-    api.getPublicOrganizationSponsorPlacement.mockResolvedValue({ sponsor_name: 'Local sponsor', sponsor_url: 'https://example.org', placement_surface: 'public_organization_homepage', reporting: { display_capability: 'display-capability', click_capability: 'click-capability' } });
+    api.getPublicOrganizationSponsorPlacement
+      .mockResolvedValueOnce({ sponsor_name: 'Local sponsor', sponsor_url: 'https://example.org', placement_surface: 'public_organization_homepage', reporting: { display_capability: 'display-capability', click_capability: 'click-capability', report_view_key: 'stable-placement-revision' } })
+      .mockResolvedValueOnce({ sponsor_name: 'Local sponsor', sponsor_url: 'https://example.org', placement_surface: 'public_organization_homepage', reporting: { display_capability: 'rotated-display-capability', click_capability: 'rotated-click-capability', report_view_key: 'stable-placement-revision' } })
+      .mockResolvedValueOnce({ sponsor_name: 'Replacement sponsor', sponsor_url: 'https://replacement.example.org', placement_surface: 'public_organization_homepage', reporting: { display_capability: 'replacement-display-capability', click_capability: 'replacement-click-capability', report_view_key: 'replacement-placement-revision' } });
     const wrapper = mount(OrganizationCommunityView, { props: { publicIdentifier: 'north' } });
     await flushPromises(); await nextTick();
     expect(wrapper.text()).toContain('Local sponsor');
@@ -95,14 +98,26 @@ describe('OrganizationCommunityView sponsor placement', () => {
     expect(api.recordPublicSponsorPlacementEvent.mock.calls[0][1]).toMatch(/^[0-9a-f-]{36}$/i);
     observers[0].callback([{ isIntersecting: true, intersectionRatio: 1 } as IntersectionObserverEntry], {} as IntersectionObserver);
     expect(api.recordPublicSponsorPlacementEvent).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(30_000);
+    await flushPromises();
+    observers.at(-1)?.callback([{ isIntersecting: true, intersectionRatio: 1 } as IntersectionObserverEntry], {} as IntersectionObserver);
+    expect(api.recordPublicSponsorPlacementEvent).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(30_000);
+    await flushPromises();
+    observers.at(-1)?.callback([{ isIntersecting: true, intersectionRatio: 1 } as IntersectionObserverEntry], {} as IntersectionObserver);
+    expect(api.recordPublicSponsorPlacementEvent).toHaveBeenCalledTimes(2);
+    expect(api.recordPublicSponsorPlacementEvent.mock.calls[1][0]).toBe('replacement-display-capability');
+
     await wrapper.get('.sponsor-placement a').trigger('click');
-    expect(api.recordPublicSponsorPlacementEvent.mock.calls[1][0]).toBe('click-capability');
+    expect(api.recordPublicSponsorPlacementEvent.mock.calls[2][0]).toBe('replacement-click-capability');
   });
 
   it('does not report while the document is hidden and cleans observer resources on route changes and unmount', async () => {
     Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' });
     api.getPublicOrganizationCommunity.mockImplementation((value: string) => Promise.resolve(community(value)));
-    api.getPublicOrganizationSponsorPlacement.mockResolvedValue({ sponsor_name: 'Local sponsor', sponsor_url: null, placement_surface: 'public_organization_homepage', reporting: { display_capability: 'hidden-capability', click_capability: 'click-capability' } });
+    api.getPublicOrganizationSponsorPlacement.mockResolvedValue({ sponsor_name: 'Local sponsor', sponsor_url: null, placement_surface: 'public_organization_homepage', reporting: { display_capability: 'hidden-capability', click_capability: 'click-capability', report_view_key: 'hidden-placement-revision' } });
     const wrapper = mount(OrganizationCommunityView, { props: { publicIdentifier: 'north' } });
     await flushPromises(); await nextTick();
     observers[0].callback([{ isIntersecting: true, intersectionRatio: 1 } as IntersectionObserverEntry], {} as IntersectionObserver);

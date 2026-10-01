@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
+import type { ComponentPublicInstance } from 'vue';
 import { RouterLink } from 'vue-router';
 
 import { organizationTerminology } from '@/composables/useOrganizationTerminology';
@@ -17,6 +18,7 @@ let generation = 0;
 let refreshTimer: ReturnType<typeof setInterval> | undefined;
 const sponsorElement = ref<HTMLElement | null>(null);
 const reportedCapabilities = new Set<string>();
+const reportedDisplayKeys = new Set<string>();
 let displayObserver: IntersectionObserver | null = null;
 let lastDisplayEntry: IntersectionObserverEntry | null = null;
 
@@ -32,9 +34,22 @@ function reportSponsorEvent(capability: string | undefined) {
   void Promise.resolve(recordPublicSponsorPlacementEvent(capability, eventId())).catch(() => undefined);
 }
 
+function displayKey() {
+  const placement = sponsor.value;
+  const reportViewKey = placement?.reporting?.report_view_key;
+  // Capabilities rotate on every polling response. The server-issued opaque
+  // revision key is stable for the actual public placement and changes when
+  // that placement is replaced; it never exposes a private placement ID.
+  return reportViewKey ? `${props.publicIdentifier}\u001f${reportViewKey}` : null;
+}
+
 function reportDisplayIfEligible(entry: IntersectionObserverEntry | null) {
   if (document.visibilityState !== 'visible' || !entry?.isIntersecting || entry.intersectionRatio < 0.5) return;
-  reportSponsorEvent(sponsor.value?.reporting?.display_capability);
+  const key = displayKey();
+  const capability = sponsor.value?.reporting?.display_capability;
+  if (!key || !capability || reportedDisplayKeys.has(key)) return;
+  reportedDisplayKeys.add(key);
+  reportSponsorEvent(capability);
 }
 
 function clearDisplayObserver() {
@@ -61,8 +76,8 @@ function observeSponsorDisplay() {
 
 // A function ref runs only once the sponsor has actually been rendered. This
 // avoids treating a successful placement fetch as an impression.
-function setSponsorElement(element: Element | null) {
-  sponsorElement.value = element as HTMLElement | null;
+function setSponsorElement(element: Element | ComponentPublicInstance | null) {
+  sponsorElement.value = element instanceof HTMLElement ? element : null;
   if (sponsorElement.value) observeSponsorDisplay();
   else clearDisplayObserver();
 }

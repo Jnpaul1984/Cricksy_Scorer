@@ -89,7 +89,7 @@ export type PublicOrganizationSponsorPlacement = {
   sponsor_name: string;
   sponsor_url: string | null;
   placement_surface: 'public_organization_homepage';
-  reporting?: { display_capability: string; click_capability: string };
+  reporting?: { display_capability: string; click_capability: string; report_view_key: string };
 };
 
 export type PlatformSponsorPlacement = {
