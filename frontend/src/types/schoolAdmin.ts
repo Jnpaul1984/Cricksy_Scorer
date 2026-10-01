@@ -727,6 +727,18 @@ export interface OrganizationCommunitySettings {
   competitions: OrganizationCommunityCompetitionSettings[];
 }
 
+export interface TeamPublicPublication {
+  public_identifier: string;
+  publication_state: OrganizationCommunityPublicationState;
+  publication_version: number;
+}
+
+export interface PublicTeam {
+  public_identifier: string;
+  display_name: string;
+  aggregate_stats: { published_games: number };
+}
+
 export interface PublicCommunityFixture {
   team_a_name: string;
   team_b_name: string;

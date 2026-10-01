@@ -4,6 +4,9 @@ from __future__ import annotations
 
 from typing import Annotated, NoReturn
 
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from backend.api.schemas.organization_publication import (
     OrganizationBrandingUpdate,
     OrganizationCommunitySettingsResponse,
@@ -11,14 +14,13 @@ from backend.api.schemas.organization_publication import (
     OrganizationPublicationSettingsResponse,
     PublicOrganizationCommunityResponse,
     PublicOrganizationResponse,
+    PublicTeamResponse,
 )
 from backend.security import get_current_active_user
 from backend.services import organization_publication_service
 from backend.services.organization_service import OrganizationServiceError
 from backend.sql_app.database import get_db
 from backend.sql_app.models import User
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(tags=["organization-publication"])
 
@@ -232,3 +234,85 @@ async def public_organization_community(
     if projection is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Public page not found")
     return projection
+
+
+@router.put("/api/organizations/{organization_id}/teams/{team_id}/public-publication/publish")
+async def publish_team_to_community(
+    organization_id: str,
+    team_id: str,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict[str, object]:
+    try:
+        item = await organization_publication_service.set_team_publication_state(
+            db,
+            organization_id=organization_id,
+            team_id=team_id,
+            actor_user_id=current_user.id,
+            publish=True,
+        )
+    except OrganizationServiceError as exc:
+        _service_error(exc)
+    return {
+        "public_identifier": item.public_identifier,
+        "publication_state": item.publication_state,
+        "publication_version": item.publication_version,
+    }
+
+
+@router.get("/api/organizations/{organization_id}/teams/{team_id}/public-publication")
+async def get_team_publication_settings(
+    organization_id: str,
+    team_id: str,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict[str, object]:
+    try:
+        return await organization_publication_service.get_team_publication_settings(
+            db, organization_id=organization_id, team_id=team_id, actor_user_id=current_user.id
+        )
+    except OrganizationServiceError as exc:
+        _service_error(exc)
+
+
+@router.put("/api/organizations/{organization_id}/teams/{team_id}/public-publication/unpublish")
+async def unpublish_team_from_community(
+    organization_id: str,
+    team_id: str,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict[str, object]:
+    try:
+        item = await organization_publication_service.set_team_publication_state(
+            db,
+            organization_id=organization_id,
+            team_id=team_id,
+            actor_user_id=current_user.id,
+            publish=False,
+        )
+    except OrganizationServiceError as exc:
+        _service_error(exc)
+    return {
+        "public_identifier": item.public_identifier,
+        "publication_state": item.publication_state,
+        "publication_version": item.publication_version,
+    }
+
+
+@router.get(
+    "/api/public/organizations/{public_identifier}/teams/{team_public_identifier}",
+    response_model=PublicTeamResponse,
+)
+async def public_team(
+    public_identifier: str,
+    team_public_identifier: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> PublicTeamResponse:
+    projection = await organization_publication_service.get_public_team(
+        db,
+        organization_public_identifier=public_identifier,
+        team_public_identifier=team_public_identifier,
+    )
+    if projection is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Public team not found")
+    return PublicTeamResponse(**projection)

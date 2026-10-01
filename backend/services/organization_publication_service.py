@@ -9,6 +9,10 @@ from urllib.parse import unquote, urlsplit
 
 import idna
 import structlog
+from sqlalchemy import func, or_, select
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from backend.api.schemas.organization_publication import (
     OrganizationBrandingUpdate,
     OrganizationCommunitySettingsResponse,
@@ -18,6 +22,7 @@ from backend.api.schemas.organization_publication import (
     PublicCommunityStanding,
     PublicOrganizationBranding,
     PublicOrganizationCommunityResponse,
+    PublicTeamAggregateStats,
 )
 from backend.config import settings
 from backend.services import school_competition_service
@@ -28,9 +33,6 @@ from backend.services.organization_service import (
     OrganizationServiceError,
 )
 from backend.sql_app import models
-from sqlalchemy import func, select
-from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = structlog.get_logger(__name__)
 
@@ -738,3 +740,172 @@ async def get_public_community(
             for competition in competitions
         ],
     )
+
+
+_TEAM_PUBLIC_IDENTIFIER_NAMESPACE = uuid.UUID("a4b679db-e8fc-4c72-97c5-dfcb0c48c2c9")
+
+
+def team_public_identifier_candidate(team_id: str) -> str:
+    """Opaque, stable identifier; never derive a URL from an internal team id."""
+    return f"team_{uuid.uuid5(_TEAM_PUBLIC_IDENTIFIER_NAMESPACE, team_id).hex[:24]}"
+
+
+async def get_team_publication_settings(
+    db: AsyncSession, *, organization_id: str, team_id: str, actor_user_id: str
+) -> dict[str, object]:
+    """Return the private default without creating a publication record on GET."""
+    await _lock_active_organization(db, organization_id=organization_id)
+    await _current_membership(
+        db, organization_id=organization_id, actor_user_id=actor_user_id, manage=True
+    )
+    team = await db.scalar(
+        select(models.Team).where(
+            models.Team.id == team_id, models.Team.organization_id == organization_id
+        )
+    )
+    if team is None:
+        raise OrganizationServiceError(404, "Team not found")
+    publication = await db.get(models.OrganizationTeamPublication, team_id)
+    if publication is None:
+        return {
+            "public_identifier": team_public_identifier_candidate(team_id),
+            "publication_state": "unpublished",
+            "publication_version": 1,
+        }
+    return {
+        "public_identifier": publication.public_identifier,
+        "publication_state": publication.publication_state,
+        "publication_version": publication.publication_version,
+    }
+
+
+async def set_team_publication_state(
+    db: AsyncSession, *, organization_id: str, team_id: str, actor_user_id: str, publish: bool
+) -> models.OrganizationTeamPublication:
+    """Owner/admin-only, tenant-bound and default-private team publication transition."""
+    await _lock_active_organization(db, organization_id=organization_id)
+    await _current_membership(
+        db, organization_id=organization_id, actor_user_id=actor_user_id, manage=True
+    )
+    team = await db.scalar(
+        select(models.Team)
+        .where(models.Team.id == team_id, models.Team.organization_id == organization_id)
+        .with_for_update()
+    )
+    if team is None:
+        raise OrganizationServiceError(404, "Team not found")
+    if publish and team.status != "active":
+        raise OrganizationServiceError(409, "Archived teams cannot be published")
+    publication = await db.scalar(
+        select(models.OrganizationTeamPublication)
+        .where(models.OrganizationTeamPublication.team_id == team_id)
+        .with_for_update()
+    )
+    if publication is None:
+        publication = models.OrganizationTeamPublication(
+            team_id=team_id,
+            organization_id=organization_id,
+            public_identifier=team_public_identifier_candidate(team_id),
+        )
+        db.add(publication)
+        await db.flush()
+    requested = "published" if publish else "unpublished"
+    if publication.publication_state != requested:
+        now = await db.scalar(select(func.now()))
+        publication.publication_state = requested
+        publication.publication_version += 1
+        publication.updated_by_user_id = actor_user_id
+        if publish:
+            publication.published_at, publication.published_by_user_id = now, actor_user_id
+        else:
+            publication.unpublished_at, publication.unpublished_by_user_id = now, actor_user_id
+        db.add(
+            models.OrganizationTeamPublicationAudit(
+                team_id=team_id,
+                organization_id=organization_id,
+                action=requested,
+                actor_user_id=actor_user_id,
+                publication_version=publication.publication_version,
+            )
+        )
+    await db.commit()
+    await db.refresh(publication)
+    return publication
+
+
+async def get_public_team(
+    db: AsyncSession, *, organization_public_identifier: str, team_public_identifier: str
+) -> dict[str, object] | None:
+    """Fail closed unless both parent organization and team are explicitly published."""
+    if not PUBLIC_IDENTIFIER_PATTERN.fullmatch(organization_public_identifier) or not re.fullmatch(
+        r"team_[0-9a-f]{24}", team_public_identifier
+    ):
+        return None
+    row = (
+        await db.execute(
+            select(
+                models.OrganizationTeamPublication.public_identifier,
+                models.Team.name,
+                models.OrganizationTeamPublication.team_id,
+                models.OrganizationTeamPublication.organization_id,
+            )
+            .join(models.Team, models.Team.id == models.OrganizationTeamPublication.team_id)
+            .join(
+                models.OrganizationPublicSettings,
+                models.OrganizationPublicSettings.organization_id
+                == models.OrganizationTeamPublication.organization_id,
+            )
+            .join(
+                models.Organization,
+                models.Organization.id == models.OrganizationTeamPublication.organization_id,
+            )
+            .where(
+                models.OrganizationPublicSettings.public_identifier
+                == organization_public_identifier,
+                models.OrganizationPublicSettings.publication_state == "published",
+                models.OrganizationTeamPublication.public_identifier == team_public_identifier,
+                models.OrganizationTeamPublication.publication_state == "published",
+                models.Organization.status == ACTIVE_ORGANIZATION_STATUS,
+                models.Team.status == "active",
+            )
+            .limit(1)
+        )
+    ).one_or_none()
+    if row is None:
+        return None
+
+    # Deliberately derive only a team aggregate from games that have separately
+    # passed the existing final-scorecard publication gate.  No delivery,
+    # scorecard, roster, membership, or player-profile data crosses this route.
+    published_games = 0
+    if await organization_has_capability(
+        db, organization_id=row[3], capability="school_live_scorecards"
+    ):
+        published_games = int(
+            await db.scalar(
+                select(func.count(models.Fixture.id))
+                .join(models.Game, models.Game.id == models.Fixture.game_id)
+                .join(models.Tournament, models.Tournament.id == models.Fixture.tournament_id)
+                .join(
+                    models.OrganizationCompetitionPublication,
+                    (
+                        models.OrganizationCompetitionPublication.competition_id
+                        == models.Tournament.id
+                    )
+                    & (models.OrganizationCompetitionPublication.organization_id == row[3]),
+                )
+                .where(
+                    models.Tournament.organization_id == row[3],
+                    models.OrganizationCompetitionPublication.publication_state == "published",
+                    or_(models.Fixture.team_a_id == row[2], models.Fixture.team_b_id == row[2]),
+                    models.Game.publication_state == "published_final",
+                    models.Game.status == models.GameStatus.completed,
+                )
+            )
+            or 0
+        )
+    return {
+        "public_identifier": row[0],
+        "display_name": row[1],
+        "aggregate_stats": PublicTeamAggregateStats(published_games=published_games),
+    }

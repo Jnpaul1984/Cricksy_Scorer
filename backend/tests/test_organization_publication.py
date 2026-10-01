@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import importlib
+import os
 
 import pytest
 from fastapi.testclient import TestClient
@@ -9,16 +10,25 @@ from sqlalchemy import delete, func, select, text
 from sqlalchemy.exc import IntegrityError
 
 from backend.api.schemas.organizations import OrganizationMembershipUpdate
-from backend.services import organization_publication_service
+from backend.services import organization_publication_service, organization_team_service
 from backend.services.organization_publication_service import (
     PUBLIC_IDENTIFIER_PATTERN,
     public_identifier_candidate,
+    team_public_identifier_candidate,
 )
 from backend.services.organization_service import OrganizationServiceError, update_membership
 from backend.sql_app.models import (
+    Fixture,
+    Game,
+    GameStatus,
     Organization,
+    OrganizationEntitlement,
     OrganizationMembership,
     OrganizationPublicSettings,
+    OrganizationTeamPublication,
+    OrganizationTeamPublicationAudit,
+    Team,
+    Tournament,
 )
 from backend.tests.school_test_helpers import (
     add_membership,
@@ -428,3 +438,286 @@ async def test_migration_backfill_assigns_unique_identifiers_to_existing_organiz
             )
         ).all()
         assert all(PUBLIC_IDENTIFIER_PATTERN.fullmatch(identifier) for identifier in identifiers)
+
+
+@pytest.mark.parametrize("organization_kind", ["school", "club"])
+def test_team_publication_is_owner_admin_only_tenant_bound_and_revocable(
+    school_client: TestClient, organization_kind: str
+) -> None:
+    owner = register_user(school_client, f"team-public-owner-{organization_kind}@example.com")
+    admin = register_user(school_client, f"team-public-admin-{organization_kind}@example.com")
+    coach = register_user(school_client, f"team-public-coach-{organization_kind}@example.com")
+    outsider = register_user(school_client, f"team-public-outsider-{organization_kind}@example.com")
+    create = create_school if organization_kind == "school" else create_club
+    organization = create(school_client, owner, f"{organization_kind} Team Public")
+    add_membership(school_client, owner, organization["id"], admin.id, "admin")
+    add_membership(school_client, owner, organization["id"], coach.id, "coach")
+    team_response = school_client.post(
+        f"/api/organizations/{organization['id']}/teams", json={"name": "Private XI"}, headers=owner.headers
+    )
+    assert team_response.status_code == 201, team_response.text
+    team = team_response.json()
+    team_identifier = team_public_identifier_candidate(team["id"])
+    public_path = f"/api/public/organizations/{public_identifier_candidate(organization['id'])}/teams/{team_identifier}"
+    assert school_client.get(public_path).status_code == 404
+
+    for actor in (coach, outsider):
+        denied = school_client.put(
+            f"/api/organizations/{organization['id']}/teams/{team['id']}/public-publication/publish",
+            headers=actor.headers,
+        )
+        assert denied.status_code in {403, 404}
+
+    other = create(school_client, owner, f"Other {organization_kind} Tenant")
+    foreign = school_client.post(
+        f"/api/organizations/{other['id']}/teams", json={"name": "Foreign XI"}, headers=owner.headers
+    ).json()
+    cross_tenant = school_client.put(
+        f"/api/organizations/{organization['id']}/teams/{foreign['id']}/public-publication/publish",
+        headers=owner.headers,
+    )
+    assert cross_tenant.status_code == 404
+
+    published = school_client.put(
+        f"/api/organizations/{organization['id']}/teams/{team['id']}/public-publication/publish",
+        headers=admin.headers,
+    )
+    assert published.status_code == 200
+    assert published.json()["public_identifier"] == team_identifier
+    # The parent organization is an independent, fail-closed publication gate.
+    assert school_client.get(public_path).status_code == 404
+    assert school_client.put(
+        f"/api/organizations/{organization['id']}/public-settings/publish", headers=owner.headers
+    ).status_code == 200
+    public = school_client.get(public_path)
+    assert public.status_code == 200
+    assert public.json() == {
+        "public_identifier": team_identifier,
+        "display_name": "Private XI",
+        "aggregate_stats": {"published_games": 0},
+    }
+    assert "player" not in public.text.lower() and "roster" not in public.text.lower()
+    assert school_client.put(
+        f"/api/organizations/{organization['id']}/teams/{team['id']}/public-publication/unpublish",
+        headers=owner.headers,
+    ).status_code == 200
+    assert school_client.get(public_path).status_code == 404
+    session_maker = school_client.session_maker  # type: ignore[attr-defined]
+    async def audit_rows() -> list[OrganizationTeamPublicationAudit]:
+        async with session_maker() as session:
+            return (await session.scalars(select(OrganizationTeamPublicationAudit).where(OrganizationTeamPublicationAudit.team_id == team["id"]).order_by(OrganizationTeamPublicationAudit.id))).all()
+    history = asyncio.run(audit_rows())
+    assert [(row.action, row.actor_user_id, row.publication_version) for row in history] == [
+        ("published", admin.id, 2), ("unpublished", owner.id, 3)
+    ]
+
+
+@pytest.mark.parametrize("organization_kind", ["school", "club"])
+def test_archiving_team_revokes_publication_and_cannot_be_republished(
+    school_client: TestClient, organization_kind: str
+) -> None:
+    owner = register_user(school_client, f"team-archive-owner-{organization_kind}@example.com")
+    create = create_school if organization_kind == "school" else create_club
+    organization = create(school_client, owner, f"{organization_kind} Archive Public")
+    other_organization = create(school_client, owner, f"Other {organization_kind} Archive")
+    team = school_client.post(
+        f"/api/organizations/{organization['id']}/teams",
+        json={"name": "Archive XI"},
+        headers=owner.headers,
+    ).json()
+    other_team = school_client.post(
+        f"/api/organizations/{other_organization['id']}/teams",
+        json={"name": "Other Archive XI"},
+        headers=owner.headers,
+    ).json()
+    public_path = (
+        f"/api/public/organizations/{public_identifier_candidate(organization['id'])}"
+        f"/teams/{team_public_identifier_candidate(team['id'])}"
+    )
+    other_public_path = (
+        f"/api/public/organizations/{public_identifier_candidate(other_organization['id'])}"
+        f"/teams/{team_public_identifier_candidate(other_team['id'])}"
+    )
+    for organization_item, team_item in ((organization, team), (other_organization, other_team)):
+        assert school_client.put(
+            f"/api/organizations/{organization_item['id']}/public-settings/publish",
+            headers=owner.headers,
+        ).status_code == 200
+        assert school_client.put(
+            f"/api/organizations/{organization_item['id']}/teams/{team_item['id']}"
+            "/public-publication/publish",
+            headers=owner.headers,
+        ).status_code == 200
+    assert school_client.get(public_path).status_code == 200
+    assert school_client.get(other_public_path).status_code == 200
+
+    # Tenant binding is checked before archival side effects.
+    assert school_client.delete(
+        f"/api/organizations/{organization['id']}/teams/{other_team['id']}",
+        headers=owner.headers,
+    ).status_code == 404
+    assert school_client.get(other_public_path).status_code == 200
+
+    assert school_client.delete(
+        f"/api/organizations/{organization['id']}/teams/{team['id']}", headers=owner.headers
+    ).status_code == 204
+    assert school_client.get(public_path).status_code == 404
+    assert school_client.put(
+        f"/api/organizations/{organization['id']}/teams/{team['id']}/public-publication/publish",
+        headers=owner.headers,
+    ).status_code == 409
+
+    session_maker = school_client.session_maker  # type: ignore[attr-defined]
+
+    async def audit_rows() -> list[OrganizationTeamPublicationAudit]:
+        async with session_maker() as session:
+            return (
+                await session.scalars(
+                    select(OrganizationTeamPublicationAudit)
+                    .where(OrganizationTeamPublicationAudit.team_id == team["id"])
+                    .order_by(OrganizationTeamPublicationAudit.id)
+                )
+            ).all()
+
+    history = asyncio.run(audit_rows())
+    assert [(row.action, row.actor_user_id, row.publication_version) for row in history] == [
+        ("published", owner.id, 2),
+        ("archived", owner.id, 3),
+    ]
+
+
+@pytest.mark.skipif(
+    os.getenv("PHASE7B_POSTGRES_MIGRATED_TESTS") != "1",
+    reason="requires migrated PostgreSQL row-lock semantics",
+)
+def test_postgres_archive_publish_race_never_leaves_archived_team_published(
+    school_client: TestClient,
+) -> None:
+    owner = register_user(school_client, "team-archive-race-owner@example.com")
+    organization = create_school(school_client, owner, "Archive Race School")
+    team = school_client.post(
+        f"/api/organizations/{organization['id']}/teams",
+        json={"name": "Race XI"},
+        headers=owner.headers,
+    ).json()
+    assert school_client.put(
+        f"/api/organizations/{organization['id']}/public-settings/publish",
+        headers=owner.headers,
+    ).status_code == 200
+    session_maker = school_client.session_maker  # type: ignore[attr-defined]
+
+    async def race() -> tuple[object | None, object | None]:
+        gate = asyncio.Event()
+
+        async def publish() -> object | None:
+            async with session_maker() as session:
+                await gate.wait()
+                try:
+                    return await organization_publication_service.set_team_publication_state(
+                        session,
+                        organization_id=organization["id"],
+                        team_id=team["id"],
+                        actor_user_id=owner.id,
+                        publish=True,
+                    )
+                except OrganizationServiceError as exc:
+                    return exc
+
+        async def archive() -> object | None:
+            async with session_maker() as session:
+                await gate.wait()
+                try:
+                    await organization_team_service.archive_team(
+                        session,
+                        organization_id=organization["id"],
+                        team_id=team["id"],
+                        actor_user_id=owner.id,
+                    )
+                    return None
+                except organization_team_service.OrganizationTeamServiceError as exc:
+                    return exc
+
+        gate.set()
+        return tuple(await asyncio.gather(publish(), archive()))
+
+    publish_result, archive_result = asyncio.run(race())
+    assert archive_result is None
+    assert isinstance(publish_result, OrganizationTeamPublication) or (
+        isinstance(publish_result, OrganizationServiceError)
+        and publish_result.status_code == 409
+    )
+
+    async def final_state() -> tuple[Team, OrganizationTeamPublication | None, list[str]]:
+        async with session_maker() as session:
+            persisted_team = await session.get(Team, team["id"])
+            publication = await session.get(OrganizationTeamPublication, team["id"])
+            actions = list(
+                await session.scalars(
+                    select(OrganizationTeamPublicationAudit.action)
+                    .where(OrganizationTeamPublicationAudit.team_id == team["id"])
+                    .order_by(OrganizationTeamPublicationAudit.id)
+                )
+            )
+            assert persisted_team is not None
+            return persisted_team, publication, actions
+
+    persisted_team, publication, actions = asyncio.run(final_state())
+    assert persisted_team.status == "archived"
+    assert publication is None or publication.publication_state == "unpublished"
+    assert actions in ([], ["published", "archived"])
+    assert school_client.get(
+        f"/api/public/organizations/{public_identifier_candidate(organization['id'])}"
+        f"/teams/{team_public_identifier_candidate(team['id'])}"
+    ).status_code == 404
+
+
+async def test_public_team_aggregate_counts_only_published_final_games(school_client: TestClient) -> None:
+    owner = register_user(school_client, "team-aggregate-owner@example.com")
+    organization = create_school(school_client, owner, "Aggregate School")
+    team = school_client.post(
+        f"/api/organizations/{organization['id']}/teams", json={"name": "Aggregate XI"}, headers=owner.headers
+    ).json()
+    assert school_client.put(f"/api/organizations/{organization['id']}/public-settings/publish", headers=owner.headers).status_code == 200
+    assert school_client.put(f"/api/organizations/{organization['id']}/teams/{team['id']}/public-publication/publish", headers=owner.headers).status_code == 200
+    session_maker = school_client.session_maker  # type: ignore[attr-defined]
+    other_organization = create_school(school_client, owner, "Foreign Aggregate School")
+    async with session_maker() as session:
+        tournament = Tournament(name="Aggregate Competition", organization_id=organization["id"])
+        unpublished_tournament = Tournament(name="Private Competition", organization_id=organization["id"])
+        foreign_tournament = Tournament(name="Foreign Competition", organization_id=other_organization["id"])
+        published_game = Game(status=GameStatus.completed, publication_state="published_final")
+        private_game = Game(status=GameStatus.completed, publication_state="private")
+        unpublished_competition_game = Game(status=GameStatus.completed, publication_state="published_final")
+        foreign_competition_game = Game(status=GameStatus.completed, publication_state="published_final")
+        session.add_all([tournament, unpublished_tournament, foreign_tournament, published_game, private_game, unpublished_competition_game, foreign_competition_game])
+        await session.flush()
+        session.add_all([
+            Fixture(tournament_id=tournament.id, team_a_name="Aggregate XI", team_b_name="Opposition", team_a_id=team["id"], game_id=published_game.id, status="completed"),
+            Fixture(tournament_id=tournament.id, team_a_name="Aggregate XI", team_b_name="Private Opposition", team_a_id=team["id"], game_id=private_game.id, status="completed"),
+            Fixture(tournament_id=unpublished_tournament.id, team_a_name="Aggregate XI", team_b_name="Unpublished", team_a_id=team["id"], game_id=unpublished_competition_game.id, status="completed"),
+            Fixture(tournament_id=foreign_tournament.id, team_a_name="Aggregate XI", team_b_name="Foreign", team_a_id=team["id"], game_id=foreign_competition_game.id, status="completed"),
+        ])
+        await session.commit()
+    assert school_client.put(
+        f"/api/organizations/{organization['id']}/competitions/{tournament.id}/community-publication/publish",
+        headers=owner.headers,
+    ).status_code == 200
+    public = school_client.get(
+        f"/api/public/organizations/{public_identifier_candidate(organization['id'])}/teams/{team_public_identifier_candidate(team['id'])}"
+    )
+    assert public.status_code == 200
+    assert public.json()["aggregate_stats"] == {"published_games": 1}
+    async with session_maker() as session:
+        entitlement = await session.scalar(
+            select(OrganizationEntitlement).where(
+                OrganizationEntitlement.organization_id == organization["id"]
+            )
+        )
+        assert entitlement is not None
+        entitlement.status = "disabled"
+        await session.commit()
+    disabled = school_client.get(
+        f"/api/public/organizations/{public_identifier_candidate(organization['id'])}/teams/{team_public_identifier_candidate(team['id'])}"
+    )
+    assert disabled.status_code == 200
+    assert disabled.json()["aggregate_stats"] == {"published_games": 0}
