@@ -198,7 +198,7 @@ describe('Club Free shared organization journey', () => {
     // The roster screen now loads publication state alongside roster data; keep
     // this Club fixture complete so a missing optional response cannot mask the
     // assignment form under its shared load error state.
-    cy.intercept('GET', '**/api/organizations/club-a/community', {
+    cy.intercept('GET', '**/api/organizations/club-a/community-settings', {
       organization_id: club.id,
       public_identifier: 'org_0123456789abcdef01234567',
       publication_state: 'unpublished',
@@ -208,7 +208,7 @@ describe('Club Free shared organization journey', () => {
       branding_updated_at: null,
       competitions: [],
     })
-    cy.intercept('GET', '**/api/organizations/club-a/teams/team-a/publication', {
+    cy.intercept('GET', '**/api/organizations/club-a/teams/team-a/public-publication', {
       team_id: team.id,
       organization_id: club.id,
       public_identifier: 'team_0123456789abcdef01234567',
