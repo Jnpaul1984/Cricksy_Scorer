@@ -4,6 +4,7 @@ from typing import Any
 
 import structlog
 from fastapi import FastAPI, Request
+from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import ORJSONResponse
 from pydantic import ValidationError
@@ -36,7 +37,13 @@ def _json_error(
         },
     }
     if details is not None:
-        payload["error"]["details"] = details  # type: ignore[index]
+        # Pydantic v2 validation contexts can retain a raw ValueError under
+        # ``ctx.error``. Encode those values before ORJSONResponse renders the
+        # envelope, otherwise an invalid request is incorrectly turned into a 500.
+        payload["error"]["details"] = jsonable_encoder(
+            details,
+            custom_encoder={ValueError: lambda value: str(value)},
+        )  # type: ignore[index]
 
     return ORJSONResponse(payload, status_code=status_code)
 
