@@ -3,19 +3,23 @@ import { computed, onMounted, ref } from 'vue';
 import { RouterLink, useRoute } from 'vue-router';
 
 import { useSchoolContext } from '@/composables/useSchoolContext';
+import router from '@/router';
 import { getErrorMessage } from '@/services/api';
 import {
   addTeamRosterPlayer,
   deactivateTeamRosterPlayer,
   getSchoolTeam,
+  getOrganizationCommunitySettings,
+  getTeamPublicPublication,
   listSchoolPlayers,
   listTeamRoster,
+  setTeamPublicPublication,
   setTeamRosterPlayerStatus,
 } from '@/services/schoolAdminApi';
-import type { SchoolRosterPlayer, SchoolTeam, SchoolTeamRosterPlayer } from '@/types/schoolAdmin';
+import type { SchoolRosterPlayer, SchoolTeam, SchoolTeamRosterPlayer, TeamPublicPublication } from '@/types/schoolAdmin';
 
 const route = useRoute();
-const { organizationId, organizationBasePath, terminology, canManageTeamRoster } =
+const { organizationId, organizationBasePath, terminology, canManageTeamRoster, canManageCommunity } =
   useSchoolContext();
 const teamId = computed(() => String(route.params.teamId || ''));
 const team = ref<SchoolTeam | null>(null);
@@ -25,6 +29,10 @@ const selectedMembershipId = ref('');
 const loading = ref(true);
 const error = ref('');
 const success = ref('');
+const organizationPublicIdentifier = ref('');
+const publication = ref<TeamPublicPublication | null>(null);
+const publicLink = computed(() => publication.value && organizationPublicIdentifier.value
+  ? new URL(router.resolve({ name: 'public-team', params: { publicIdentifier: organizationPublicIdentifier.value, teamPublicIdentifier: publication.value.public_identifier } }).href, window.location.origin).href : '');
 const availablePlayers = computed(() =>
   activeSchoolPlayers.value.filter(
     (player) =>
@@ -38,19 +46,35 @@ async function load() {
   loading.value = true;
   error.value = '';
   try {
-    const [loadedTeam, loadedRoster, players] = await Promise.all([
+    const [loadedTeam, loadedRoster, players, community, teamPublication] = await Promise.all([
       getSchoolTeam(organizationId.value, teamId.value),
       listTeamRoster(organizationId.value, teamId.value),
       listSchoolPlayers(organizationId.value, 'active'),
+      canManageCommunity.value ? getOrganizationCommunitySettings(organizationId.value) : Promise.resolve(null),
+      canManageCommunity.value ? getTeamPublicPublication(organizationId.value, teamId.value) : Promise.resolve(null),
     ]);
     team.value = loadedTeam;
     roster.value = loadedRoster;
     activeSchoolPlayers.value = players;
+    organizationPublicIdentifier.value = community?.public_identifier || '';
+    publication.value = teamPublication;
   } catch (reason) {
     error.value = getErrorMessage(reason);
   } finally {
     loading.value = false;
   }
+}
+async function setPublic(publish: boolean) {
+  error.value = '';
+  try {
+    publication.value = await setTeamPublicPublication(organizationId.value, teamId.value, publish);
+    success.value = publish ? 'Team page published.' : 'Team page revoked.';
+  } catch (reason) { error.value = getErrorMessage(reason); }
+}
+async function copyPublicLink() {
+  if (!publicLink.value) return;
+  try { await navigator.clipboard.writeText(publicLink.value); success.value = 'Public team link copied.'; }
+  catch { error.value = 'Could not copy the link. Select and copy it manually.'; }
 }
 async function assign() {
   const membershipId = selectedMembershipId.value;
@@ -101,6 +125,18 @@ onMounted(load);
     </header>
     <div v-if="error" class="notice error" role="alert">{{ error }}</div>
     <div v-if="success" class="notice success" role="status">{{ success }}</div>
+    <article class="notice publication" data-test="team-publication-controls">
+      <strong>Public Team page</strong>
+      <p>Private by default. Public pages show the Team name and approved aggregate game count only—never the roster or player identities.</p>
+      <div v-if="canManageCommunity" class="button-row">
+        <button v-if="publication?.publication_state !== 'published'" type="button" @click="setPublic(true)">Publish Team</button>
+        <button v-else type="button" class="danger" @click="setPublic(false)">Unpublish Team</button>
+      </div>
+      <template v-if="publication?.publication_state === 'published'">
+        <label>Revocable public link <input :value="publicLink" readonly aria-label="Public Team link" /></label>
+        <button type="button" class="compact" @click="copyPublicLink">Copy link</button>
+      </template>
+    </article>
     <form
       v-if="canManageTeamRoster && team?.status === 'active'"
       class="assign"

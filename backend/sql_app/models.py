@@ -1012,100 +1012,183 @@ class SponsorImpression(Base):
 class OrganizationSponsorPlacement(Base):
     __tablename__ = "organization_sponsor_placements"
     __table_args__ = (
-        CheckConstraint("placement_surface = 'public_organization_homepage'", name="ck_org_sponsor_placement_surface"),
-        CheckConstraint("state IN ('proposed', 'approved', 'taken_down')", name="ck_org_sponsor_placement_state"),
-        CheckConstraint("length(category) BETWEEN 1 AND 64", name="ck_org_sponsor_placement_category"),
+        CheckConstraint(
+            "placement_surface = 'public_organization_homepage'",
+            name="ck_org_sponsor_placement_surface",
+        ),
+        CheckConstraint(
+            "state IN ('proposed', 'approved', 'taken_down')", name="ck_org_sponsor_placement_state"
+        ),
+        CheckConstraint(
+            "length(category) BETWEEN 1 AND 64", name="ck_org_sponsor_placement_category"
+        ),
         Index("ix_org_sponsor_placement_public", "organization_id", "state", "placement_surface"),
-        Index("uq_org_sponsor_one_approved", "organization_id", "placement_surface", unique=True, postgresql_where=text("state = 'approved'"), sqlite_where=text("state = 'approved'")),
+        Index(
+            "uq_org_sponsor_one_approved",
+            "organization_id",
+            "placement_surface",
+            unique=True,
+            postgresql_where=text("state = 'approved'"),
+            sqlite_where=text("state = 'approved'"),
+        ),
     )
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True)
+    organization_id: Mapped[str] = mapped_column(
+        ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
     sponsor_name: Mapped[str] = mapped_column(String(160), nullable=False)
     category: Mapped[str] = mapped_column(String(64), nullable=False)
     sponsor_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
-    placement_surface: Mapped[str] = mapped_column(String(64), nullable=False, default="public_organization_homepage")
+    placement_surface: Mapped[str] = mapped_column(
+        String(64), nullable=False, default="public_organization_homepage"
+    )
     state: Mapped[str] = mapped_column(String(16), nullable=False, default="proposed")
-    visibility_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
-    proposed_by_user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
-    approved_by_user_id: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"))
-    taken_down_by_user_id: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"))
+    visibility_enabled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+    proposed_by_user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
+    )
+    approved_by_user_id: Mapped[str | None] = mapped_column(
+        ForeignKey("users.id", ondelete="RESTRICT")
+    )
+    taken_down_by_user_id: Mapped[str | None] = mapped_column(
+        ForeignKey("users.id", ondelete="RESTRICT")
+    )
     approved_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
     taken_down_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
-    created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
 
 
 class OrganizationSponsorPlacementAudit(Base):
     __tablename__ = "organization_sponsor_placement_audit"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    placement_id: Mapped[str] = mapped_column(ForeignKey("organization_sponsor_placements.id", ondelete="RESTRICT"), nullable=False, index=True)
-    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True)
+    placement_id: Mapped[str] = mapped_column(
+        ForeignKey("organization_sponsor_placements.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+    organization_id: Mapped[str] = mapped_column(
+        ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
     action: Mapped[str] = mapped_column(String(16), nullable=False)
-    actor_user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
-    created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    actor_user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
+    )
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
 
 
 class SponsorVisibilityGlobalSetting(Base):
     __tablename__ = "sponsor_visibility_global_settings"
     key: Mapped[str] = mapped_column(String(32), primary_key=True, default="global")
-    visibility_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
-    updated_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    visibility_enabled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+    updated_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
 
 
 class OrganizationSponsorVisibilitySetting(Base):
     __tablename__ = "organization_sponsor_visibility_settings"
-    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="RESTRICT"), primary_key=True)
-    visibility_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
-    updated_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    organization_id: Mapped[str] = mapped_column(
+        ForeignKey("organizations.id", ondelete="RESTRICT"), primary_key=True
+    )
+    visibility_enabled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+    updated_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
 
 
 class SponsorVisibilityAudit(Base):
     __tablename__ = "sponsor_visibility_audit"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     scope: Mapped[str] = mapped_column(String(16), nullable=False)
-    organization_id: Mapped[str | None] = mapped_column(ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=True, index=True)
-    placement_id: Mapped[str | None] = mapped_column(ForeignKey("organization_sponsor_placements.id", ondelete="RESTRICT"), nullable=True, index=True)
+    organization_id: Mapped[str | None] = mapped_column(
+        ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=True, index=True
+    )
+    placement_id: Mapped[str | None] = mapped_column(
+        ForeignKey("organization_sponsor_placements.id", ondelete="RESTRICT"),
+        nullable=True,
+        index=True,
+    )
     visibility_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False)
-    actor_user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
-    created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    actor_user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
+    )
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
 
 
 class SponsorPlacementDailyMetric(Base):
     """Anonymous, organization-scoped daily placement totals; never a viewer log."""
+
     __tablename__ = "sponsor_placement_daily_metrics"
     __table_args__ = (
         UniqueConstraint("placement_id", "metric_date", name="uq_sponsor_placement_daily_metric"),
-        CheckConstraint("display_count >= 0 AND click_count >= 0", name="ck_sponsor_daily_metric_nonnegative"),
+        CheckConstraint(
+            "display_count >= 0 AND click_count >= 0", name="ck_sponsor_daily_metric_nonnegative"
+        ),
     )
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    placement_id: Mapped[str] = mapped_column(ForeignKey("organization_sponsor_placements.id", ondelete="RESTRICT"), nullable=False, index=True)
+    placement_id: Mapped[str] = mapped_column(
+        ForeignKey("organization_sponsor_placements.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
     metric_date: Mapped[dt.date] = mapped_column(Date, nullable=False, index=True)
-    display_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    display_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
     click_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
 
 
 class SponsorPlacementReportDedup(Base):
     """Short-lived anonymous event nonce, retained two days only for replay protection."""
+
     __tablename__ = "sponsor_placement_report_dedup"
     event_id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    placement_id: Mapped[str] = mapped_column(ForeignKey("organization_sponsor_placements.id", ondelete="RESTRICT"), nullable=False, index=True)
+    placement_id: Mapped[str] = mapped_column(
+        ForeignKey("organization_sponsor_placements.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
     received_date: Mapped[dt.date] = mapped_column(Date, nullable=False, index=True)
-    received_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
+    received_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
+    )
 
 
 class SponsorPlacementReportingCapability(Base):
     """Short-lived, one-time anonymous public reporting nonce."""
+
     __tablename__ = "sponsor_placement_reporting_capabilities"
     nonce: Mapped[str] = mapped_column(String(36), primary_key=True)
-    placement_id: Mapped[str] = mapped_column(ForeignKey("organization_sponsor_placements.id", ondelete="RESTRICT"), nullable=False, index=True)
+    placement_id: Mapped[str] = mapped_column(
+        ForeignKey("organization_sponsor_placements.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
     event_type: Mapped[str] = mapped_column(String(8), nullable=False)
-    expires_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    expires_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, index=True
+    )
     consumed_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class SponsorPlacementReportRateBucket(Base):
     __tablename__ = "sponsor_placement_report_rate_buckets"
-    placement_id: Mapped[str] = mapped_column(ForeignKey("organization_sponsor_placements.id", ondelete="RESTRICT"), primary_key=True)
+    placement_id: Mapped[str] = mapped_column(
+        ForeignKey("organization_sponsor_placements.id", ondelete="RESTRICT"), primary_key=True
+    )
     bucket_start: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), primary_key=True)
     event_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
 
@@ -2496,6 +2579,82 @@ class FeedbackSubmission(Base):
 
 
 # ===== Team Management =====
+
+
+class OrganizationTeamPublication(Base):
+    """Default-private, tenant-bound publication authority for a team."""
+
+    __tablename__ = "organization_team_publications"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["team_id", "organization_id"],
+            ["teams.id", "teams.organization_id"],
+            ondelete="CASCADE",
+            name="fk_org_team_publication_team_org",
+        ),
+        UniqueConstraint("public_identifier", name="uq_org_team_publication_public_identifier"),
+        CheckConstraint(
+            "publication_state IN ('unpublished', 'published')",
+            name="ck_org_team_publication_state",
+        ),
+        CheckConstraint("publication_version >= 1", name="ck_org_team_publication_version"),
+    )
+    team_id: Mapped[str] = mapped_column(String, primary_key=True)
+    organization_id: Mapped[str] = mapped_column(String, nullable=False)
+    public_identifier: Mapped[str] = mapped_column(String(29), nullable=False)
+    publication_state: Mapped[str] = mapped_column(
+        String(16), default="unpublished", server_default="unpublished", nullable=False
+    )
+    publication_version: Mapped[int] = mapped_column(
+        Integer, default=1, server_default="1", nullable=False
+    )
+    published_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    unpublished_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    published_by_user_id: Mapped[str | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+    unpublished_by_user_id: Mapped[str | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+    updated_by_user_id: Mapped[str | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+
+class OrganizationTeamPublicationAudit(Base):
+    """Append-only transition evidence; intentionally has no update path."""
+
+    __tablename__ = "organization_team_publication_audit"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    team_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    organization_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    action: Mapped[str] = mapped_column(String(16), nullable=False)
+    actor_user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
+    )
+    publication_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    occurred_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["team_id", "organization_id"],
+            ["teams.id", "teams.organization_id"],
+            ondelete="RESTRICT",
+            name="fk_org_team_publication_audit_team_org",
+        ),
+        CheckConstraint(
+            "action IN ('published', 'unpublished')", name="ck_org_team_publication_audit_action"
+        ),
+        CheckConstraint("publication_version >= 1", name="ck_org_team_publication_audit_version"),
+        Index("ix_org_team_publication_audit_team_time", "team_id", "occurred_at"),
+    )
 
 
 class Team(Base):

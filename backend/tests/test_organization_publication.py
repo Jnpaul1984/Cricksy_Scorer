@@ -13,12 +13,19 @@ from backend.services import organization_publication_service
 from backend.services.organization_publication_service import (
     PUBLIC_IDENTIFIER_PATTERN,
     public_identifier_candidate,
+    team_public_identifier_candidate,
 )
 from backend.services.organization_service import OrganizationServiceError, update_membership
 from backend.sql_app.models import (
     Organization,
+    OrganizationEntitlement,
+    OrganizationTeamPublicationAudit,
     OrganizationMembership,
     OrganizationPublicSettings,
+    Fixture,
+    Game,
+    GameStatus,
+    Tournament,
 )
 from backend.tests.school_test_helpers import (
     add_membership,
@@ -428,3 +435,127 @@ async def test_migration_backfill_assigns_unique_identifiers_to_existing_organiz
             )
         ).all()
         assert all(PUBLIC_IDENTIFIER_PATTERN.fullmatch(identifier) for identifier in identifiers)
+
+
+@pytest.mark.parametrize("organization_kind", ["school", "club"])
+def test_team_publication_is_owner_admin_only_tenant_bound_and_revocable(
+    school_client: TestClient, organization_kind: str
+) -> None:
+    owner = register_user(school_client, f"team-public-owner-{organization_kind}@example.com")
+    admin = register_user(school_client, f"team-public-admin-{organization_kind}@example.com")
+    coach = register_user(school_client, f"team-public-coach-{organization_kind}@example.com")
+    outsider = register_user(school_client, f"team-public-outsider-{organization_kind}@example.com")
+    create = create_school if organization_kind == "school" else create_club
+    organization = create(school_client, owner, f"{organization_kind} Team Public")
+    add_membership(school_client, owner, organization["id"], admin.id, "admin")
+    add_membership(school_client, owner, organization["id"], coach.id, "coach")
+    team_response = school_client.post(
+        f"/api/organizations/{organization['id']}/teams", json={"name": "Private XI"}, headers=owner.headers
+    )
+    assert team_response.status_code == 201, team_response.text
+    team = team_response.json()
+    team_identifier = team_public_identifier_candidate(team["id"])
+    public_path = f"/api/public/organizations/{public_identifier_candidate(organization['id'])}/teams/{team_identifier}"
+    assert school_client.get(public_path).status_code == 404
+
+    for actor in (coach, outsider):
+        denied = school_client.put(
+            f"/api/organizations/{organization['id']}/teams/{team['id']}/public-publication/publish",
+            headers=actor.headers,
+        )
+        assert denied.status_code in {403, 404}
+
+    other = create(school_client, owner, f"Other {organization_kind} Tenant")
+    foreign = school_client.post(
+        f"/api/organizations/{other['id']}/teams", json={"name": "Foreign XI"}, headers=owner.headers
+    ).json()
+    cross_tenant = school_client.put(
+        f"/api/organizations/{organization['id']}/teams/{foreign['id']}/public-publication/publish",
+        headers=owner.headers,
+    )
+    assert cross_tenant.status_code == 404
+
+    published = school_client.put(
+        f"/api/organizations/{organization['id']}/teams/{team['id']}/public-publication/publish",
+        headers=admin.headers,
+    )
+    assert published.status_code == 200
+    assert published.json()["public_identifier"] == team_identifier
+    # The parent organization is an independent, fail-closed publication gate.
+    assert school_client.get(public_path).status_code == 404
+    assert school_client.put(
+        f"/api/organizations/{organization['id']}/public-settings/publish", headers=owner.headers
+    ).status_code == 200
+    public = school_client.get(public_path)
+    assert public.status_code == 200
+    assert public.json() == {
+        "public_identifier": team_identifier,
+        "display_name": "Private XI",
+        "aggregate_stats": {"published_games": 0},
+    }
+    assert "player" not in public.text.lower() and "roster" not in public.text.lower()
+    assert school_client.put(
+        f"/api/organizations/{organization['id']}/teams/{team['id']}/public-publication/unpublish",
+        headers=owner.headers,
+    ).status_code == 200
+    assert school_client.get(public_path).status_code == 404
+    session_maker = school_client.session_maker  # type: ignore[attr-defined]
+    async def audit_rows() -> list[OrganizationTeamPublicationAudit]:
+        async with session_maker() as session:
+            return (await session.scalars(select(OrganizationTeamPublicationAudit).where(OrganizationTeamPublicationAudit.team_id == team["id"]).order_by(OrganizationTeamPublicationAudit.id))).all()
+    history = asyncio.run(audit_rows())
+    assert [(row.action, row.actor_user_id, row.publication_version) for row in history] == [
+        ("published", admin.id, 2), ("unpublished", owner.id, 3)
+    ]
+
+
+async def test_public_team_aggregate_counts_only_published_final_games(school_client: TestClient) -> None:
+    owner = register_user(school_client, "team-aggregate-owner@example.com")
+    organization = create_school(school_client, owner, "Aggregate School")
+    team = school_client.post(
+        f"/api/organizations/{organization['id']}/teams", json={"name": "Aggregate XI"}, headers=owner.headers
+    ).json()
+    assert school_client.put(f"/api/organizations/{organization['id']}/public-settings/publish", headers=owner.headers).status_code == 200
+    assert school_client.put(f"/api/organizations/{organization['id']}/teams/{team['id']}/public-publication/publish", headers=owner.headers).status_code == 200
+    session_maker = school_client.session_maker  # type: ignore[attr-defined]
+    other_organization = create_school(school_client, owner, "Foreign Aggregate School")
+    async with session_maker() as session:
+        tournament = Tournament(name="Aggregate Competition", organization_id=organization["id"])
+        unpublished_tournament = Tournament(name="Private Competition", organization_id=organization["id"])
+        foreign_tournament = Tournament(name="Foreign Competition", organization_id=other_organization["id"])
+        published_game = Game(status=GameStatus.completed, publication_state="published_final")
+        private_game = Game(status=GameStatus.completed, publication_state="private")
+        unpublished_competition_game = Game(status=GameStatus.completed, publication_state="published_final")
+        foreign_competition_game = Game(status=GameStatus.completed, publication_state="published_final")
+        session.add_all([tournament, unpublished_tournament, foreign_tournament, published_game, private_game, unpublished_competition_game, foreign_competition_game])
+        await session.flush()
+        session.add_all([
+            Fixture(tournament_id=tournament.id, team_a_name="Aggregate XI", team_b_name="Opposition", team_a_id=team["id"], game_id=published_game.id, status="completed"),
+            Fixture(tournament_id=tournament.id, team_a_name="Aggregate XI", team_b_name="Private Opposition", team_a_id=team["id"], game_id=private_game.id, status="completed"),
+            Fixture(tournament_id=unpublished_tournament.id, team_a_name="Aggregate XI", team_b_name="Unpublished", team_a_id=team["id"], game_id=unpublished_competition_game.id, status="completed"),
+            Fixture(tournament_id=foreign_tournament.id, team_a_name="Aggregate XI", team_b_name="Foreign", team_a_id=team["id"], game_id=foreign_competition_game.id, status="completed"),
+        ])
+        await session.commit()
+    assert school_client.put(
+        f"/api/organizations/{organization['id']}/competitions/{tournament.id}/community-publication/publish",
+        headers=owner.headers,
+    ).status_code == 200
+    public = school_client.get(
+        f"/api/public/organizations/{public_identifier_candidate(organization['id'])}/teams/{team_public_identifier_candidate(team['id'])}"
+    )
+    assert public.status_code == 200
+    assert public.json()["aggregate_stats"] == {"published_games": 1}
+    async with session_maker() as session:
+        entitlement = await session.scalar(
+            select(OrganizationEntitlement).where(
+                OrganizationEntitlement.organization_id == organization["id"]
+            )
+        )
+        assert entitlement is not None
+        entitlement.status = "disabled"
+        await session.commit()
+    disabled = school_client.get(
+        f"/api/public/organizations/{public_identifier_candidate(organization['id'])}/teams/{team_public_identifier_candidate(team['id'])}"
+    )
+    assert disabled.status_code == 200
+    assert disabled.json()["aggregate_stats"] == {"published_games": 0}

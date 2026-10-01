@@ -56,6 +56,8 @@ import type {
   OrganizationCommunitySettings,
   OrganizationCommunityCompetitionSettings,
   PublicOrganizationCommunity,
+  PublicTeam,
+  TeamPublicPublication,
 } from '@/types/schoolAdmin';
 
 const orgPath = (organizationId: string, suffix = '') =>
@@ -831,6 +833,26 @@ export const setOrganizationCompetitionCommunityPublication = (
 export const getPublicOrganizationCommunity = (publicIdentifier: string) =>
   apiRequest<PublicOrganizationCommunity>(
     `/api/public/organizations/${encodeURIComponent(publicIdentifier)}/community`,
+  );
+export const setTeamPublicPublication = (
+  organizationId: string,
+  teamId: string,
+  publish: boolean,
+) =>
+  apiRequest<TeamPublicPublication>(
+    orgPath(
+      organizationId,
+      `/teams/${encodeURIComponent(teamId)}/public-publication/${publish ? 'publish' : 'unpublish'}`,
+    ),
+    { method: 'PUT' },
+  );
+export const getTeamPublicPublication = (organizationId: string, teamId: string) =>
+  apiRequest<TeamPublicPublication>(
+    orgPath(organizationId, `/teams/${encodeURIComponent(teamId)}/public-publication`),
+  );
+export const getPublicTeam = (organizationPublicIdentifier: string, teamPublicIdentifier: string) =>
+  apiRequest<PublicTeam>(
+    `/api/public/organizations/${encodeURIComponent(organizationPublicIdentifier)}/teams/${encodeURIComponent(teamPublicIdentifier)}`,
   );
 
 export interface SponsorAggregateReport {
