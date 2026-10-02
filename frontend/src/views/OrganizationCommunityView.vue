@@ -316,9 +316,11 @@ onBeforeUnmount(() => { if (refreshTimer) clearInterval(refreshTimer); clearDisp
                     <p v-if="fixture.venue">{{ fixture.venue }}</p>
                     <p>{{ fixture.result || fixture.game_status || fixture.fixture_status }}</p>
                   </div>
-                  <RouterLink v-if="fixture.public_scorecard_path" :to="fixture.public_scorecard_path">
+                  <RouterLink v-if="fixture.canonical_scorecard_path" :to="fixture.canonical_scorecard_path">
                     View published scorecard
                   </RouterLink>
+                  <PublicShareLinkButton v-if="fixture.canonical_scorecard_path" :path="fixture.canonical_scorecard_path" label="Copy scorecard link" />
+                  <RouterLink v-if="fixture.public_result_path" :to="fixture.public_result_path">View published result</RouterLink>
                   <PublicShareLinkButton :path="fixture.canonical_path" label="Copy fixture link" />
                 </li>
               </ul>

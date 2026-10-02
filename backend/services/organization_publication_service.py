@@ -270,27 +270,6 @@ async def get_public_organization(
     return None if row is None else (row[0], row[1], row[2])
 
 
-async def get_organization_id_for_public_identifier(
-    db: AsyncSession, *, public_identifier: str
-) -> str | None:
-    """Resolve an eligible public identifier without exposing the private UUID."""
-    if not PUBLIC_IDENTIFIER_PATTERN.fullmatch(public_identifier):
-        return None
-    return await db.scalar(
-        select(models.Organization.id)
-        .join(
-            models.OrganizationPublicSettings,
-            models.OrganizationPublicSettings.organization_id == models.Organization.id,
-        )
-        .where(
-            models.OrganizationPublicSettings.public_identifier == public_identifier,
-            models.OrganizationPublicSettings.publication_state == "published",
-            models.Organization.status == ACTIVE_ORGANIZATION_STATUS,
-        )
-        .limit(1)
-    )
-
-
 def validate_logo_url(value: str) -> str:
     """Validate a passive HTTPS raster-image URL without fetching it server-side."""
     candidate = value.strip()
@@ -516,9 +495,21 @@ async def set_competition_publication_state(
 
 
 async def get_public_community(
-    db: AsyncSession, *, public_identifier: str
+    db: AsyncSession,
+    *,
+    public_identifier: str,
+    competition_public_key: str | None = None,
+    fixture_public_identifier: str | None = None,
 ) -> PublicOrganizationCommunityResponse | None:
     if not PUBLIC_IDENTIFIER_PATTERN.fullmatch(public_identifier):
+        return None
+    if competition_public_key is not None and not PUBLIC_COMPETITION_KEY_PATTERN.fullmatch(
+        competition_public_key
+    ):
+        return None
+    if fixture_public_identifier is not None and not PUBLIC_FIXTURE_IDENTIFIER_PATTERN.fullmatch(
+        fixture_public_identifier
+    ):
         return None
     identity = (
         await db.execute(
@@ -554,9 +545,8 @@ async def get_public_community(
         capability="school_live_scorecards",
     )
 
-    competition_rows = (
-        await db.execute(
-            select(models.Tournament, models.OrganizationCompetitionPublication.public_key)
+    competition_statement = (
+        select(models.Tournament, models.OrganizationCompetitionPublication.public_key)
                 .join(
                     models.OrganizationCompetitionPublication,
                     models.OrganizationCompetitionPublication.competition_id
@@ -573,9 +563,14 @@ async def get_public_community(
                     models.Tournament.name,
                     models.Tournament.id,
                 )
-                .limit(MAX_PUBLIC_COMPETITIONS)
-        )
-    ).all()
+    )
+    if competition_public_key is not None:
+        competition_statement = competition_statement.where(
+            models.OrganizationCompetitionPublication.public_key == competition_public_key
+        ).limit(1)
+    else:
+        competition_statement = competition_statement.limit(MAX_PUBLIC_COMPETITIONS)
+    competition_rows = (await db.execute(competition_statement)).all()
     competitions = [row[0] for row in competition_rows]
     competition_ids = [competition.id for competition in competitions]
     competition_public_keys = {competition.id: public_key for competition, public_key in competition_rows}
@@ -665,13 +660,18 @@ async def get_public_community(
             .where(models.Fixture.tournament_id.in_(competition_ids))
             .subquery()
         )
-        fixture_rows = (
-            await db.execute(
-                select(ranked_fixtures)
-                .where(ranked_fixtures.c.fixture_rank <= MAX_PUBLIC_FIXTURES_PER_COMPETITION)
-                .order_by(ranked_fixtures.c.competition_id, ranked_fixtures.c.fixture_rank)
+        fixture_statement = select(ranked_fixtures).order_by(
+            ranked_fixtures.c.competition_id, ranked_fixtures.c.fixture_rank
+        )
+        if fixture_public_identifier is None:
+            fixture_statement = fixture_statement.where(
+                ranked_fixtures.c.fixture_rank <= MAX_PUBLIC_FIXTURES_PER_COMPETITION
             )
-        ).all()
+        else:
+            fixture_statement = fixture_statement.where(
+                ranked_fixtures.c.fixture_public_identifier == fixture_public_identifier
+            )
+        fixture_rows = (await db.execute(fixture_statement)).all()
         for row in fixture_rows:
             game_status = getattr(row.game_status, "value", row.game_status)
             completed = game_status == models.GameStatus.completed.value
@@ -694,11 +694,31 @@ async def get_public_community(
                         if completed
                         else None
                     ),
-                    canonical_path=(f"/community/{settings.public_identifier}/competitions/{competition_public_keys[str(row.competition_id)]}/fixtures/{row.fixture_public_identifier}"),
-                    public_result_path=(f"/community/{settings.public_identifier}/competitions/{competition_public_keys[str(row.competition_id)]}/results/{row.fixture_public_identifier}" if completed and scorecard_is_public else None),
-                    canonical_scorecard_path=(f"/community/{settings.public_identifier}/competitions/{competition_public_keys[str(row.competition_id)]}/scorecards/{row.game_public_scorecard_identifier}" if scorecard_is_public and row.game_public_scorecard_identifier else None),
+                    canonical_path=(
+                        f"/community/{settings.public_identifier}/competitions/"
+                        f"{competition_public_keys[str(row.competition_id)]}/fixtures/"
+                        f"{row.fixture_public_identifier}"
+                    ),
+                    public_result_path=(
+                        f"/community/{settings.public_identifier}/competitions/"
+                        f"{competition_public_keys[str(row.competition_id)]}/results/"
+                        f"{row.fixture_public_identifier}"
+                        if completed and scorecard_is_public
+                        else None
+                    ),
                     public_scorecard_path=(
-                        f"/community/{settings.public_identifier}/competitions/{competition_public_keys[str(row.competition_id)]}/scorecards/{row.game_public_scorecard_identifier}" if scorecard_is_public and row.game_public_scorecard_identifier else None
+                        f"/community/{settings.public_identifier}/competitions/"
+                        f"{competition_public_keys[str(row.competition_id)]}/scorecards/"
+                        f"{row.game_public_scorecard_identifier}"
+                        if scorecard_is_public and row.game_public_scorecard_identifier
+                        else None
+                    ),
+                    canonical_scorecard_path=(
+                        f"/community/{settings.public_identifier}/competitions/"
+                        f"{competition_public_keys[str(row.competition_id)]}/scorecards/"
+                        f"{row.game_public_scorecard_identifier}"
+                        if scorecard_is_public and row.game_public_scorecard_identifier
+                        else None
                     ),
                 )
             )
@@ -790,35 +810,113 @@ async def get_public_community(
     )
 
 
-async def get_public_competition(db: AsyncSession, *, public_identifier: str, competition_public_key: str) -> PublicCompetitionResponse | None:
-    if not (PUBLIC_IDENTIFIER_PATTERN.fullmatch(public_identifier) and PUBLIC_COMPETITION_KEY_PATTERN.fullmatch(competition_public_key)):
+async def get_public_competition(
+    db: AsyncSession, *, public_identifier: str, competition_public_key: str
+) -> PublicCompetitionResponse | None:
+    """Resolve a published competition afresh; no caller-supplied private id is accepted."""
+    if not (
+        PUBLIC_IDENTIFIER_PATTERN.fullmatch(public_identifier)
+        and PUBLIC_COMPETITION_KEY_PATTERN.fullmatch(competition_public_key)
+    ):
         return None
-    community = await get_public_community(db, public_identifier=public_identifier)
+    community = await get_public_community(
+        db,
+        public_identifier=public_identifier,
+        competition_public_key=competition_public_key,
+    )
     if community is None:
         return None
-    competition = next((item for item in community.competitions if item.public_key == competition_public_key), None)
+    competition = next(
+        (item for item in community.competitions if item.public_key == competition_public_key), None
+    )
     if competition is None:
         return None
-    return PublicCompetitionResponse(**competition.model_dump(), public_identifier=public_identifier, canonical_path=f"/community/{public_identifier}/competitions/{competition_public_key}")
+    return PublicCompetitionResponse(
+        **competition.model_dump(),
+        public_identifier=public_identifier,
+        canonical_path=f"/community/{public_identifier}/competitions/{competition_public_key}",
+    )
 
 
-async def get_public_fixture(db: AsyncSession, *, public_identifier: str, competition_public_key: str, fixture_public_identifier: str, result_only: bool = False) -> PublicFixtureResponse | None:
+async def get_public_fixture(
+    db: AsyncSession,
+    *,
+    public_identifier: str,
+    competition_public_key: str,
+    fixture_public_identifier: str,
+    result_only: bool = False,
+) -> PublicFixtureResponse | None:
+    """Return a fixture only through its currently-published organization and competition."""
     if not PUBLIC_FIXTURE_IDENTIFIER_PATTERN.fullmatch(fixture_public_identifier):
         return None
-    competition = await get_public_competition(db, public_identifier=public_identifier, competition_public_key=competition_public_key)
+    community = await get_public_community(
+        db,
+        public_identifier=public_identifier,
+        competition_public_key=competition_public_key,
+        fixture_public_identifier=fixture_public_identifier,
+    )
+    competition = community.competitions[0] if community and community.competitions else None
     if competition is None:
         return None
-    fixture = next((item for item in competition.fixtures if item.public_identifier == fixture_public_identifier), None)
+    fixture = next(
+        (item for item in competition.fixtures if item.public_identifier == fixture_public_identifier), None
+    )
+    # A result link is deliberately narrower than a fixture link: it requires
+    # a separately entitled and final-published scorecard, not merely a result
+    # field from an operator's private game.
     if fixture is None or (result_only and fixture.public_result_path is None):
         return None
-    return PublicFixtureResponse(**fixture.model_dump(), competition_public_key=competition.public_key, competition_name=competition.name)
+    return PublicFixtureResponse(
+        **fixture.model_dump(),
+        competition_public_key=competition.public_key,
+        competition_name=competition.name,
+    )
 
 
-async def get_public_scorecard_game_id(db: AsyncSession, *, public_identifier: str, competition_public_key: str, scorecard_public_identifier: str) -> str | None:
-    if not (PUBLIC_IDENTIFIER_PATTERN.fullmatch(public_identifier) and PUBLIC_COMPETITION_KEY_PATTERN.fullmatch(competition_public_key) and PUBLIC_SCORECARD_IDENTIFIER_PATTERN.fullmatch(scorecard_public_identifier)):
+async def get_public_scorecard_game_id(
+    db: AsyncSession,
+    *,
+    public_identifier: str,
+    competition_public_key: str,
+    scorecard_public_identifier: str,
+) -> str | None:
+    """Map an opaque share key to a game only after all public gates hold."""
+    if not (
+        PUBLIC_IDENTIFIER_PATTERN.fullmatch(public_identifier)
+        and PUBLIC_COMPETITION_KEY_PATTERN.fullmatch(competition_public_key)
+        and PUBLIC_SCORECARD_IDENTIFIER_PATTERN.fullmatch(scorecard_public_identifier)
+    ):
         return None
-    row = (await db.execute(select(models.Game.id, models.Organization.id).join(models.Fixture, models.Fixture.game_id == models.Game.id).join(models.Tournament, models.Tournament.id == models.Fixture.tournament_id).join(models.OrganizationCompetitionPublication, (models.OrganizationCompetitionPublication.competition_id == models.Tournament.id) & (models.OrganizationCompetitionPublication.organization_id == models.Tournament.organization_id)).join(models.Organization, models.Organization.id == models.Tournament.organization_id).join(models.OrganizationPublicSettings, models.OrganizationPublicSettings.organization_id == models.Organization.id).where(models.OrganizationPublicSettings.public_identifier == public_identifier, models.OrganizationPublicSettings.publication_state == "published", models.OrganizationCompetitionPublication.public_key == competition_public_key, models.OrganizationCompetitionPublication.publication_state == "published", models.Organization.status == ACTIVE_ORGANIZATION_STATUS, models.Game.public_scorecard_identifier == scorecard_public_identifier, models.Game.publication_state.in_(("published_live", "published_final"))).limit(1))).one_or_none()
-    if row is None or not await organization_has_capability(db, organization_id=row[1], capability="school_live_scorecards"):
+    row = (
+        await db.execute(
+            select(models.Game.id, models.Organization.id)
+            .join(models.Fixture, models.Fixture.game_id == models.Game.id)
+            .join(models.Tournament, models.Tournament.id == models.Fixture.tournament_id)
+            .join(
+                models.OrganizationCompetitionPublication,
+                (models.OrganizationCompetitionPublication.competition_id == models.Tournament.id)
+                & (models.OrganizationCompetitionPublication.organization_id == models.Tournament.organization_id),
+            )
+            .join(models.Organization, models.Organization.id == models.Tournament.organization_id)
+            .join(
+                models.OrganizationPublicSettings,
+                models.OrganizationPublicSettings.organization_id == models.Organization.id,
+            )
+            .where(
+                models.OrganizationPublicSettings.public_identifier == public_identifier,
+                models.OrganizationPublicSettings.publication_state == "published",
+                models.OrganizationCompetitionPublication.public_key == competition_public_key,
+                models.OrganizationCompetitionPublication.publication_state == "published",
+                models.Organization.status == ACTIVE_ORGANIZATION_STATUS,
+                models.Game.public_scorecard_identifier == scorecard_public_identifier,
+                models.Game.publication_state.in_(("published_live", "published_final")),
+            )
+            .limit(1)
+        )
+    ).one_or_none()
+    if row is None or not await organization_has_capability(
+        db, organization_id=row[1], capability="school_live_scorecards"
+    ):
         return None
     return row[0]
 
