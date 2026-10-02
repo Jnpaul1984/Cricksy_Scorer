@@ -1,18 +1,27 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 
+import PublicShareLinkButton from '@/components/PublicShareLinkButton.vue';
 import { getErrorMessage } from '@/services/api';
-import { getPublicSchoolScorecard } from '@/services/schoolAdminApi';
-import type { PublicSchoolScorecard } from '@/types/schoolAdmin';
+import { getPublicCompetitionScorecard, getPublicSchoolScorecard } from '@/services/schoolAdminApi';
+import type { PublicOpaqueSchoolScorecard, PublicSchoolScorecard } from '@/types/schoolAdmin';
 
-const props = defineProps<{ gameId: string }>();
-const scorecard = ref<PublicSchoolScorecard | null>(null);
+const props = defineProps<{ gameId?: string; publicIdentifier?: string; competitionPublicKey?: string; scorecardPublicIdentifier?: string }>();
+const scorecard = ref<(PublicSchoolScorecard | PublicOpaqueSchoolScorecard) | null>(null);
 const loading = ref(true);
 const error = ref('');
+const canonicalSharePath = computed(() => (
+  props.publicIdentifier && props.competitionPublicKey && props.scorecardPublicIdentifier
+    ? `/community/${props.publicIdentifier}/competitions/${props.competitionPublicKey}/scorecards/${props.scorecardPublicIdentifier}`
+    : null
+));
 
-onMounted(async () => {
+async function load() {
+  loading.value = true; error.value = ''; scorecard.value = null;
   try {
-    scorecard.value = await getPublicSchoolScorecard(props.gameId);
+    scorecard.value = props.scorecardPublicIdentifier && props.publicIdentifier && props.competitionPublicKey
+      ? await getPublicCompetitionScorecard(props.publicIdentifier, props.competitionPublicKey, props.scorecardPublicIdentifier)
+      : await getPublicSchoolScorecard(props.gameId || '');
   } catch (reason) {
     const status = (reason as { status?: number })?.status;
     error.value =
@@ -20,7 +29,9 @@ onMounted(async () => {
   } finally {
     loading.value = false;
   }
-});
+}
+onMounted(load);
+watch(() => [props.gameId, props.publicIdentifier, props.competitionPublicKey, props.scorecardPublicIdentifier], load);
 </script>
 
 <template>
@@ -42,6 +53,7 @@ onMounted(async () => {
         <span>{{ scorecard.overs_completed }}.{{ scorecard.balls_this_over }} overs</span>
       </section>
       <p v-if="scorecard.result" class="result">{{ scorecard.result }}</p>
+      <PublicShareLinkButton v-if="canonicalSharePath" :path="canonicalSharePath" label="Copy scorecard link" />
       <div class="tables">
         <section>
           <h2>Batting</h2>

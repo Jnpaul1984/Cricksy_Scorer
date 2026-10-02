@@ -708,6 +708,9 @@ class Game(Base):
     first_inning_summary: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     result: Mapped[str | None] = mapped_column(String, nullable=True)
     publication_state: Mapped[str | None] = mapped_column(String(24), nullable=True)
+    public_scorecard_identifier: Mapped[str] = mapped_column(
+        String(28), unique=True, default=lambda: f"sc_{uuid.uuid4().hex[:24]}", nullable=False
+    )
     created_by_user_id: Mapped[str | None] = mapped_column(
         String,
         ForeignKey("users.id", ondelete="SET NULL"),
@@ -2519,6 +2522,9 @@ class Fixture(Base):
     __tablename__ = "fixtures"
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    public_identifier: Mapped[str] = mapped_column(
+        String(28), unique=True, default=lambda: f"fix_{uuid.uuid4().hex[:24]}", nullable=False
+    )
     tournament_id: Mapped[str] = mapped_column(
         String,
         ForeignKey("tournaments.id", ondelete="CASCADE"),

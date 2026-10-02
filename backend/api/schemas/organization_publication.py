@@ -114,6 +114,7 @@ class PublicCommunityStanding(BaseModel):
 
 
 class PublicCommunityFixture(BaseModel):
+    public_identifier: str
     team_a_name: str
     team_b_name: str
     match_number: int | None
@@ -122,6 +123,9 @@ class PublicCommunityFixture(BaseModel):
     fixture_status: str
     game_status: str | None
     result: str | None
+    canonical_path: str
+    public_result_path: str | None
+    canonical_scorecard_path: str | None
     public_scorecard_path: str | None
 
     model_config = ConfigDict(extra="forbid")
@@ -148,6 +152,18 @@ class PublicOrganizationCommunityResponse(BaseModel):
     branding: PublicOrganizationBranding
     competitions: list[PublicCommunityCompetition]
 
+    model_config = ConfigDict(extra="forbid")
+
+
+class PublicCompetitionResponse(PublicCommunityCompetition):
+    public_identifier: str
+    canonical_path: str
+    model_config = ConfigDict(extra="forbid")
+
+
+class PublicFixtureResponse(PublicCommunityFixture):
+    competition_public_key: str
+    competition_name: str
     model_config = ConfigDict(extra="forbid")
 
 

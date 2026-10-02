@@ -3,6 +3,7 @@ import { getActivePinia } from 'pinia';
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import type { ComponentPublicInstance } from 'vue';
 import { RouterLink } from 'vue-router';
+import PublicShareLinkButton from '@/components/PublicShareLinkButton.vue';
 
 import { organizationTerminology } from '@/composables/useOrganizationTerminology';
 import {
@@ -253,6 +254,7 @@ onBeforeUnmount(() => { if (refreshTimer) clearInterval(refreshTimer); clearDisp
           <p class="eyebrow">{{ terminology.kindLabel }} cricket community</p>
           <h1>{{ community.display_name }}</h1>
           <p>Public {{ terminology.kindLabelLower }} competitions, fixtures, results, and standings.</p>
+          <PublicShareLinkButton :path="`/community/${community.public_identifier}`" label="Copy community link" />
           <button type="button" class="favorite-button" @click="toggleFavorite">{{ favoriteId ? 'Saved public page' : 'Save public page' }}</button>
           <p v-if="favoriteError" class="favorite-error" role="status">{{ favoriteError }}</p>
         </div>
@@ -285,6 +287,7 @@ onBeforeUnmount(() => { if (refreshTimer) clearInterval(refreshTimer); clearDisp
             <header>
               <p class="competition-status">{{ competition.status }} · {{ competition.tournament_type }}</p>
               <h3>{{ competition.name }}</h3>
+              <RouterLink :to="`/community/${community.public_identifier}/competitions/${competition.public_key}`">Open competition</RouterLink>
               <button
                 type="button"
                 class="favorite-button competition-favorite-button"
@@ -308,7 +311,7 @@ onBeforeUnmount(() => { if (refreshTimer) clearInterval(refreshTimer); clearDisp
               <ul class="fixture-list">
                 <li v-for="(fixture, index) in competition.fixtures" :key="`${fixture.team_a_name}:${fixture.team_b_name}:${fixture.scheduled_date || index}`">
                   <div>
-                    <strong>{{ fixture.team_a_name }} vs {{ fixture.team_b_name }}</strong>
+                    <RouterLink :to="fixture.canonical_path"><strong>{{ fixture.team_a_name }} vs {{ fixture.team_b_name }}</strong></RouterLink>
                     <p v-if="fixture.scheduled_date">{{ formatDate(fixture.scheduled_date) }}</p>
                     <p v-if="fixture.venue">{{ fixture.venue }}</p>
                     <p>{{ fixture.result || fixture.game_status || fixture.fixture_status }}</p>
@@ -316,6 +319,7 @@ onBeforeUnmount(() => { if (refreshTimer) clearInterval(refreshTimer); clearDisp
                   <RouterLink v-if="fixture.public_scorecard_path" :to="fixture.public_scorecard_path">
                     View published scorecard
                   </RouterLink>
+                  <PublicShareLinkButton :path="fixture.canonical_path" label="Copy fixture link" />
                 </li>
               </ul>
             </section>

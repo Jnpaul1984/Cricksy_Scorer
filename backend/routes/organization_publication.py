@@ -10,12 +10,17 @@ from backend.api.schemas.organization_publication import (
     OrganizationCompetitionPublicationResponse,
     OrganizationPublicationSettingsResponse,
     PublicAnonymousLeaderboardsResponse,
+    PublicCompetitionResponse,
+    PublicFixtureResponse,
     PublicOrganizationCommunityResponse,
     PublicOrganizationResponse,
     PublicTeamResponse,
 )
 from backend.security import get_current_active_user
 from backend.services import organization_publication_service, public_leaderboard_service
+from backend.services import school_competition_service
+from backend.services.school_competition_service import SchoolCompetitionServiceError
+from backend.api.schemas.school_competitions import PublicOpaqueSchoolScorecard
 from backend.services.organization_service import OrganizationServiceError
 from backend.sql_app.database import get_db
 from backend.sql_app.models import User
@@ -235,6 +240,38 @@ async def public_organization_community(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Public page not found")
     return projection
 
+
+@router.get("/api/public/organizations/{public_identifier}/competitions/{competition_public_key}", response_model=PublicCompetitionResponse)
+async def public_competition(public_identifier: str, competition_public_key: str, db: Annotated[AsyncSession, Depends(get_db)]) -> PublicCompetitionResponse:
+    projection = await organization_publication_service.get_public_competition(db, public_identifier=public_identifier, competition_public_key=competition_public_key)
+    if projection is None:
+        raise HTTPException(status_code=404, detail="Public competition not found")
+    return projection
+
+@router.get("/api/public/organizations/{public_identifier}/competitions/{competition_public_key}/fixtures/{fixture_public_identifier}", response_model=PublicFixtureResponse)
+async def public_fixture(public_identifier: str, competition_public_key: str, fixture_public_identifier: str, db: Annotated[AsyncSession, Depends(get_db)]) -> PublicFixtureResponse:
+    projection = await organization_publication_service.get_public_fixture(db, public_identifier=public_identifier, competition_public_key=competition_public_key, fixture_public_identifier=fixture_public_identifier)
+    if projection is None:
+        raise HTTPException(status_code=404, detail="Public fixture not found")
+    return projection
+
+@router.get("/api/public/organizations/{public_identifier}/competitions/{competition_public_key}/results/{fixture_public_identifier}", response_model=PublicFixtureResponse)
+async def public_result(public_identifier: str, competition_public_key: str, fixture_public_identifier: str, db: Annotated[AsyncSession, Depends(get_db)]) -> PublicFixtureResponse:
+    projection = await organization_publication_service.get_public_fixture(db, public_identifier=public_identifier, competition_public_key=competition_public_key, fixture_public_identifier=fixture_public_identifier, result_only=True)
+    if projection is None:
+        raise HTTPException(status_code=404, detail="Public result not found")
+    return projection
+
+@router.get("/api/public/organizations/{public_identifier}/competitions/{competition_public_key}/scorecards/{scorecard_public_identifier}", response_model=PublicOpaqueSchoolScorecard)
+async def public_competition_scorecard(public_identifier: str, competition_public_key: str, scorecard_public_identifier: str, db: Annotated[AsyncSession, Depends(get_db)]) -> PublicOpaqueSchoolScorecard:
+    game_id = await organization_publication_service.get_public_scorecard_game_id(db, public_identifier=public_identifier, competition_public_key=competition_public_key, scorecard_public_identifier=scorecard_public_identifier)
+    if game_id is None:
+        raise HTTPException(status_code=404, detail="Published scorecard not found")
+    try:
+        legacy = await school_competition_service.public_scorecard(db, game_id=game_id)
+    except SchoolCompetitionServiceError:
+        raise HTTPException(status_code=404, detail="Published scorecard not found") from None
+    return PublicOpaqueSchoolScorecard(public_identifier=scorecard_public_identifier, **legacy.model_dump(exclude={"game_id"}))
 
 @router.get(
     "/api/public/organizations/{public_identifier}/leaderboards",

@@ -57,6 +57,9 @@ import type {
   OrganizationCommunityCompetitionSettings,
   PublicAnonymousLeaderboards,
   PublicOrganizationCommunity,
+  PublicCompetition,
+  PublicFixture,
+  PublicOpaqueSchoolScorecard,
   PublicTeam,
   TeamPublicPublication,
 } from '@/types/schoolAdmin';
@@ -216,6 +219,11 @@ export const getPublicOrganizationSponsorPlacement = (publicIdentifier: string) 
   apiRequest<PublicOrganizationSponsorPlacement>(
     `/api/public/organizations/${encodeURIComponent(publicIdentifier)}/sponsor-placement`,
   );
+
+const publicCompetitionPath = (organizationPublicIdentifier: string, competitionPublicKey: string) => `/api/public/organizations/${encodeURIComponent(organizationPublicIdentifier)}/competitions/${encodeURIComponent(competitionPublicKey)}`;
+export const getPublicCompetition = (organizationPublicIdentifier: string, competitionPublicKey: string) => apiRequest<PublicCompetition>(publicCompetitionPath(organizationPublicIdentifier, competitionPublicKey));
+export const getPublicFixture = (organizationPublicIdentifier: string, competitionPublicKey: string, fixturePublicIdentifier: string, resultOnly = false) => apiRequest<PublicFixture>(`${publicCompetitionPath(organizationPublicIdentifier, competitionPublicKey)}/${resultOnly ? 'results' : 'fixtures'}/${encodeURIComponent(fixturePublicIdentifier)}`);
+export const getPublicCompetitionScorecard = (organizationPublicIdentifier: string, competitionPublicKey: string, scorecardPublicIdentifier: string) => apiRequest<PublicOpaqueSchoolScorecard>(`${publicCompetitionPath(organizationPublicIdentifier, competitionPublicKey)}/scorecards/${encodeURIComponent(scorecardPublicIdentifier)}`);
 export const proposeOrganizationSponsorPlacement = (organizationId: string, sponsorName: string, category: string, sponsorUrl?: string) =>
   apiRequest<{ id: string; state: string }>(orgPath(organizationId, '/sponsor-placements'), { method: 'POST', body: JSON.stringify({ sponsor_name: sponsorName, category, sponsor_url: sponsorUrl || undefined }) });
 
