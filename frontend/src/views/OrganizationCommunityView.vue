@@ -3,8 +3,8 @@ import { getActivePinia } from 'pinia';
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import type { ComponentPublicInstance } from 'vue';
 import { RouterLink } from 'vue-router';
-import PublicShareLinkButton from '@/components/PublicShareLinkButton.vue';
 
+import PublicShareLinkButton from '@/components/PublicShareLinkButton.vue';
 import { organizationTerminology } from '@/composables/useOrganizationTerminology';
 import {
   getPublicOrganizationCommunity,
@@ -321,6 +321,7 @@ onBeforeUnmount(() => { if (refreshTimer) clearInterval(refreshTimer); clearDisp
                   </RouterLink>
                   <PublicShareLinkButton v-if="fixture.canonical_scorecard_path" :path="fixture.canonical_scorecard_path" label="Copy scorecard link" />
                   <RouterLink v-if="fixture.public_result_path" :to="fixture.public_result_path">View published result</RouterLink>
+                  <PublicShareLinkButton v-if="fixture.public_result_path" :path="fixture.public_result_path" label="Copy result link" />
                   <PublicShareLinkButton :path="fixture.canonical_path" label="Copy fixture link" />
                 </li>
               </ul>

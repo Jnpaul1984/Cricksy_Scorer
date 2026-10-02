@@ -13,6 +13,7 @@ from backend.api.schemas.organizations import OrganizationMembershipUpdate
 from backend.services import organization_publication_service, organization_team_service
 from backend.services.organization_publication_service import (
     PUBLIC_IDENTIFIER_PATTERN,
+    public_competition_key_candidate,
     public_identifier_candidate,
     team_public_identifier_candidate,
 )
@@ -831,3 +832,34 @@ async def test_opaque_entity_share_routes_fail_closed_after_parent_revocation(
         f"/api/organizations/{organization['id']}/public-settings/unpublish", headers=owner.headers
     ).status_code == 200
     assert school_client.get(f"{base}/fixtures/{fixture_projection['public_identifier']}").status_code == 404
+async def test_direct_opaque_entity_links_bypass_community_collection_caps(school_client: TestClient) -> None:
+    owner = register_user(school_client, "opaque-boundary-owner@example.com")
+    organization = create_school(school_client, owner, "Opaque Boundary School")
+    session_maker = school_client.session_maker  # type: ignore[attr-defined]
+    async with session_maker() as session:
+        competitions = [Tournament(name=f"Boundary Competition {number:02d}", organization_id=organization["id"]) for number in range(1, 10)]
+        session.add_all(competitions)
+        await session.flush()
+        ninth = competitions[-1]
+        fixtures = [Fixture(tournament_id=ninth.id, team_a_name=f"Home {number}", team_b_name=f"Away {number}", match_number=number, status="scheduled") for number in range(1, 14)]
+        session.add_all(fixtures)
+        await session.commit()
+        await session.refresh(fixtures[-1])
+    published = school_client.put(f"/api/organizations/{organization['id']}/public-settings/publish", headers=owner.headers)
+    assert published.status_code == 200
+    public_identifier = published.json()["public_identifier"]
+    for competition in competitions:
+        response = school_client.put(f"/api/organizations/{organization['id']}/competitions/{competition.id}/community-publication/publish", headers=owner.headers)
+        assert response.status_code == 200, response.text
+    ninth_key = public_competition_key_candidate(ninth.id)
+    base = f"/api/public/organizations/{public_identifier}/competitions/{ninth_key}"
+    community = school_client.get(f"/api/public/organizations/{public_identifier}/community")
+    assert community.status_code == 200
+    assert len(community.json()["competitions"]) == 8
+    assert all(item["public_key"] != ninth_key for item in community.json()["competitions"])
+    assert school_client.get(base).status_code == 200
+    fixture_url = f"{base}/fixtures/{fixtures[-1].public_identifier}"
+    assert school_client.get(fixture_url).status_code == 200
+    assert school_client.put(f"/api/organizations/{organization['id']}/competitions/{ninth.id}/community-publication/unpublish", headers=owner.headers).status_code == 200
+    assert school_client.get(base).status_code == 404
+    assert school_client.get(fixture_url).status_code == 404
