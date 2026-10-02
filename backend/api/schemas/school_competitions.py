@@ -173,3 +173,28 @@ class PublicSchoolScorecard(BaseModel):
     result: str | None
     batting_scorecard: list[PublicScorecardEntry]
     bowling_scorecard: list[PublicScorecardEntry]
+
+
+class PublicOpaqueSchoolScorecard(BaseModel):
+    public_identifier: str
+    organization_type: Literal["school", "club"]
+    publication_state: Literal["published_live", "published_final"]
+    status: str
+    team_a: PublicTeam
+    team_b: PublicTeam
+    match_type: str
+    overs_limit: int | None
+    days_limit: int | None
+    overs_per_day: int | None
+    toss_winner_team: str | None
+    decision: str | None
+    batting_team_name: str | None
+    bowling_team_name: str | None
+    total_runs: int
+    total_wickets: int
+    overs_completed: int
+    balls_this_over: int
+    current_inning: int
+    result: str | None
+    batting_scorecard: list[PublicScorecardEntry]
+    bowling_scorecard: list[PublicScorecardEntry]

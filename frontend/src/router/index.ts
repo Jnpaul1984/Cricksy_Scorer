@@ -231,6 +231,10 @@ const router = createRouter({
       component: () => import('@/views/school/SchoolPublicScorecardView.vue'),
       props: true,
     },
+    { path: '/community/:publicIdentifier/competitions/:competitionPublicKey', name: 'public-competition', component: () => import('@/views/PublicCompetitionView.vue'), props: true },
+    { path: '/community/:publicIdentifier/competitions/:competitionPublicKey/fixtures/:fixturePublicIdentifier', name: 'public-fixture', component: () => import('@/views/PublicFixtureView.vue'), props: true },
+    { path: '/community/:publicIdentifier/competitions/:competitionPublicKey/results/:fixturePublicIdentifier', name: 'public-result', component: () => import('@/views/PublicFixtureView.vue'), props: route => ({ ...route.params, resultOnly: true }) },
+    { path: '/community/:publicIdentifier/competitions/:competitionPublicKey/scorecards/:scorecardPublicIdentifier', name: 'public-competition-scorecard', component: () => import('@/views/school/SchoolPublicScorecardView.vue'), props: true },
     {
       path: '/community/:publicIdentifier',
       name: 'organization-community',
@@ -441,7 +445,7 @@ router.beforeEach(async (to, _from, next) => {
     'pricing',
     'viewer-scoreboard',
     'embed-scoreboard',
-    'school-public-scorecard', 'organization-community', 'public-team', 'register', 'school-free', 'club-free',
+    'school-public-scorecard', 'organization-community', 'public-team', 'public-competition', 'public-fixture', 'public-result', 'public-competition-scorecard', 'register', 'school-free', 'club-free',
   ]
 
   const isPublic = publicPaths.includes(to.path) || (to.name != null && publicNames.includes(String(to.name)))

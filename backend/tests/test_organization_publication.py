@@ -13,6 +13,7 @@ from backend.api.schemas.organizations import OrganizationMembershipUpdate
 from backend.services import organization_publication_service, organization_team_service
 from backend.services.organization_publication_service import (
     PUBLIC_IDENTIFIER_PATTERN,
+    public_competition_key_candidate,
     public_identifier_candidate,
     team_public_identifier_candidate,
 )
@@ -721,3 +722,144 @@ async def test_public_team_aggregate_counts_only_published_final_games(school_cl
     )
     assert disabled.status_code == 200
     assert disabled.json()["aggregate_stats"] == {"published_games": 0}
+
+
+async def test_opaque_entity_share_routes_fail_closed_after_parent_revocation(
+    school_client: TestClient,
+) -> None:
+    """Public entity links never accept/return tenant, fixture, or game identifiers."""
+    owner = register_user(school_client, "opaque-share-owner@example.com")
+    organization = create_school(school_client, owner, "Opaque Share School")
+    other = create_school(school_client, owner, "Other Opaque Share School")
+    session_maker = school_client.session_maker  # type: ignore[attr-defined]
+    async with session_maker() as session:
+        competition = Tournament(name="Opaque Cup", organization_id=organization["id"])
+        game = Game(
+            status=GameStatus.completed,
+            publication_state="published_final",
+            result="Home won by 1 run",
+            team_a={"name": "Home", "players": [], "school_source": {"organization_id": organization["id"]}},
+            team_b={"name": "Away", "players": [], "school_source": {"organization_id": organization["id"]}},
+        )
+        session.add_all([competition, game])
+        await session.flush()
+        fixture = Fixture(
+            tournament_id=competition.id,
+            team_a_name="Home",
+            team_b_name="Away",
+            game_id=game.id,
+            status="completed",
+            result="Private result must not be used",
+        )
+        session.add(fixture)
+        await session.commit()
+        await session.refresh(fixture)
+        await session.refresh(game)
+
+    published_org = school_client.put(
+        f"/api/organizations/{organization['id']}/public-settings/publish", headers=owner.headers
+    ).json()
+    public_org = published_org["public_identifier"]
+    published_competition = school_client.put(
+        f"/api/organizations/{organization['id']}/competitions/{competition.id}/community-publication/publish",
+        headers=owner.headers,
+    )
+    assert published_competition.status_code == 200
+    community = school_client.get(f"/api/public/organizations/{public_org}/community")
+    assert community.status_code == 200
+    public_competition = community.json()["competitions"][0]
+    fixture_projection = public_competition["fixtures"][0]
+    assert public_competition["public_key"].startswith("cmp_")
+    assert fixture_projection["public_identifier"].startswith("fix_")
+    assert fixture_projection["canonical_scorecard_path"].endswith(game.public_scorecard_identifier)
+
+    base = f"/api/public/organizations/{public_org}/competitions/{public_competition['public_key']}"
+    for suffix in ("", f"/fixtures/{fixture_projection['public_identifier']}", f"/results/{fixture_projection['public_identifier']}"):
+        response = school_client.get(f"{base}{suffix}")
+        assert response.status_code == 200, response.text
+        serialized = response.text
+        for private_identifier in (organization["id"], competition.id, fixture.id, game.id):
+            assert private_identifier not in serialized
+    scorecard = school_client.get(f"{base}/scorecards/{game.public_scorecard_identifier}")
+    assert scorecard.status_code == 200, scorecard.text
+    assert scorecard.json()["public_identifier"] == game.public_scorecard_identifier
+    assert game.id not in scorecard.text
+    # Preserve the earlier endpoint's deliberately separate contract while the
+    # nested canonical endpoint remains opaque-only.
+    legacy_scorecard = school_client.get(f"/public/school-scorecards/{game.id}")
+    assert legacy_scorecard.status_code == 200
+    assert legacy_scorecard.json()["game_id"] == game.id
+    assert "public_identifier" not in legacy_scorecard.json()
+
+    # Opaque keys cannot be replayed under another tenant and are immediately
+    # invalid when either publication gate is withdrawn.
+    other_public = school_client.put(
+        f"/api/organizations/{other['id']}/public-settings/publish", headers=owner.headers
+    ).json()["public_identifier"]
+    assert school_client.get(
+        f"/api/public/organizations/{other_public}/competitions/{public_competition['public_key']}"
+    ).status_code == 404
+    assert school_client.put(
+        f"/api/organizations/{organization['id']}/competitions/{competition.id}/community-publication/unpublish",
+        headers=owner.headers,
+    ).status_code == 200
+    assert school_client.get(base).status_code == 404
+    assert school_client.get(f"{base}/scorecards/{game.public_scorecard_identifier}").status_code == 404
+    assert school_client.put(
+        f"/api/organizations/{organization['id']}/competitions/{competition.id}/community-publication/publish",
+        headers=owner.headers,
+    ).status_code == 200
+    async with session_maker() as session:
+        entitlement = await session.scalar(
+            select(OrganizationEntitlement).where(
+                OrganizationEntitlement.organization_id == organization["id"]
+            )
+        )
+        assert entitlement is not None
+        entitlement.status = "disabled"
+        await session.commit()
+    assert school_client.get(f"{base}/scorecards/{game.public_scorecard_identifier}").status_code == 404
+    async with session_maker() as session:
+        entitlement = await session.scalar(
+            select(OrganizationEntitlement).where(
+                OrganizationEntitlement.organization_id == organization["id"]
+            )
+        )
+        assert entitlement is not None
+        entitlement.status = "active"
+        await session.commit()
+    assert school_client.put(
+        f"/api/organizations/{organization['id']}/public-settings/unpublish", headers=owner.headers
+    ).status_code == 200
+    assert school_client.get(f"{base}/fixtures/{fixture_projection['public_identifier']}").status_code == 404
+async def test_direct_opaque_entity_links_bypass_community_collection_caps(school_client: TestClient) -> None:
+    owner = register_user(school_client, "opaque-boundary-owner@example.com")
+    organization = create_school(school_client, owner, "Opaque Boundary School")
+    session_maker = school_client.session_maker  # type: ignore[attr-defined]
+    async with session_maker() as session:
+        competitions = [Tournament(name=f"Boundary Competition {number:02d}", organization_id=organization["id"]) for number in range(1, 10)]
+        session.add_all(competitions)
+        await session.flush()
+        ninth = competitions[-1]
+        fixtures = [Fixture(tournament_id=ninth.id, team_a_name=f"Home {number}", team_b_name=f"Away {number}", match_number=number, status="scheduled") for number in range(1, 14)]
+        session.add_all(fixtures)
+        await session.commit()
+        await session.refresh(fixtures[-1])
+    published = school_client.put(f"/api/organizations/{organization['id']}/public-settings/publish", headers=owner.headers)
+    assert published.status_code == 200
+    public_identifier = published.json()["public_identifier"]
+    for competition in competitions:
+        response = school_client.put(f"/api/organizations/{organization['id']}/competitions/{competition.id}/community-publication/publish", headers=owner.headers)
+        assert response.status_code == 200, response.text
+    ninth_key = public_competition_key_candidate(ninth.id)
+    base = f"/api/public/organizations/{public_identifier}/competitions/{ninth_key}"
+    community = school_client.get(f"/api/public/organizations/{public_identifier}/community")
+    assert community.status_code == 200
+    assert len(community.json()["competitions"]) == 8
+    assert all(item["public_key"] != ninth_key for item in community.json()["competitions"])
+    assert school_client.get(base).status_code == 200
+    fixture_url = f"{base}/fixtures/{fixtures[-1].public_identifier}"
+    assert school_client.get(fixture_url).status_code == 200
+    assert school_client.put(f"/api/organizations/{organization['id']}/competitions/{ninth.id}/community-publication/unpublish", headers=owner.headers).status_code == 200
+    assert school_client.get(base).status_code == 404
+    assert school_client.get(fixture_url).status_code == 404

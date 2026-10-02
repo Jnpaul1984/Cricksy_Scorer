@@ -690,6 +690,7 @@ export interface PublicSchoolScorecard {
   batting_scorecard: PublicScorecardEntry[];
   bowling_scorecard: PublicScorecardEntry[];
 }
+export interface PublicOpaqueSchoolScorecard extends Omit<PublicSchoolScorecard, 'game_id'> { public_identifier: string; }
 
 export interface PublicScorecardEntry {
   player_name: string;
@@ -740,6 +741,7 @@ export interface PublicTeam {
 }
 
 export interface PublicCommunityFixture {
+  public_identifier: string;
   team_a_name: string;
   team_b_name: string;
   match_number: number | null;
@@ -748,6 +750,9 @@ export interface PublicCommunityFixture {
   fixture_status: string;
   game_status: string | null;
   result: string | null;
+  canonical_path: string;
+  public_result_path: string | null;
+  canonical_scorecard_path: string | null;
   public_scorecard_path: string | null;
 }
 
@@ -783,6 +788,9 @@ export interface PublicOrganizationCommunity {
   };
   competitions: PublicCommunityCompetition[];
 }
+
+export interface PublicCompetition extends PublicCommunityCompetition { public_identifier: string; canonical_path: string; }
+export interface PublicFixture extends PublicCommunityFixture { competition_public_key: string; competition_name: string; }
 
 export interface PublicAnonymousLeaderboardEntry {
   rank: number;
