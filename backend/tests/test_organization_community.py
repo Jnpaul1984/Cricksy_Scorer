@@ -100,9 +100,7 @@ def test_public_community_has_no_enumeration_endpoint_and_safe_not_found_shape(
 def test_unpublished_school_and_club_community_return_safe_404(
     school_client: TestClient, organization_type: str
 ) -> None:
-    owner = register_user(
-        school_client, f"unpublished-community-{organization_type}@example.com"
-    )
+    owner = register_user(school_client, f"unpublished-community-{organization_type}@example.com")
     create = create_school if organization_type == "school" else create_club
     organization = create(school_client, owner, f"Private {organization_type.title()}")
     settings = school_client.get(
@@ -236,9 +234,16 @@ async def test_shared_school_club_homepage_requires_explicit_subordinate_publica
         headers=owner.headers,
     )
     assert scorecard_publication.status_code == 200
-    assert school_client.get(community_url).json()["competitions"][0]["fixtures"][0][
-        "public_scorecard_path"
-    ] == f"/school-scorecards/{game.id}"
+    published_fixture = school_client.get(community_url).json()["competitions"][0]["fixtures"][0]
+    assert (
+        published_fixture["canonical_scorecard_path"] == published_fixture["public_scorecard_path"]
+    )
+    assert published_fixture["canonical_scorecard_path"] == (
+        f"/community/{public_identifier}/competitions/"
+        f"{body['competitions'][0]['public_key']}/scorecards/{game.public_scorecard_identifier}"
+    )
+    # The legacy endpoint remains independently backward-compatible.
+    assert school_client.get(f"/public/school-scorecards/{game.id}").status_code == 200
 
     scorecard_private = school_client.patch(
         f"/api/organizations/{organization['id']}/matches/{game.id}/publication",
@@ -246,13 +251,16 @@ async def test_shared_school_club_homepage_requires_explicit_subordinate_publica
         headers=owner.headers,
     )
     assert scorecard_private.status_code == 200
-    assert school_client.get(community_url).json()["competitions"][0]["fixtures"][0][
-        "public_scorecard_path"
-    ] is None
+    private_fixture = school_client.get(community_url).json()["competitions"][0]["fixtures"][0]
+    assert private_fixture["canonical_scorecard_path"] is None
+    assert private_fixture["public_scorecard_path"] is None
 
-    assert _set_competition_publication(
-        school_client, owner, organization["id"], competition["id"], publish=False
-    ).status_code == 200
+    assert (
+        _set_competition_publication(
+            school_client, owner, organization["id"], competition["id"], publish=False
+        ).status_code
+        == 200
+    )
     assert school_client.get(community_url).json()["competitions"] == []
 
 
@@ -273,10 +281,13 @@ async def test_homepage_unpublish_does_not_mutate_independent_scorecard_publicat
     )
     public_identifier = _publish_homepage(school_client, owner, organization["id"])
     assert school_client.get(f"/public/school-scorecards/{game.id}").status_code == 200
-    assert school_client.put(
-        f"/api/organizations/{organization['id']}/public-settings/unpublish",
-        headers=owner.headers,
-    ).status_code == 200
+    assert (
+        school_client.put(
+            f"/api/organizations/{organization['id']}/public-settings/unpublish",
+            headers=owner.headers,
+        ).status_code
+        == 200
+    )
     assert (
         school_client.get(f"/api/public/organizations/{public_identifier}/community").status_code
         == 404
@@ -337,25 +348,37 @@ def test_nonmember_disabled_and_cross_tenant_community_mutations_fail_closed(
     membership = add_membership(
         school_client, owner, organization["id"], disabled_admin.id, "admin"
     )
-    assert school_client.patch(
-        f"/api/organizations/{organization['id']}/memberships/{membership['id']}",
-        json={"status": "disabled"},
-        headers=owner.headers,
-    ).status_code == 200
+    assert (
+        school_client.patch(
+            f"/api/organizations/{organization['id']}/memberships/{membership['id']}",
+            json={"status": "disabled"},
+            headers=owner.headers,
+        ).status_code
+        == 200
+    )
 
     for actor in (outsider, disabled_admin):
-        assert school_client.put(
-            f"/api/organizations/{organization['id']}/community-branding",
-            json={"logo_url": "https://cdn.example.com/logo.png"},
-            headers=actor.headers,
-        ).status_code == 404
-        assert _set_competition_publication(
-            school_client, actor, organization["id"], competition["id"], publish=True
-        ).status_code == 404
+        assert (
+            school_client.put(
+                f"/api/organizations/{organization['id']}/community-branding",
+                json={"logo_url": "https://cdn.example.com/logo.png"},
+                headers=actor.headers,
+            ).status_code
+            == 404
+        )
+        assert (
+            _set_competition_publication(
+                school_client, actor, organization["id"], competition["id"], publish=True
+            ).status_code
+            == 404
+        )
 
-    assert _set_competition_publication(
-        school_client, owner, organization["id"], foreign_competition["id"], publish=True
-    ).status_code == 404
+    assert (
+        _set_competition_publication(
+            school_client, owner, organization["id"], foreign_competition["id"], publish=True
+        ).status_code
+        == 404
+    )
 
 
 @pytest.mark.parametrize(
@@ -391,16 +414,14 @@ def test_logo_validation_rejects_unsafe_sources_and_markup(
 async def test_branding_is_durable_and_public_allowlist_uses_safe_fallback(
     school_client: TestClient, organization_type: str
 ) -> None:
-    owner = register_user(
-        school_client, f"durable-branding-{organization_type}-owner@example.com"
-    )
+    owner = register_user(school_client, f"durable-branding-{organization_type}-owner@example.com")
     create = create_school if organization_type == "school" else create_club
     display_name = f"Durable {organization_type.title()}"
     organization = create(school_client, owner, display_name)
     public_identifier = _publish_homepage(school_client, owner, organization["id"])
-    fallback = school_client.get(
-        f"/api/public/organizations/{public_identifier}/community"
-    ).json()["branding"]
+    fallback = school_client.get(f"/api/public/organizations/{public_identifier}/community").json()[
+        "branding"
+    ]
     assert fallback == {
         "logo_url": None,
         "logo_alt_text": f"{display_name} logo",
@@ -447,7 +468,9 @@ async def test_public_collections_are_bounded(school_client: TestClient) -> None
                 OrganizationCompetitionPublication(
                     competition_id=competition.id,
                     organization_id=organization["id"],
-                    public_key=organization_publication_service.public_competition_key_candidate(competition.id),
+                    public_key=organization_publication_service.public_competition_key_candidate(
+                        competition.id
+                    ),
                     publication_state="published",
                 )
             )
@@ -493,9 +516,7 @@ async def test_public_collections_are_bounded(school_client: TestClient) -> None
 
     event.listen(engine.sync_engine, "before_cursor_execute", record_statement)
     try:
-        body = school_client.get(
-            f"/api/public/organizations/{public_identifier}/community"
-        ).json()
+        body = school_client.get(f"/api/public/organizations/{public_identifier}/community").json()
     finally:
         event.remove(engine.sync_engine, "before_cursor_execute", record_statement)
     assert len(statements) <= 6
@@ -544,14 +565,15 @@ async def test_postgres_concurrent_publication_and_branding_are_coherent(
 
     async def publish(actor_user_id: str) -> tuple[str, int]:
         async with session_maker() as session:
-            publication, _ = (
-                await organization_publication_service.set_competition_publication_state(
-                    session,
-                    organization_id=organization["id"],
-                    competition_id=competition["id"],
-                    actor_user_id=actor_user_id,
-                    publish=True,
-                )
+            (
+                publication,
+                _,
+            ) = await organization_publication_service.set_competition_publication_state(
+                session,
+                organization_id=organization["id"],
+                competition_id=competition["id"],
+                actor_user_id=actor_user_id,
+                publish=True,
             )
             return publication.publication_state, publication.publication_version
 
@@ -601,9 +623,7 @@ async def test_postgres_concurrent_publication_and_branding_are_coherent(
             )
         ).all()
         settings = await session.get(OrganizationPublicSettings, organization["id"])
-        other_settings = await session.get(
-            OrganizationPublicSettings, other_organization["id"]
-        )
+        other_settings = await session.get(OrganizationPublicSettings, other_organization["id"])
         assert len(records) == 1
         assert records[0].publication_state in {"published", "unpublished"}
         assert records[0].publication_version in {3, 4}
@@ -750,9 +770,12 @@ async def test_postgres_migration_backfill_is_default_private(school_client: Tes
         )
         await session.execute(text(current_schema_backfill_sql))
         await session.commit()
-        assert await session.scalar(
-            select(func.count(OrganizationCompetitionPublication.competition_id)).where(
-                OrganizationCompetitionPublication.competition_id == competition["id"],
-                OrganizationCompetitionPublication.publication_state == "unpublished",
+        assert (
+            await session.scalar(
+                select(func.count(OrganizationCompetitionPublication.competition_id)).where(
+                    OrganizationCompetitionPublication.competition_id == competition["id"],
+                    OrganizationCompetitionPublication.publication_state == "unpublished",
+                )
             )
-        ) == 1
+            == 1
+        )

@@ -210,7 +210,13 @@ async def test_public_community_hides_scorecard_link_when_capability_is_disabled
     public_identifier = published_homepage.json()["public_identifier"]
     community_url = f"/api/public/organizations/{public_identifier}/community"
     initial_fixture = school_client.get(community_url).json()["competitions"][0]["fixtures"][0]
-    assert initial_fixture["public_scorecard_path"] == f"/school-scorecards/{game.id}"
+    assert initial_fixture["canonical_scorecard_path"] == initial_fixture["public_scorecard_path"]
+    assert initial_fixture["canonical_scorecard_path"].startswith(
+        f"/community/{public_identifier}/competitions/cmp_"
+    )
+    assert initial_fixture["canonical_scorecard_path"].endswith(game.public_scorecard_identifier)
+    assert str(game.id) not in initial_fixture["canonical_scorecard_path"]
+    # This assertion protects the old API contract separately from the opaque link.
     assert school_client.get(f"/public/school-scorecards/{game.id}").status_code == 200
 
     session_maker = school_client.session_maker  # type: ignore[attr-defined]
@@ -225,6 +231,7 @@ async def test_public_community_hides_scorecard_link_when_capability_is_disabled
         await session.commit()
 
     disabled_fixture = school_client.get(community_url).json()["competitions"][0]["fixtures"][0]
+    assert disabled_fixture["canonical_scorecard_path"] is None
     assert disabled_fixture["public_scorecard_path"] is None
     assert school_client.get(f"/public/school-scorecards/{game.id}").status_code == 404
 
