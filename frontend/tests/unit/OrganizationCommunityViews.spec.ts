@@ -31,7 +31,7 @@ const api = vi.hoisted(() => ({
 vi.mock('@/services/schoolAdminApi', () => api);
 
 const routerStubs = {
-  RouterLink: { template: '<a><slot /></a>' },
+  RouterLink: { props: ['to'], template: '<a :href="to"><slot /></a>' },
 };
 
 function settings(organizationId: string, name = 'Community Cup'): OrganizationCommunitySettings {
@@ -179,6 +179,9 @@ describe('OrganizationCommunityView', () => {
       expect(wrapper.text()).toContain(`${organizationType === 'school' ? 'School' : 'Club'} cricket community`);
       expect(wrapper.text()).toContain('First XI won by 8 runs');
       expect(wrapper.text()).toContain('View published scorecard');
+      expect(
+        wrapper.findAll('a').find(link => link.text() === 'View published scorecard')?.attributes('href'),
+      ).toBe('/school-scorecards/public-game');
       expect(wrapper.find('table').exists()).toBe(true);
       expect(wrapper.text()).not.toContain('No public competitions');
       expect(wrapper.text().toLowerCase()).not.toContain('roster');
