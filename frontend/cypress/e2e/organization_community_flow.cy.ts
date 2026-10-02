@@ -31,7 +31,7 @@ function publicCommunity(organizationType: OrganizationType) {
             fixture_status: 'completed',
             game_status: 'completed',
             result: 'First XI won by 8 runs',
-            public_scorecard_path: '/school-scorecards/public-game',
+            canonical_scorecard_path: '/community/org_0123456789abcdef01234567/competitions/cmp_0123456789abcdef01234567/scorecards/sc_0123456789abcdef01234567',
           },
         ],
         standings: [

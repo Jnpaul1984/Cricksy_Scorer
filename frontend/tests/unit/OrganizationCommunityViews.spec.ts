@@ -86,6 +86,7 @@ function community(organizationType: FreeOrganizationType): PublicOrganizationCo
             fixture_status: 'completed',
             game_status: 'completed',
             result: 'First XI won by 8 runs',
+            canonical_scorecard_path: '/community/org_0123456789abcdef01234567/competitions/cmp_0123456789abcdef01234567/scorecards/sc_0123456789abcdef01234567',
             public_scorecard_path: '/school-scorecards/public-game',
           },
         ],
@@ -181,7 +182,7 @@ describe('OrganizationCommunityView', () => {
       expect(wrapper.text()).toContain('View published scorecard');
       expect(
         wrapper.findAll('a').find(link => link.text() === 'View published scorecard')?.attributes('href'),
-      ).toBe('/school-scorecards/public-game');
+      ).toBe('/community/org_0123456789abcdef01234567/competitions/cmp_0123456789abcdef01234567/scorecards/sc_0123456789abcdef01234567');
       expect(wrapper.find('table').exists()).toBe(true);
       expect(wrapper.text()).not.toContain('No public competitions');
       expect(wrapper.text().toLowerCase()).not.toContain('roster');
@@ -189,6 +190,21 @@ describe('OrganizationCommunityView', () => {
       expect(wrapper.get('main').classes()).toContain('community-page');
     },
   );
+
+  it('does not generate a scorecard link from a raw legacy scorecard path', async () => {
+    const response = community('school');
+    response.competitions[0].fixtures[0].canonical_scorecard_path = null;
+    api.getPublicOrganizationCommunity.mockResolvedValue(response);
+    const wrapper = mount(OrganizationCommunityView, {
+      props: { publicIdentifier: 'org_0123456789abcdef01234567' },
+      global: { stubs: routerStubs },
+    });
+    await flushPromises();
+
+    expect(wrapper.text()).not.toContain('View published scorecard');
+    expect(wrapper.text()).not.toContain('Copy scorecard link');
+    expect(wrapper.html()).not.toContain('/school-scorecards/public-game');
+  });
 
   it('uses the same anonymous router component and a safe not-found state', async () => {
     api.getPublicOrganizationCommunity.mockRejectedValue(Object.assign(new Error('missing'), { status: 404 }));
