@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 
-import cricksyLogo from '@/assets/logo.png';
+import cricksyLogo from '@/assets/optimized/logo-w480.webp';
 import PublicShareLinkButton from '@/components/PublicShareLinkButton.vue';
 import { getErrorMessage } from '@/services/api';
 import { getPublicCompetitionScorecard, getPublicSchoolScorecard } from '@/services/schoolAdminApi';
@@ -210,12 +210,12 @@ onBeforeUnmount(() => {
   padding: 1rem;
   color: #eef2ff;
 }
-.freshness { margin: 0.8rem 0; color: #526174; font-size: 0.9rem; }
-.freshness.stale { color: #8a5500; }
+.freshness { margin: 0.8rem 0; color: #aebbd7; font-size: 0.9rem; }
+.freshness.stale { color: #ffd08a; }
 .refresh-now { margin: 0 0 1rem; }
-.support-slot { display: flex; align-items: center; gap: 0.55rem; margin-top: 1.5rem; padding: 0.75rem 1rem; border-top: 1px solid #d5dde7; color: #526174; font-size: 0.9rem; }
+.support-slot { display: flex; align-items: center; gap: 0.55rem; margin-top: 1.5rem; padding: 0.75rem 1rem; border-top: 1px solid #d5dde7; color: #aebbd7; font-size: 0.9rem; }
 .support-slot img { width: 26px; height: 26px; object-fit: contain; }
-.support-slot strong { color: #172033; }
+.support-slot strong { color: #eef2ff; }
 @media (max-width: 520px) { .support-slot { align-items: flex-start; flex-wrap: wrap; } }
 header,
 .score-summary,

@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+
 import { flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, ref } from 'vue';
@@ -407,11 +410,43 @@ describe('Phase 7J School statistics and competition experience', () => {
     expect(wrapper.text()).toContain('Last updated');
     expect(wrapper.text()).toContain('Supported by');
     expect(wrapper.find('.support-slot img').attributes('alt')).toBe('Cricksy');
+    expect(wrapper.get('.support-slot img').attributes('src')).toContain('logo-w480.webp');
     await vi.advanceTimersByTimeAsync(120_000);
     await flushPromises();
     expect(schoolApi.getPublicSchoolScorecard).toHaveBeenCalledTimes(2);
     expect(wrapper.text()).toContain('91/1');
     wrapper.unmount();
+  });
+
+  describe('Public scorecard dark-background contrast', () => {
+    const publicScorecardSource = readFileSync(
+      resolve('src/views/school/SchoolPublicScorecardView.vue'),
+      'utf8',
+    );
+
+    function luminance(hex: string) {
+      const channels = hex.match(/[a-f\d]{2}/gi)!.map(channel => {
+        const value = parseInt(channel, 16) / 255;
+        return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+      });
+      return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
+    }
+
+    it.each(['.freshness', '.freshness.stale', '.support-slot', '.support-slot strong'])(
+      'keeps %s text at WCAG AA contrast across the page gradient',
+      (selector) => {
+        const rule = publicScorecardSource.split(`${selector} {`)[1]?.split('}')[0];
+        const color = rule?.match(/(?:^|;)\s*color:\s*(#[a-f\d]{6})/i)?.[1];
+        expect(color).toBeDefined();
+        for (const background of ['#0f1115', '#151926', '#1c2340']) {
+          const foregroundLuminance = luminance(color!);
+          const backgroundLuminance = luminance(background);
+          const contrast = (Math.max(foregroundLuminance, backgroundLuminance) + 0.05)
+            / (Math.min(foregroundLuminance, backgroundLuminance) + 0.05);
+          expect(contrast).toBeGreaterThanOrEqual(4.5);
+        }
+      },
+    );
   });
 
   it('keeps the last verified score and retries after a temporary refresh failure', async () => {
