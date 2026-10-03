@@ -1,5 +1,5 @@
 import { flushPromises, mount } from '@vue/test-utils';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, ref } from 'vue';
 
 import {
@@ -15,6 +15,16 @@ import SchoolPublicScorecardView from '@/views/school/SchoolPublicScorecardView.
 import SchoolStatisticsView from '@/views/school/SchoolStatisticsView.vue';
 
 vi.mock('@/services/schoolAdminApi');
+
+const publicScorecard = (runs = 90) => ({
+  game_id: 'game-a', publication_state: 'published_live' as const, status: 'in_progress',
+  team_a: { name: 'A', players: [{ name: 'Asha' }] }, team_b: { name: 'B', players: [{ name: 'Ben' }] },
+  match_type: 'limited', overs_limit: 20, days_limit: null, overs_per_day: null,
+  toss_winner_team: 'A', decision: 'bat', batting_team_name: 'A', bowling_team_name: 'B',
+  total_runs: runs, total_wickets: 1, overs_completed: 4, balls_this_over: 2,
+  current_inning: 1, result: null, batting_scorecard: [{ player_name: 'Asha', runs }],
+  bowling_scorecard: [{ player_name: 'Ben', wickets_taken: 1 }],
+});
 
 function context(role: SchoolMembershipRole, organizationId = ref('school-a')): SchoolContext {
   const edit = computed(() => ['owner', 'admin', 'coach'].includes(role));
@@ -385,5 +395,101 @@ describe('Phase 7J School statistics and competition experience', () => {
     await flushPromises();
     expect(wrapper.text()).toContain('not published');
     expect(wrapper.text()).not.toContain('hidden');
+  });
+
+  it('refreshes an open legacy public scorecard without overlapping the initial request', async () => {
+    vi.useFakeTimers();
+    vi.mocked(schoolApi.getPublicSchoolScorecard)
+      .mockResolvedValueOnce(publicScorecard(90))
+      .mockResolvedValueOnce(publicScorecard(91));
+    const wrapper = mount(SchoolPublicScorecardView, { props: { gameId: 'game-a' } });
+    await flushPromises();
+    expect(wrapper.text()).toContain('Last updated');
+    expect(wrapper.text()).toContain('Supported by');
+    expect(wrapper.find('.support-slot img').attributes('alt')).toBe('Cricksy');
+    await vi.advanceTimersByTimeAsync(120_000);
+    await flushPromises();
+    expect(schoolApi.getPublicSchoolScorecard).toHaveBeenCalledTimes(2);
+    expect(wrapper.text()).toContain('91/1');
+    wrapper.unmount();
+  });
+
+  it('keeps the last verified score and retries after a temporary refresh failure', async () => {
+    vi.useFakeTimers();
+    vi.mocked(schoolApi.getPublicSchoolScorecard)
+      .mockResolvedValueOnce(publicScorecard(90))
+      .mockRejectedValueOnce(Object.assign(new Error('offline'), { status: 503 }));
+    const wrapper = mount(SchoolPublicScorecardView, { props: { gameId: 'game-a' } });
+    await flushPromises();
+    await vi.advanceTimersByTimeAsync(120_000);
+    await flushPromises();
+    expect(wrapper.text()).toContain('90/1');
+    expect(wrapper.text()).toContain('Retrying automatically');
+    wrapper.unmount();
+  });
+
+  it('offers a manual refresh without changing the bounded automatic cadence', async () => {
+    vi.useFakeTimers();
+    vi.mocked(schoolApi.getPublicSchoolScorecard).mockResolvedValue(publicScorecard(90));
+    const wrapper = mount(SchoolPublicScorecardView, { props: { gameId: 'game-a' } });
+    await flushPromises();
+    expect(wrapper.text()).toContain('every 2 minutes');
+    await wrapper.get('button.refresh-now').trigger('click');
+    await flushPromises();
+    expect(schoolApi.getPublicSchoolScorecard).toHaveBeenCalledTimes(2);
+    wrapper.unmount();
+  });
+
+  it('stops a canonical-route refresh and clears content after publication revocation', async () => {
+    vi.useFakeTimers();
+    vi.mocked(schoolApi.getPublicCompetitionScorecard)
+      .mockResolvedValueOnce({ ...publicScorecard(90), public_identifier: 'sc_opaque' })
+      .mockRejectedValueOnce(Object.assign(new Error('revoked'), { status: 404 }));
+    const wrapper = mount(SchoolPublicScorecardView, {
+      props: { publicIdentifier: 'org_opaque', competitionPublicKey: 'cmp_opaque', scorecardPublicIdentifier: 'sc_opaque' },
+      global: { stubs: { PublicShareLinkButton: true } },
+    });
+    await flushPromises();
+    await vi.advanceTimersByTimeAsync(120_000);
+    await flushPromises();
+    expect(wrapper.text()).toContain('not published or is no longer available');
+    expect(wrapper.text()).not.toContain('90/1');
+    await vi.advanceTimersByTimeAsync(240_000);
+    expect(schoolApi.getPublicCompetitionScorecard).toHaveBeenCalledTimes(2);
+    wrapper.unmount();
+  });
+
+  it('cleans up periodic work when the parent leaves the public scorecard', async () => {
+    vi.useFakeTimers();
+    vi.mocked(schoolApi.getPublicSchoolScorecard).mockResolvedValue(publicScorecard(90));
+    const wrapper = mount(SchoolPublicScorecardView, { props: { gameId: 'game-a' } });
+    await flushPromises();
+    wrapper.unmount();
+    await vi.advanceTimersByTimeAsync(240_000);
+    expect(schoolApi.getPublicSchoolScorecard).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not let a late response from a previous scorecard overwrite repeated navigation', async () => {
+    let resolvePrevious: ((value: ReturnType<typeof publicScorecard>) => void) | undefined;
+    vi.mocked(schoolApi.getPublicSchoolScorecard)
+      .mockResolvedValueOnce(publicScorecard(90))
+      .mockImplementationOnce(() => new Promise(resolve => { resolvePrevious = resolve; }))
+      .mockResolvedValueOnce(publicScorecard(92));
+    const wrapper = mount(SchoolPublicScorecardView, { props: { gameId: 'game-a' } });
+    await flushPromises();
+    await wrapper.setProps({ gameId: 'game-b' });
+    await flushPromises();
+    await wrapper.setProps({ gameId: 'game-c' });
+    await flushPromises();
+    resolvePrevious?.(publicScorecard(91));
+    await flushPromises();
+    expect(schoolApi.getPublicSchoolScorecard).toHaveBeenLastCalledWith('game-c');
+    expect(wrapper.text()).toContain('92/1');
+    expect(wrapper.text()).not.toContain('91/1');
+    wrapper.unmount();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 });
