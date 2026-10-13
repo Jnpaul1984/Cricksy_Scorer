@@ -571,7 +571,7 @@ describe('Phase 7J School statistics and competition experience', () => {
       expect(wrapper.text()).toContain('A');
       expect(wrapper.text()).toContain('B');
       expect(wrapper.text()).toContain('90/1');
-      expect(wrapper.text()).toContain('Legal overs 4.2');
+      expect(wrapper.text()).toContain('Overs 4.2');
       expect(wrapper.find('table').exists()).toBe(false);
       expect(wrapper.text()).not.toContain('Asha');
       expect(wrapper.text()).not.toContain('Ben');

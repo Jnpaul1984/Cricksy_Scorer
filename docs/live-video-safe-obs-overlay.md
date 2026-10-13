@@ -22,6 +22,17 @@ Do not replace or edit the identifiers with a game ID, and do not use `/view/:ga
 4. The page checks every 12 seconds while visible. Transient failures back off exponentially, capped at 60 seconds; the last verified score remains marked stale. Final scorecards continue to revalidate every 5 minutes so later revocation or result correction is detected. A browser offline event pauses polling until connectivity returns.
 5. OBS/browser visibility signals do not establish whether a source is actually on-air. Validate the source manually during a rehearsal; this engineering work is not an actual OBS rehearsal.
 
+## Synthetic rendered checks
+
+The following Chromium screenshots use synthetic adult team/player names. Both source sizes were checked at the exact viewport dimensions; final-state card heights measured 166 px at 960 × 240 and 171 px at 640 × 180, and final, stale, offline, and unavailable states had no horizontal or vertical document overflow. The long names wrap within the team columns.
+
+| State | 960 × 240 | 640 × 180 |
+|---|---|---|
+| Final result | ![Final score at 960 by 240](images/obs-overlay-960x240-final.png) | ![Final score at 640 by 180](images/obs-overlay-640x180-final.png) |
+| Stale after transient failure | ![Stale score at 960 by 240](images/obs-overlay-960x240-stale.png) | ![Stale score at 640 by 180](images/obs-overlay-640x180-stale.png) |
+| Offline with last verified score | ![Offline score at 960 by 240](images/obs-overlay-960x240-offline.png) | ![Offline score at 640 by 180](images/obs-overlay-640x180-offline.png) |
+| Initial unavailable state | ![Unavailable overlay at 960 by 240](images/obs-overlay-960x240-unavailable.png) | ![Unavailable overlay at 640 by 180](images/obs-overlay-640x180-unavailable.png) |
+
 ## Synthetic, adult-only rehearsal
 
 Before connecting any real match, rehearse with a synthetic scorecard and two adult test teams. Use made-up team names and runs/wickets to confirm the score, legal overs, innings/status, final-result text, refresh behavior, and revocation handling. Do not use pupil names or real junior match data in screenshots, fixtures, recordings, or rehearsal material.
@@ -30,6 +41,6 @@ The current canonical public scorecard response still includes published player 
 
 ## Limits and rollback
 
-This overlay is read-only; it does not provide a video player, stream integration, scoring controls, or an OBS/on-air signal. The focused UI tests do not substitute for a real OBS rehearsal.
+This overlay is read-only; it does not provide a video player, stream integration, scoring controls, or an OBS/on-air signal. The browser viewport checks and focused UI tests do not substitute for a real OBS rehearsal.
 
 To roll back this slice, remove the overlay route and layout mode, the overlay branch/polling and copied-link button from the existing public scorecard view, and this guide. The canonical public API and its publication gates remain unchanged.

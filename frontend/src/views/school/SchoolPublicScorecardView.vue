@@ -231,7 +231,7 @@ onBeforeUnmount(() => {
       <section class="obs-scoreboard" aria-label="OBS team scoreboard">
         <header class="obs-heading">
           <p class="eyebrow">{{ scorecard.publication_state === 'published_final' ? 'Final score' : 'Live score' }} · {{ scorecard.organization_type }}</p>
-          <span>{{ scorecard.status.replace('_', ' ') }}</span>
+          <span>Innings {{ scorecard.current_inning }} · {{ scorecard.status.replace('_', ' ') }}</span>
         </header>
         <div class="obs-teams">
           <div>
@@ -239,18 +239,17 @@ onBeforeUnmount(() => {
             <strong>{{ scorecard.team_a.name }}</strong>
             <small v-if="scorecard.batting_team_name === scorecard.team_a.name">Batting</small>
           </div>
+          <section class="obs-innings" aria-label="Current innings score">
+            <span>{{ scorecard.batting_team_name ? 'Batting' : 'Current innings' }}</span>
+            <strong>{{ scorecard.total_runs }}/{{ scorecard.total_wickets }}</strong>
+            <span>Overs {{ scorecard.overs_completed }}.{{ scorecard.balls_this_over }}</span>
+          </section>
           <div>
             <span>Team B</span>
             <strong>{{ scorecard.team_b.name }}</strong>
             <small v-if="scorecard.batting_team_name === scorecard.team_b.name">Batting</small>
           </div>
         </div>
-        <section class="obs-innings" aria-label="Current innings score">
-          <span>{{ scorecard.batting_team_name || 'Current innings' }}</span>
-          <strong>{{ scorecard.total_runs }}/{{ scorecard.total_wickets }}</strong>
-          <span>Legal overs {{ scorecard.overs_completed }}.{{ scorecard.balls_this_over }}</span>
-        </section>
-        <p class="obs-match-state">Innings {{ scorecard.current_inning }} · {{ scorecard.status.replace('_', ' ') }}</p>
         <p v-if="scorecard.result" class="obs-result">{{ scorecard.result }}</p>
         <div class="obs-status">
           <p class="freshness" :class="{ stale: freshness === 'stale' || offline }" role="status">
@@ -385,7 +384,6 @@ onBeforeUnmount(() => {
   background: transparent;
 }
 .obs-heading,
-.obs-teams,
 .obs-status {
   display: flex;
   align-items: center;
@@ -395,35 +393,41 @@ onBeforeUnmount(() => {
 .obs-heading .eyebrow { margin: 0; font-size: 0.72rem; }
 .obs-heading > span,
 .obs-teams > div > span { color: #cbd5e1; font-size: 0.78rem; text-transform: uppercase; }
-.obs-teams { margin: 0.4rem 0; }
+.obs-heading > span { text-align: right; }
+.obs-teams {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0.3rem 0;
+}
 .obs-teams > div { min-width: 0; display: grid; gap: 0.1rem; }
 .obs-teams > div:last-child { text-align: right; }
-.obs-teams strong { overflow-wrap: anywhere; font-size: clamp(1rem, 2.8vw, 1.45rem); }
+.obs-teams strong { overflow-wrap: anywhere; font-size: clamp(0.9rem, 2.4vw, 1.25rem); line-height: 1.15; }
 .obs-teams small { color: #70d7b0; font-weight: 700; }
 .obs-innings {
   display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: 0.55rem 1rem;
-  padding: 0.35rem 0.6rem;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.05rem;
+  margin: 0;
+  padding: 0.15rem 0.35rem;
   border-radius: 8px;
   background: rgba(51, 65, 85, 0.72);
 }
-.obs-innings > span:first-child { margin-right: auto; overflow-wrap: anywhere; font-weight: 700; }
-.obs-innings strong { font-size: clamp(1.55rem, 5vw, 2.35rem); line-height: 1.05; }
-.obs-innings > span:last-child { color: #cbd5e1; font-size: 0.9rem; }
-.obs-match-state,
-.obs-result { margin: 0.35rem 0 0; font-size: 0.85rem; }
+.obs-innings span { color: #cbd5e1; font-size: 0.68rem; line-height: 1.1; }
+.obs-innings strong { font-size: clamp(1.3rem, 4vw, 2rem); line-height: 1.05; }
+.obs-result { margin: 0.2rem 0 0; font-size: 0.82rem; line-height: 1.2; }
 .obs-result { color: #86efac; font-weight: 700; }
 .obs-status { margin-top: 0.2rem; }
 .freshness { margin: 0.8rem 0; color: #aebbd7; font-size: 0.9rem; }
 .freshness.stale { color: #ffd08a; }
-.obs-status p.freshness { margin: 0; font-size: 0.72rem; }
+.obs-status p.freshness { margin: 0; font-size: 0.67rem; line-height: 1.15; }
 .obs-status .refresh-now { margin: 0; padding: 0.2rem 0.55rem; font-size: 0.75rem; }
 @media (max-width: 520px) {
   .obs-scoreboard { padding: 0.4rem; }
-  .obs-status { align-items: flex-start; }
-  .obs-innings > span:first-child { flex-basis: 100%; }
+  .obs-teams { grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 0.25rem; }
+  .obs-teams > div > span { font-size: 0.65rem; }
 }
 .refresh-now { margin: 0 0 1rem; }
 .support-slot { display: flex; align-items: center; gap: 0.55rem; margin-top: 1.5rem; padding: 0.75rem 1rem; border-top: 1px solid #d5dde7; color: #aebbd7; font-size: 0.9rem; }
