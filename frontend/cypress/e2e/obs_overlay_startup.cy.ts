@@ -82,6 +82,16 @@ describe('production app startup', () => {
           !url.search &&
           !hasAuthorization &&
           (resourceType === 'fetch' || resourceType === 'xhr');
+        const isOverlayDocument =
+          url.origin === appOrigin &&
+          url.pathname === overlayPath &&
+          request.method === 'GET' &&
+          resourceType === 'document';
+        const isStaticAsset =
+          url.origin === appOrigin &&
+          request.method === 'GET' &&
+          (url.pathname.startsWith('/assets/') || url.pathname === '/logo.png') &&
+          staticResourceTypes.has(resourceType);
 
         if (isCanonicalScorecardRequest) {
           apiRequests.push({ url: request.url, headers: request.headers });
@@ -89,11 +99,7 @@ describe('production app startup', () => {
           return;
         }
 
-        if (
-          url.origin === appOrigin &&
-          request.method === 'GET' &&
-          staticResourceTypes.has(resourceType)
-        ) {
+        if (isOverlayDocument || isStaticAsset) {
           request.continue();
           return;
         }
