@@ -236,6 +236,18 @@ const router = createRouter({
     { path: '/community/:publicIdentifier/competitions/:competitionPublicKey/results/:fixturePublicIdentifier', name: 'public-result', component: () => import('@/views/PublicFixtureView.vue'), props: route => ({ ...route.params, resultOnly: true }) },
     { path: '/community/:publicIdentifier/competitions/:competitionPublicKey/scorecards/:scorecardPublicIdentifier', name: 'public-competition-scorecard', component: () => import('@/views/school/SchoolPublicScorecardView.vue'), props: true },
     {
+      path: '/community/:publicIdentifier/competitions/:competitionPublicKey/scorecards/:scorecardPublicIdentifier/overlay',
+      name: 'public-competition-scorecard-overlay',
+      component: () => import('@/views/school/SchoolPublicScorecardView.vue'),
+      props: route => ({
+        publicIdentifier: String(route.params.publicIdentifier ?? ''),
+        competitionPublicKey: String(route.params.competitionPublicKey ?? ''),
+        scorecardPublicIdentifier: String(route.params.scorecardPublicIdentifier ?? ''),
+        overlay: true,
+      }),
+      meta: { layout: 'obs-overlay' },
+    },
+    {
       path: '/community/:publicIdentifier',
       name: 'organization-community',
       component: () => import('@/views/OrganizationCommunityView.vue'),
@@ -433,7 +445,7 @@ router.beforeEach(async (to, _from, next) => {
     }
   }
 
-  if (!auth.user && auth.token) {
+  if (!auth.user && auth.token && to.name !== 'public-competition-scorecard-overlay') {
     await auth.loadUser()
   }
 
@@ -445,7 +457,7 @@ router.beforeEach(async (to, _from, next) => {
     'pricing',
     'viewer-scoreboard',
     'embed-scoreboard',
-    'school-public-scorecard', 'organization-community', 'public-team', 'public-competition', 'public-fixture', 'public-result', 'public-competition-scorecard', 'register', 'school-free', 'club-free',
+    'school-public-scorecard', 'organization-community', 'public-team', 'public-competition', 'public-fixture', 'public-result', 'public-competition-scorecard', 'public-competition-scorecard-overlay', 'register', 'school-free', 'club-free',
   ]
 
   const isPublic = publicPaths.includes(to.path) || (to.name != null && publicNames.includes(String(to.name)))

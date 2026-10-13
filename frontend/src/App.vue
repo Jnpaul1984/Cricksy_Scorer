@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { RouterLink, RouterView } from 'vue-router'
+import { RouterLink, RouterView, useRoute } from 'vue-router'
 
 import logoAvif1024 from '@/assets/optimized/logo-w1024.avif'
 import logoWebp1024 from '@/assets/optimized/logo-w1024.webp'
@@ -19,7 +19,9 @@ const isDev = computed(() => import.meta.env.DEV)
 const showFeedbackModal = ref(false)
 const showBetaChecklist = ref(false)
 const auth = useAuthStore()
+const route = useRoute()
 const showBetaGuide = computed(() => Boolean(auth.user && auth.user.beta_tag))
+const isObsOverlay = computed(() => route.meta.layout === 'obs-overlay')
 
 function handleFeedbackSubmit(payload: { text: string; email?: string }) {
   // TODO: Send feedback to backend API
@@ -72,8 +74,8 @@ const showAdminNav = computed(() => auth.isSuper)
 </script>
 
 <template>
-  <div class="app">
-    <header class="app-header">
+  <div class="app" :class="{ 'app--obs-overlay': isObsOverlay }">
+    <header v-if="!isObsOverlay" class="app-header">
       <RouterLink to="/" class="brand">
         <picture class="brand-logo">
           <source :srcset="logoAvifSrcset" :sizes="logoSizes" type="image/avif" />
@@ -130,22 +132,23 @@ const showAdminNav = computed(() => auth.isSuper)
     </header>
 
     <!-- AI Quota Warning Banner -->
-    <QuotaWarningBanner />
+    <QuotaWarningBanner v-if="!isObsOverlay" />
 
     <main class="app-main">
       <RouterView />
     </main>
 
-    <footer class="app-footer">
+    <footer v-if="!isObsOverlay" class="app-footer">
       © {{ new Date().getFullYear() }} Cricksy Scorer. All rights reserved.
     </footer>
 
     <!-- Feedback Modal -->
     <FeedbackModal
+      v-if="!isObsOverlay"
       v-model:visible="showFeedbackModal"
       @submitted="handleFeedbackSubmit"
     />
-    <BetaChecklistModal v-model:visible="showBetaChecklist" />
+    <BetaChecklistModal v-if="!isObsOverlay" v-model:visible="showBetaChecklist" />
   </div>
 </template>
 
@@ -156,6 +159,14 @@ const showAdminNav = computed(() => auth.isSuper)
   display: grid;
   grid-template-rows: auto 1fr auto;
   background: linear-gradient(135deg, #0f1115, #151926 35%, #1c2340);
+}
+.app--obs-overlay {
+  display: block;
+  min-height: 0;
+  background: transparent;
+}
+:global(body:has(.app--obs-overlay)) {
+  background: transparent !important;
 }
 
 /* Header */

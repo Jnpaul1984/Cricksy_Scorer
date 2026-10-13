@@ -8,6 +8,7 @@ export type ScoreUpdatePayload = any;
 const VITE_BASE = typeof import.meta !== 'undefined' ? import.meta.env?.VITE_API_BASE : '';
 const LEGACY_BASE =
   typeof import.meta !== 'undefined' ? import.meta.env?.VITE_API_BASE_URL : '';
+const CONFIGURED_BASE = (VITE_BASE || LEGACY_BASE || '').replace(/\/+$/, '');
 
 const RUNTIME_ORIGIN =
   typeof window !== 'undefined' ? `${window.location.protocol}//${window.location.host}` : '';
@@ -30,6 +31,7 @@ function getApiBaseFromUrl(): string {
 const URL_OVERRIDE = getApiBaseFromUrl();
 
 export const API_BASE = (URL_OVERRIDE || VITE_BASE || LEGACY_BASE || RUNTIME_ORIGIN || '').replace(/\/+$/, '');
+const API_BASE_WITHOUT_URL_OVERRIDE = (CONFIGURED_BASE || RUNTIME_ORIGIN || '').replace(/\/+$/, '');
 
 // Production-grade logging for API_BASE resolution
 const isProduction = import.meta.env.PROD;
@@ -92,9 +94,9 @@ function notifyUnauthorized(err: Error) {
   console.warn('[api] 401 unauthorized', err.message);
 }
 
-function url(path: string) {
-  if (!API_BASE) return path;
-  const base = API_BASE.replace(/\/+$/, '');
+function url(path: string, apiBase = API_BASE) {
+  if (!apiBase) return path;
+  const base = apiBase.replace(/\/+$/, '');
   const p = path.startsWith('/') ? path : `/${path}`;
   return `${base}${p}`;
 }
@@ -120,18 +122,22 @@ export type TossDecision = 'bat' | 'bowl';
 type ApiRequestOptions = RequestInit & {
   /** If true, do NOT attach the Authorization header even if a token is present. */
   noAuth?: boolean;
+  /** Ignore untrusted URL apiBase overrides while retaining the configured API base. */
+  ignoreUrlOverride?: boolean;
 };
 
 /** Low-level fetch wrapper that preserves JSON errors from FastAPI. */
 async function request<T>(path: string, init?: ApiRequestOptions): Promise<T> {
+  const { noAuth, ignoreUrlOverride, ...fetchInit } = init ?? {};
   const method = (init?.method || 'GET').toUpperCase()
   const hasBody = init?.body !== undefined && init?.body !== null
   const isForm = typeof FormData !== 'undefined' && init?.body instanceof FormData
   const isUrlParams = typeof URLSearchParams !== 'undefined' && init?.body instanceof URLSearchParams
   const isJSONish = hasBody && !isForm && !isUrlParams && typeof init?.body === 'string'
-  const authHeader = init?.noAuth ? null : getAuthHeader()
+  const authHeader = noAuth ? null : getAuthHeader()
+  const base = ignoreUrlOverride ? API_BASE_WITHOUT_URL_OVERRIDE : API_BASE;
 
-  const res = await fetch(url(path), {
+  const res = await fetch(url(path, base), {
     // For GETs, make results uncacheable so live UI always sees fresh data.
     cache: method === 'GET' ? 'no-store' : init?.cache,
     // If you use cookie/session auth, uncomment the next line:
@@ -140,9 +146,9 @@ async function request<T>(path: string, init?: ApiRequestOptions): Promise<T> {
       ...(isJSONish ? { 'Content-Type': 'application/json' } : {}),
       ...(method === 'GET' ? { 'Cache-Control': 'no-store' } : {}),
       ...(authHeader || {}),
-      ...(init?.headers || {}),
+      ...(fetchInit.headers || {}),
     },
-    ...init,
+    ...fetchInit,
   })
 
   if (!res.ok) {
@@ -173,6 +179,13 @@ export function apiRequestPublic<T>(
   const base: ApiRequestOptions = init ? { ...init } : {}
   base.noAuth = true
   return request<T>(path, base)
+}
+
+export function apiRequestPublicScorecard<T>(
+  path: string,
+  init?: RequestInit
+): Promise<T> {
+  return request<T>(path, { ...init, noAuth: true, ignoreUrlOverride: true })
 }
 
 export { request as apiRequest };

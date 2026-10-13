@@ -30,6 +30,7 @@ const SUITES = {
     'cypress/e2e/organization_announcements_flow.cy.ts',
     'cypress/e2e/organization_notifications_flow.cy.ts',
     'cypress/e2e/organization_community_flow.cy.ts',
+    'cypress/e2e/obs_overlay_startup.cy.ts',
   ].join(','),
   scoring: [
     'cypress/e2e/scoring_gate_smoke.cy.ts',

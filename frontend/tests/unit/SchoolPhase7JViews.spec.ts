@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import { flushPromises, mount } from '@vue/test-utils';
+import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, ref } from 'vue';
 
@@ -10,7 +11,9 @@ import {
   organizationTerminology,
 } from '@/composables/useOrganizationTerminology';
 import { schoolContextKey, type SchoolContext } from '@/composables/useSchoolContext';
+import router from '@/router';
 import * as schoolApi from '@/services/schoolAdminApi';
+import { useAuthStore } from '@/stores/authStore';
 import type { SchoolMembershipRole } from '@/types/schoolAdmin';
 import SchoolCompetitionsView from '@/views/school/SchoolCompetitionsView.vue';
 import SchoolFixturesResultsView from '@/views/school/SchoolFixturesResultsView.vue';
@@ -390,6 +393,51 @@ describe('Phase 7J School statistics and competition experience', () => {
     expect(schoolApi.getPublicSchoolScorecard).toHaveBeenCalledWith('game-a');
   });
 
+  it('keeps the OBS share URL on the public opaque route', async () => {
+    vi.mocked(schoolApi.getPublicCompetitionScorecard).mockResolvedValue({
+      ...publicScorecard(90),
+      public_identifier: 'sc_opaque',
+    } as never);
+    const wrapper = mount(SchoolPublicScorecardView, {
+      props: {
+        publicIdentifier: 'org_opaque',
+        competitionPublicKey: 'cmp_opaque',
+        scorecardPublicIdentifier: 'sc_opaque',
+      },
+      global: {
+        stubs: {
+          PublicShareLinkButton: {
+            props: ['path', 'label'],
+            template: '<a class="test-public-link" :href="path">{{ label }}</a>',
+          },
+        },
+      },
+    });
+    await flushPromises();
+    const links = wrapper.findAll('.test-public-link');
+    expect(links.map(link => link.attributes('href'))).toEqual([
+      '/community/org_opaque/competitions/cmp_opaque/scorecards/sc_opaque',
+      '/community/org_opaque/competitions/cmp_opaque/scorecards/sc_opaque/overlay',
+    ]);
+    expect(links.map(link => link.text())).toContain('Copy OBS overlay link');
+    expect(links.some(link => link.attributes('href')?.includes('game-a'))).toBe(false);
+    wrapper.unmount();
+  });
+
+  it('allows anonymous routing to the canonical overlay without a staff login', async () => {
+    localStorage.clear();
+    setActivePinia(createPinia());
+    localStorage.setItem('cricksy_token', 'synthetic-overlay-test-token');
+    const auth = useAuthStore();
+    const loadUser = vi.spyOn(auth, 'loadUser');
+    await router.push('/community/org_opaque/competitions/cmp_opaque/scorecards/sc_opaque/overlay');
+    expect(router.currentRoute.value.name).toBe('public-competition-scorecard-overlay');
+    expect(router.currentRoute.value.meta.requiresAuth).not.toBe(true);
+    expect(loadUser).not.toHaveBeenCalled();
+    localStorage.clear();
+    await router.push('/landing');
+  });
+
   it('fails closed when a public scorecard is private', async () => {
     vi.mocked(schoolApi.getPublicSchoolScorecard).mockRejectedValue(
       Object.assign(new Error('hidden'), { status: 404 }),
@@ -491,6 +539,320 @@ describe('Phase 7J School statistics and competition experience', () => {
     expect(wrapper.text()).not.toContain('90/1');
     await vi.advanceTimersByTimeAsync(240_000);
     expect(schoolApi.getPublicCompetitionScorecard).toHaveBeenCalledTimes(2);
+    wrapper.unmount();
+  });
+
+  it.each(['school', 'club'] as const)(
+    'renders an aggregate-only %s overlay from the opaque public feed',
+    async (organizationType) => {
+      vi.useFakeTimers();
+      vi.mocked(schoolApi.getPublicCompetitionScorecard).mockResolvedValue({
+        ...publicScorecard(90),
+        organization_type: organizationType,
+        public_identifier: 'sc_opaque',
+      } as never);
+      const wrapper = mount(SchoolPublicScorecardView, {
+        props: {
+          overlay: true,
+          gameId: 'must-not-load-legacy-game',
+          publicIdentifier: 'org_opaque',
+          competitionPublicKey: 'cmp_opaque',
+          scorecardPublicIdentifier: 'sc_opaque',
+        },
+      });
+      await flushPromises();
+      expect(schoolApi.getPublicCompetitionScorecard).toHaveBeenCalledWith(
+        'org_opaque',
+        'cmp_opaque',
+        'sc_opaque',
+      );
+      expect(schoolApi.getPublicSchoolScorecard).not.toHaveBeenCalled();
+      expect(wrapper.text()).toContain(organizationType);
+      expect(wrapper.text()).toContain('A');
+      expect(wrapper.text()).toContain('B');
+      expect(wrapper.text()).toContain('90/1');
+      expect(wrapper.text()).toContain('Overs 4.2');
+      expect(wrapper.find('table').exists()).toBe(false);
+      expect(wrapper.text()).not.toContain('Asha');
+      expect(wrapper.text()).not.toContain('Ben');
+      await vi.advanceTimersByTimeAsync(11_999);
+      expect(schoolApi.getPublicCompetitionScorecard).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(1);
+      await flushPromises();
+      expect(schoolApi.getPublicCompetitionScorecard).toHaveBeenCalledTimes(2);
+      wrapper.unmount();
+    },
+  );
+
+  it('backs off after transient overlay failure and keeps the last verified score stale', async () => {
+    vi.useFakeTimers();
+    vi.mocked(schoolApi.getPublicCompetitionScorecard)
+      .mockResolvedValueOnce({ ...publicScorecard(90), public_identifier: 'sc_opaque' } as never)
+      .mockRejectedValueOnce(Object.assign(new Error('temporary'), { status: 503 }))
+      .mockResolvedValueOnce({ ...publicScorecard(91), public_identifier: 'sc_opaque' } as never);
+    const wrapper = mount(SchoolPublicScorecardView, {
+      props: {
+        overlay: true,
+        publicIdentifier: 'org_opaque',
+        competitionPublicKey: 'cmp_opaque',
+        scorecardPublicIdentifier: 'sc_opaque',
+      },
+    });
+    await flushPromises();
+    await vi.advanceTimersByTimeAsync(12_000);
+    await flushPromises();
+    expect(wrapper.text()).toContain('90/1');
+    expect(wrapper.text()).toContain('Stale');
+    expect(schoolApi.getPublicCompetitionScorecard).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(23_999);
+    expect(schoolApi.getPublicCompetitionScorecard).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(1);
+    await flushPromises();
+    expect(wrapper.text()).toContain('91/1');
+    expect(schoolApi.getPublicCompetitionScorecard).toHaveBeenCalledTimes(3);
+    wrapper.unmount();
+  });
+
+  it('recovers from an initial transient overlay failure with bounded backoff', async () => {
+    vi.useFakeTimers();
+    vi.mocked(schoolApi.getPublicCompetitionScorecard)
+      .mockRejectedValueOnce(Object.assign(new Error('temporary'), { status: 503 }))
+      .mockResolvedValueOnce({ ...publicScorecard(92), public_identifier: 'sc_opaque' } as never);
+    const wrapper = mount(SchoolPublicScorecardView, {
+      props: {
+        overlay: true,
+        publicIdentifier: 'org_opaque',
+        competitionPublicKey: 'cmp_opaque',
+        scorecardPublicIdentifier: 'sc_opaque',
+      },
+    });
+    await flushPromises();
+    expect(wrapper.text()).toContain('temporarily unavailable');
+    await vi.advanceTimersByTimeAsync(23_999);
+    expect(schoolApi.getPublicCompetitionScorecard).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1);
+    await flushPromises();
+    expect(wrapper.text()).toContain('92/1');
+    expect(schoolApi.getPublicCompetitionScorecard).toHaveBeenCalledTimes(2);
+    wrapper.unmount();
+  });
+
+  it('uses the overlay-only high-contrast notice for initial failure and revoked publication', async () => {
+    vi.useFakeTimers();
+    vi.mocked(schoolApi.getPublicCompetitionScorecard)
+      .mockRejectedValueOnce(Object.assign(new Error('temporary'), { status: 503 }))
+      .mockRejectedValueOnce(Object.assign(new Error('revoked'), { status: 404 }));
+    const wrapper = mount(SchoolPublicScorecardView, {
+      props: {
+        overlay: true,
+        publicIdentifier: 'org_opaque',
+        competitionPublicKey: 'cmp_opaque',
+        scorecardPublicIdentifier: 'sc_opaque',
+      },
+    });
+
+    await flushPromises();
+    expect(wrapper.get('.public-scorecard--overlay .notice').text()).toContain('temporarily unavailable');
+    expect(wrapper.get('.public-scorecard--overlay .notice h1').text()).toBe('Scoreboard unavailable');
+
+    await vi.advanceTimersByTimeAsync(24_000);
+    await flushPromises();
+    expect(wrapper.get('.public-scorecard--overlay .notice').text()).toContain('not published or is no longer available');
+    expect(wrapper.get('.public-scorecard--overlay .notice h1').text()).toBe('Scoreboard unavailable');
+    expect(wrapper.text()).not.toContain('90/1');
+    wrapper.unmount();
+  });
+
+  it('pauses overlay polling offline and refreshes when connectivity returns', async () => {
+    vi.useFakeTimers();
+    vi.mocked(schoolApi.getPublicCompetitionScorecard)
+      .mockResolvedValueOnce({ ...publicScorecard(90), public_identifier: 'sc_opaque' } as never)
+      .mockResolvedValueOnce({ ...publicScorecard(93), public_identifier: 'sc_opaque' } as never);
+    const wrapper = mount(SchoolPublicScorecardView, {
+      props: {
+        overlay: true,
+        publicIdentifier: 'org_opaque',
+        competitionPublicKey: 'cmp_opaque',
+        scorecardPublicIdentifier: 'sc_opaque',
+      },
+    });
+    await flushPromises();
+    window.dispatchEvent(new Event('offline'));
+    await flushPromises();
+    expect(wrapper.text()).toContain('Offline');
+    expect(wrapper.text()).toContain('90/1');
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(schoolApi.getPublicCompetitionScorecard).toHaveBeenCalledTimes(1);
+    window.dispatchEvent(new Event('online'));
+    await flushPromises();
+    expect(wrapper.text()).toContain('93/1');
+    expect(schoolApi.getPublicCompetitionScorecard).toHaveBeenCalledTimes(2);
+    wrapper.unmount();
+  });
+
+  it('shows the authoritative final result and stops overlay polling', async () => {
+    vi.useFakeTimers();
+    vi.mocked(schoolApi.getPublicCompetitionScorecard).mockResolvedValue({
+      ...publicScorecard(90),
+      publication_state: 'published_final',
+      result: 'North Adult XI won',
+      public_identifier: 'sc_opaque',
+    } as never);
+    const wrapper = mount(SchoolPublicScorecardView, {
+      props: {
+        overlay: true,
+        publicIdentifier: 'org_opaque',
+        competitionPublicKey: 'cmp_opaque',
+        scorecardPublicIdentifier: 'sc_opaque',
+      },
+    });
+    await flushPromises();
+    expect(wrapper.text()).toContain('Final score');
+    expect(wrapper.text()).toContain('North Adult XI won');
+    await vi.advanceTimersByTimeAsync(120_000);
+    expect(schoolApi.getPublicCompetitionScorecard).toHaveBeenCalledTimes(1);
+    wrapper.unmount();
+  });
+
+  it('revalidates final results for corrections and clears them after revocation', async () => {
+    vi.useFakeTimers();
+    vi.mocked(schoolApi.getPublicCompetitionScorecard)
+      .mockResolvedValueOnce({
+        ...publicScorecard(90),
+        publication_state: 'published_final',
+        result: 'North Adult XI won',
+        public_identifier: 'sc_opaque',
+      } as never)
+      .mockResolvedValueOnce({
+        ...publicScorecard(91),
+        publication_state: 'published_final',
+        result: 'East Adult XI won',
+        public_identifier: 'sc_opaque',
+      } as never)
+      .mockRejectedValueOnce(Object.assign(new Error('revoked'), { status: 404 }));
+    const wrapper = mount(SchoolPublicScorecardView, {
+      props: {
+        overlay: true,
+        publicIdentifier: 'org_opaque',
+        competitionPublicKey: 'cmp_opaque',
+        scorecardPublicIdentifier: 'sc_opaque',
+      },
+    });
+    await flushPromises();
+    expect(wrapper.text()).toContain('North Adult XI won');
+    expect(wrapper.text()).toContain('rechecked every 5 minutes');
+    await vi.advanceTimersByTimeAsync(299_999);
+    expect(schoolApi.getPublicCompetitionScorecard).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1);
+    await flushPromises();
+    expect(wrapper.text()).toContain('East Adult XI won');
+    expect(wrapper.text()).toContain('91/1');
+    expect(schoolApi.getPublicCompetitionScorecard).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(300_000);
+    await flushPromises();
+    expect(wrapper.text()).toContain('not published or is no longer available');
+    expect(wrapper.text()).not.toContain('East Adult XI won');
+    await vi.advanceTimersByTimeAsync(600_000);
+    expect(schoolApi.getPublicCompetitionScorecard).toHaveBeenCalledTimes(3);
+    wrapper.unmount();
+  });
+
+  it('keeps overlay requests single-flight and cleans up after unmount', async () => {
+    vi.useFakeTimers();
+    let finishRefresh: () => void = () => {};
+    const pendingRefresh = new Promise<ReturnType<typeof publicScorecard>>(resolve => {
+      finishRefresh = () => resolve(publicScorecard(91));
+    });
+    vi.mocked(schoolApi.getPublicCompetitionScorecard)
+      .mockResolvedValueOnce({ ...publicScorecard(90), public_identifier: 'sc_opaque' } as never)
+      .mockImplementationOnce(() => pendingRefresh as never)
+      .mockResolvedValueOnce({ ...publicScorecard(92), public_identifier: 'sc_opaque' } as never);
+    const wrapper = mount(SchoolPublicScorecardView, {
+      props: {
+        overlay: true,
+        publicIdentifier: 'org_opaque',
+        competitionPublicKey: 'cmp_opaque',
+        scorecardPublicIdentifier: 'sc_opaque',
+      },
+    });
+    await flushPromises();
+    await vi.advanceTimersByTimeAsync(12_000);
+    await flushPromises();
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(schoolApi.getPublicCompetitionScorecard).toHaveBeenCalledTimes(2);
+    finishRefresh();
+    await flushPromises();
+    expect(wrapper.text()).toContain('91/1');
+    await vi.advanceTimersByTimeAsync(12_000);
+    await flushPromises();
+    expect(schoolApi.getPublicCompetitionScorecard).toHaveBeenCalledTimes(3);
+    wrapper.unmount();
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(schoolApi.getPublicCompetitionScorecard).toHaveBeenCalledTimes(3);
+  });
+
+  it('ignores a late overlay response after navigating to different opaque identifiers', async () => {
+    vi.useFakeTimers();
+    let resolvePrevious: ((value: ReturnType<typeof publicScorecard>) => void) | undefined;
+    vi.mocked(schoolApi.getPublicCompetitionScorecard)
+      .mockResolvedValueOnce({ ...publicScorecard(90), public_identifier: 'sc_a' } as never)
+      .mockImplementationOnce(() => new Promise(resolve => { resolvePrevious = resolve; }))
+      .mockResolvedValueOnce({ ...publicScorecard(92), public_identifier: 'sc_b' } as never);
+    const wrapper = mount(SchoolPublicScorecardView, {
+      props: {
+        overlay: true,
+        publicIdentifier: 'org_a',
+        competitionPublicKey: 'cmp_a',
+        scorecardPublicIdentifier: 'sc_a',
+      },
+    });
+    await flushPromises();
+    await vi.advanceTimersByTimeAsync(12_000);
+    await wrapper.setProps({
+      publicIdentifier: 'org_b',
+      competitionPublicKey: 'cmp_b',
+      scorecardPublicIdentifier: 'sc_b',
+    });
+    resolvePrevious?.({ ...publicScorecard(91), public_identifier: 'sc_a' });
+    await flushPromises();
+    expect(schoolApi.getPublicCompetitionScorecard).toHaveBeenLastCalledWith('org_b', 'cmp_b', 'sc_b');
+    expect(wrapper.text()).toContain('92/1');
+    expect(wrapper.text()).not.toContain('91/1');
+    wrapper.unmount();
+  });
+
+  it('clears revoked overlay data and does not restart on visibility changes', async () => {
+    vi.useFakeTimers();
+    vi.mocked(schoolApi.getPublicCompetitionScorecard)
+      .mockResolvedValueOnce({ ...publicScorecard(90), public_identifier: 'sc_opaque' } as never)
+      .mockRejectedValueOnce(Object.assign(new Error('revoked'), { status: 404 }));
+    const wrapper = mount(SchoolPublicScorecardView, {
+      props: {
+        overlay: true,
+        publicIdentifier: 'org_opaque',
+        competitionPublicKey: 'cmp_opaque',
+        scorecardPublicIdentifier: 'sc_opaque',
+      },
+    });
+    await flushPromises();
+    await vi.advanceTimersByTimeAsync(12_000);
+    await flushPromises();
+    expect(wrapper.text()).toContain('not published or is no longer available');
+    expect(wrapper.text()).not.toContain('90/1');
+    document.dispatchEvent(new Event('visibilitychange'));
+    await vi.advanceTimersByTimeAsync(120_000);
+    expect(schoolApi.getPublicCompetitionScorecard).toHaveBeenCalledTimes(2);
+    wrapper.unmount();
+  });
+
+  it('does not fall back to a game ID when overlay identifiers are incomplete', async () => {
+    const wrapper = mount(SchoolPublicScorecardView, {
+      props: { overlay: true, gameId: 'private-game-id', publicIdentifier: 'org_opaque' },
+    });
+    await flushPromises();
+    expect(wrapper.text()).toContain('incomplete or invalid');
+    expect(schoolApi.getPublicCompetitionScorecard).not.toHaveBeenCalled();
+    expect(schoolApi.getPublicSchoolScorecard).not.toHaveBeenCalled();
     wrapper.unmount();
   });
 
