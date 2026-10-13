@@ -424,6 +424,19 @@ onBeforeUnmount(() => {
 .freshness.stale { color: #ffd08a; }
 .obs-status p.freshness { margin: 0; font-size: 0.67rem; line-height: 1.15; }
 .obs-status .refresh-now { margin: 0; padding: 0.2rem 0.55rem; font-size: 0.75rem; }
+.public-scorecard--overlay .notice {
+  padding: 0.75rem;
+  color: #f8fafc;
+}
+.public-scorecard--overlay .notice h1,
+.public-scorecard--overlay .notice p {
+  color: #f8fafc;
+}
+.public-scorecard--overlay .notice h1 {
+  margin: 0 0 0.35rem;
+  font-size: 1.25rem;
+}
+.public-scorecard--overlay .notice p { margin: 0; }
 @media (max-width: 520px) {
   .obs-scoreboard { padding: 0.4rem; }
   .obs-teams { grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 0.25rem; }

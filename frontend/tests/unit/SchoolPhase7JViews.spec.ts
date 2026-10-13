@@ -637,6 +637,32 @@ describe('Phase 7J School statistics and competition experience', () => {
     wrapper.unmount();
   });
 
+  it('uses the overlay-only high-contrast notice for initial failure and revoked publication', async () => {
+    vi.useFakeTimers();
+    vi.mocked(schoolApi.getPublicCompetitionScorecard)
+      .mockRejectedValueOnce(Object.assign(new Error('temporary'), { status: 503 }))
+      .mockRejectedValueOnce(Object.assign(new Error('revoked'), { status: 404 }));
+    const wrapper = mount(SchoolPublicScorecardView, {
+      props: {
+        overlay: true,
+        publicIdentifier: 'org_opaque',
+        competitionPublicKey: 'cmp_opaque',
+        scorecardPublicIdentifier: 'sc_opaque',
+      },
+    });
+
+    await flushPromises();
+    expect(wrapper.get('.public-scorecard--overlay .notice').text()).toContain('temporarily unavailable');
+    expect(wrapper.get('.public-scorecard--overlay .notice h1').text()).toBe('Scoreboard unavailable');
+
+    await vi.advanceTimersByTimeAsync(24_000);
+    await flushPromises();
+    expect(wrapper.get('.public-scorecard--overlay .notice').text()).toContain('not published or is no longer available');
+    expect(wrapper.get('.public-scorecard--overlay .notice h1').text()).toBe('Scoreboard unavailable');
+    expect(wrapper.text()).not.toContain('90/1');
+    wrapper.unmount();
+  });
+
   it('pauses overlay polling offline and refreshes when connectivity returns', async () => {
     vi.useFakeTimers();
     vi.mocked(schoolApi.getPublicCompetitionScorecard)

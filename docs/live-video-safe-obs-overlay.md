@@ -24,14 +24,15 @@ Do not replace or edit the identifiers with a game ID, and do not use `/view/:ga
 
 ## Synthetic rendered checks
 
-The following Chromium screenshots use synthetic adult team/player names. Both source sizes were checked at the exact viewport dimensions; final-state card heights measured 166 px at 960 × 240 and 171 px at 640 × 180, and final, stale, offline, and unavailable states had no horizontal or vertical document overflow. The long names wrap within the team columns.
+The following Chromium screenshots use synthetic adult team/player names. Both source sizes were checked at the exact viewport dimensions; final-state card heights measured 166 px at 960 × 240 and 171 px at 640 × 180, and final, stale, offline, transient-error, and revoked states had no horizontal or vertical document overflow. The error card's computed text is `rgb(248, 250, 252)` over `rgb(23, 30, 48)`, a contrast ratio of 15.87:1 (above WCAG AA for body text and large headings). The error card measured 78 px high at both source sizes. The long names wrap within the team columns.
 
 | State | 960 × 240 | 640 × 180 |
 |---|---|---|
 | Final result | ![Final score at 960 by 240](images/obs-overlay-960x240-final.png) | ![Final score at 640 by 180](images/obs-overlay-640x180-final.png) |
 | Stale after transient failure | ![Stale score at 960 by 240](images/obs-overlay-960x240-stale.png) | ![Stale score at 640 by 180](images/obs-overlay-640x180-stale.png) |
 | Offline with last verified score | ![Offline score at 960 by 240](images/obs-overlay-960x240-offline.png) | ![Offline score at 640 by 180](images/obs-overlay-640x180-offline.png) |
-| Initial unavailable state | ![Unavailable overlay at 960 by 240](images/obs-overlay-960x240-unavailable.png) | ![Unavailable overlay at 640 by 180](images/obs-overlay-640x180-unavailable.png) |
+| Initial transient failure | ![Transient error overlay at 960 by 240](images/obs-overlay-960x240-unavailable.png) | ![Transient error overlay at 640 by 180](images/obs-overlay-640x180-unavailable.png) |
+| Publication revoked (404) | ![Revoked overlay at 960 by 240](images/obs-overlay-960x240-revoked.png) | ![Revoked overlay at 640 by 180](images/obs-overlay-640x180-revoked.png) |
 
 ## Synthetic, adult-only rehearsal
 
