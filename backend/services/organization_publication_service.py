@@ -30,6 +30,10 @@ from backend.services.organization_service import (
     ACTIVE_ORGANIZATION_STATUS,
     OrganizationServiceError,
 )
+from backend.services.youtube_video_service import (
+    YOUTUBE_VIDEO_ID_PATTERN,
+    normalize_youtube_video_url,
+)
 from backend.sql_app import models
 from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
@@ -188,6 +192,95 @@ async def _current_membership(
     if manage and membership.role not in PUBLICATION_MANAGERS:
         raise OrganizationServiceError(403, "Insufficient organization role")
     return membership
+
+
+async def _managed_linked_fixture(
+    db: AsyncSession,
+    *,
+    organization_id: str,
+    actor_user_id: str,
+    competition_id: str,
+    fixture_id: str,
+    lock: bool = False,
+) -> models.Fixture:
+    organization = await _lock_active_organization(db, organization_id=organization_id)
+    if organization.organization_type not in {"school", "club"}:
+        raise OrganizationServiceError(404, "Organization not found")
+    await _current_membership(
+        db, organization_id=organization_id, actor_user_id=actor_user_id, manage=True
+    )
+    if not await organization_has_capability(
+        db, organization_id=organization_id, capability="school_live_scorecards"
+    ):
+        raise OrganizationServiceError(403, "Organization capability not enabled")
+
+    competition = await db.scalar(
+        select(models.Tournament).where(
+            models.Tournament.id == competition_id,
+            models.Tournament.organization_id == organization_id,
+        )
+    )
+    if competition is None:
+        raise OrganizationServiceError(404, "Fixture not found")
+    statement = select(models.Fixture).where(
+        models.Fixture.id == fixture_id,
+        models.Fixture.tournament_id == competition_id,
+    )
+    if lock:
+        statement = statement.with_for_update()
+    fixture = await db.scalar(statement)
+    if fixture is None or fixture.game_id is None:
+        raise OrganizationServiceError(404, "Linked match not found")
+    game = await db.get(models.Game, fixture.game_id)
+    if game is None or not school_competition_service.school_game_matches_fixture(
+        game, fixture, organization_id=organization_id
+    ):
+        raise OrganizationServiceError(404, "Linked match not found")
+    return fixture
+
+
+async def get_fixture_youtube_video(
+    db: AsyncSession,
+    *,
+    organization_id: str,
+    actor_user_id: str,
+    competition_id: str,
+    fixture_id: str,
+) -> models.Fixture:
+    return await _managed_linked_fixture(
+        db,
+        organization_id=organization_id,
+        actor_user_id=actor_user_id,
+        competition_id=competition_id,
+        fixture_id=fixture_id,
+    )
+
+
+async def update_fixture_youtube_video(
+    db: AsyncSession,
+    *,
+    organization_id: str,
+    actor_user_id: str,
+    competition_id: str,
+    fixture_id: str,
+    youtube_url: str | None,
+) -> models.Fixture:
+    fixture = await _managed_linked_fixture(
+        db,
+        organization_id=organization_id,
+        actor_user_id=actor_user_id,
+        competition_id=competition_id,
+        fixture_id=fixture_id,
+        lock=True,
+    )
+    fixture.youtube_video_id = (
+        normalize_youtube_video_url(youtube_url) if youtube_url is not None else None
+    )
+    fixture.youtube_video_updated_by_user_id = actor_user_id
+    fixture.youtube_video_updated_at = await db.scalar(select(func.now()))
+    await db.commit()
+    await db.refresh(fixture)
+    return fixture
 
 
 async def get_settings(
@@ -894,14 +987,14 @@ async def get_public_fixture(
     )
 
 
-async def get_public_scorecard_game_id(
+async def get_public_scorecard_context(
     db: AsyncSession,
     *,
     public_identifier: str,
     competition_public_key: str,
     scorecard_public_identifier: str,
-) -> str | None:
-    """Map an opaque share key to a game only after all public gates hold."""
+) -> tuple[str, str | None] | None:
+    """Map an opaque share key and optional video ID only after all public gates hold."""
     if not (
         PUBLIC_IDENTIFIER_PATTERN.fullmatch(public_identifier)
         and PUBLIC_COMPETITION_KEY_PATTERN.fullmatch(competition_public_key)
@@ -910,7 +1003,7 @@ async def get_public_scorecard_game_id(
         return None
     row = (
         await db.execute(
-            select(models.Game.id, models.Organization.id)
+            select(models.Game, models.Fixture, models.Organization.id)
             .join(models.Fixture, models.Fixture.game_id == models.Game.id)
             .join(models.Tournament, models.Tournament.id == models.Fixture.tournament_id)
             .join(
@@ -935,11 +1028,33 @@ async def get_public_scorecard_game_id(
             .limit(1)
         )
     ).one_or_none()
-    if row is None or not await organization_has_capability(
-        db, organization_id=row[1], capability="school_live_scorecards"
+    if row is None or not school_competition_service.school_game_matches_fixture(
+        row[0], row[1], organization_id=row[2]
+    ) or not await organization_has_capability(
+        db, organization_id=row[2], capability="school_live_scorecards"
     ):
         return None
-    return row[0]
+    video_id = row[1].youtube_video_id
+    if not isinstance(video_id, str) or not YOUTUBE_VIDEO_ID_PATTERN.fullmatch(video_id):
+        video_id = None
+    return row[0].id, video_id
+
+
+async def get_public_scorecard_game_id(
+    db: AsyncSession,
+    *,
+    public_identifier: str,
+    competition_public_key: str,
+    scorecard_public_identifier: str,
+) -> str | None:
+    """Compatibility wrapper for callers that need only the governed game ID."""
+    context = await get_public_scorecard_context(
+        db,
+        public_identifier=public_identifier,
+        competition_public_key=competition_public_key,
+        scorecard_public_identifier=scorecard_public_identifier,
+    )
+    return context[0] if context is not None else None
 
 
 _TEAM_PUBLIC_IDENTIFIER_NAMESPACE = uuid.UUID("a4b679db-e8fc-4c72-97c5-dfcb0c48c2c9")

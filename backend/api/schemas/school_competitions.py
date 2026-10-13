@@ -177,6 +177,7 @@ class PublicSchoolScorecard(BaseModel):
 
 class PublicOpaqueSchoolScorecard(BaseModel):
     public_identifier: str
+    youtube_video_id: str | None = Field(default=None, pattern=r"^[A-Za-z0-9_-]{11}$")
     organization_type: Literal["school", "club"]
     publication_state: Literal["published_live", "published_final"]
     status: str
@@ -198,3 +199,5 @@ class PublicOpaqueSchoolScorecard(BaseModel):
     result: str | None
     batting_scorecard: list[PublicScorecardEntry]
     bowling_scorecard: list[PublicScorecardEntry]
+
+    model_config = ConfigDict(extra="forbid")

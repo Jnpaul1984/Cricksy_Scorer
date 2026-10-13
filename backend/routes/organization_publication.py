@@ -8,6 +8,8 @@ from backend.api.schemas.organization_publication import (
     OrganizationBrandingUpdate,
     OrganizationCommunitySettingsResponse,
     OrganizationCompetitionPublicationResponse,
+    OrganizationFixtureYoutubeVideoResponse,
+    OrganizationFixtureYoutubeVideoUpdate,
     OrganizationPublicationSettingsResponse,
     PublicAnonymousLeaderboardsResponse,
     PublicCompetitionResponse,
@@ -16,14 +18,17 @@ from backend.api.schemas.organization_publication import (
     PublicOrganizationResponse,
     PublicTeamResponse,
 )
-from backend.security import get_current_active_user
-from backend.services import organization_publication_service, public_leaderboard_service
-from backend.services import school_competition_service
-from backend.services.school_competition_service import SchoolCompetitionServiceError
 from backend.api.schemas.school_competitions import PublicOpaqueSchoolScorecard
+from backend.security import get_current_active_user
+from backend.services import (
+    organization_publication_service,
+    public_leaderboard_service,
+    school_competition_service,
+)
 from backend.services.organization_service import OrganizationServiceError
+from backend.services.school_competition_service import SchoolCompetitionServiceError
 from backend.sql_app.database import get_db
-from backend.sql_app.models import User
+from backend.sql_app.models import Fixture, User
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -187,6 +192,66 @@ async def _competition_transition(
     )
 
 
+def _fixture_youtube_video_response(
+    fixture: Fixture,
+) -> OrganizationFixtureYoutubeVideoResponse:
+    return OrganizationFixtureYoutubeVideoResponse(
+        youtube_video_id=fixture.youtube_video_id,
+        updated_by_user_id=fixture.youtube_video_updated_by_user_id,
+        updated_at=fixture.youtube_video_updated_at,
+    )
+
+
+@router.get(
+    "/api/organizations/{organization_id}/competitions/{competition_id}/fixtures/{fixture_id}/youtube-video",
+    response_model=OrganizationFixtureYoutubeVideoResponse,
+)
+async def get_fixture_youtube_video(
+    organization_id: str,
+    competition_id: str,
+    fixture_id: str,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> OrganizationFixtureYoutubeVideoResponse:
+    try:
+        fixture = await organization_publication_service.get_fixture_youtube_video(
+            db,
+            organization_id=organization_id,
+            actor_user_id=current_user.id,
+            competition_id=competition_id,
+            fixture_id=fixture_id,
+        )
+    except OrganizationServiceError as exc:
+        _service_error(exc)
+    return _fixture_youtube_video_response(fixture)
+
+
+@router.put(
+    "/api/organizations/{organization_id}/competitions/{competition_id}/fixtures/{fixture_id}/youtube-video",
+    response_model=OrganizationFixtureYoutubeVideoResponse,
+)
+async def update_fixture_youtube_video(
+    organization_id: str,
+    competition_id: str,
+    fixture_id: str,
+    payload: OrganizationFixtureYoutubeVideoUpdate,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> OrganizationFixtureYoutubeVideoResponse:
+    try:
+        fixture = await organization_publication_service.update_fixture_youtube_video(
+            db,
+            organization_id=organization_id,
+            actor_user_id=current_user.id,
+            competition_id=competition_id,
+            fixture_id=fixture_id,
+            youtube_url=payload.youtube_url,
+        )
+    except OrganizationServiceError as exc:
+        _service_error(exc)
+    return _fixture_youtube_video_response(fixture)
+
+
 @router.put(
     "/api/organizations/{organization_id}/competitions/{competition_id}/community-publication/publish",
     response_model=OrganizationCompetitionPublicationResponse,
@@ -264,14 +329,19 @@ async def public_result(public_identifier: str, competition_public_key: str, fix
 
 @router.get("/api/public/organizations/{public_identifier}/competitions/{competition_public_key}/scorecards/{scorecard_public_identifier}", response_model=PublicOpaqueSchoolScorecard)
 async def public_competition_scorecard(public_identifier: str, competition_public_key: str, scorecard_public_identifier: str, db: Annotated[AsyncSession, Depends(get_db)]) -> PublicOpaqueSchoolScorecard:
-    game_id = await organization_publication_service.get_public_scorecard_game_id(db, public_identifier=public_identifier, competition_public_key=competition_public_key, scorecard_public_identifier=scorecard_public_identifier)
-    if game_id is None:
+    context = await organization_publication_service.get_public_scorecard_context(db, public_identifier=public_identifier, competition_public_key=competition_public_key, scorecard_public_identifier=scorecard_public_identifier)
+    if context is None:
         raise HTTPException(status_code=404, detail="Published scorecard not found")
+    game_id, youtube_video_id = context
     try:
         legacy = await school_competition_service.public_scorecard(db, game_id=game_id)
     except SchoolCompetitionServiceError:
         raise HTTPException(status_code=404, detail="Published scorecard not found") from None
-    return PublicOpaqueSchoolScorecard(public_identifier=scorecard_public_identifier, **legacy.model_dump(exclude={"game_id"}))
+    return PublicOpaqueSchoolScorecard(
+        public_identifier=scorecard_public_identifier,
+        youtube_video_id=youtube_video_id,
+        **legacy.model_dump(exclude={"game_id"}),
+    )
 
 @router.get(
     "/api/public/organizations/{public_identifier}/leaderboards",

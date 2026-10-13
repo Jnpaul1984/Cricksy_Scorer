@@ -10,6 +10,7 @@ import {
   deleteSchoolCompetition,
   deleteSchoolFixture,
   getSchoolStandings,
+  getSchoolFixtureYoutubeVideo,
   linkSchoolFixtureGame,
   listSchoolCompetitionFixtures,
   listSchoolCompetitions,
@@ -18,6 +19,7 @@ import {
   removeSchoolCompetitionTeam,
   updateSchoolCompetition,
   updateSchoolFixture,
+  updateSchoolFixtureYoutubeVideo,
 } from '@/services/schoolAdminApi';
 import type {
   SchoolCompetition,
@@ -26,12 +28,14 @@ import type {
   SchoolStandings,
   SchoolTeam,
 } from '@/types/schoolAdmin';
+import { normalizeYoutubeVideoUrl } from '@/utils/youtubeVideo';
 
 const {
   organizationId,
   terminology,
   canViewCompetitions,
   canManageCompetitions,
+  canManageCommunity,
   canDeleteCompetitions,
   canLinkFixtures,
 } = useSchoolContext();
@@ -54,9 +58,15 @@ const competitionStatus = ref<SchoolCompetition['status']>('upcoming');
 const fixtureForm = reactive({ team_a_id: '', team_b_id: '', venue: '', scheduled_date: '' });
 const linkGameIds = reactive<Record<string, string>>({});
 const fixtureStatuses = reactive<Record<string, SchoolFixture['status']>>({});
+const editingVideoFixtureIds = ref<string[]>([]);
+const loadedVideoFixtureIds = ref<string[]>([]);
+const youtubeUrls = reactive<Record<string, string>>({});
 const selected = computed(() => competitions.value.find((row) => row.id === selectedId.value));
 
 async function loadCompetitionDetails() {
+  editingVideoFixtureIds.value = [];
+  loadedVideoFixtureIds.value = [];
+  for (const fixtureId of Object.keys(youtubeUrls)) delete youtubeUrls[fixtureId];
   if (!selectedId.value) {
     entrants.value = [];
     fixtures.value = [];
@@ -80,6 +90,9 @@ async function load() {
   fixtures.value = [];
   standings.value = null;
   schoolTeams.value = [];
+  editingVideoFixtureIds.value = [];
+  loadedVideoFixtureIds.value = [];
+  for (const fixtureId of Object.keys(youtubeUrls)) delete youtubeUrls[fixtureId];
   selectedId.value = '';
   loading.value = true;
   error.value = '';
@@ -200,6 +213,78 @@ async function linkFixture(fixture: SchoolFixture) {
     () => linkSchoolFixtureGame(organizationId.value, selectedId.value, fixture.id, gameId),
     `Fixture linked to the selected ${terminology.value.kindLabel} match.`,
   );
+}
+
+async function toggleVideoEditor(fixture: SchoolFixture) {
+  const current = editingVideoFixtureIds.value;
+  if (current.includes(fixture.id)) {
+    editingVideoFixtureIds.value = current.filter((id) => id !== fixture.id);
+    return;
+  }
+  editingVideoFixtureIds.value = [...current, fixture.id];
+  if (loadedVideoFixtureIds.value.includes(fixture.id) || !selectedId.value) return;
+
+  const competitionId = selectedId.value;
+  const organizationIdForRequest = organizationId.value;
+  error.value = '';
+  try {
+    const association = await getSchoolFixtureYoutubeVideo(
+      organizationIdForRequest,
+      competitionId,
+      fixture.id,
+    );
+    if (
+      competitionId !== selectedId.value
+      || organizationIdForRequest !== organizationId.value
+      || !editingVideoFixtureIds.value.includes(fixture.id)
+      || !fixtures.value.some((row) => row.id === fixture.id)
+    ) return;
+    youtubeUrls[fixture.id] = association.youtube_video_id
+      ? `https://youtu.be/${association.youtube_video_id}`
+      : '';
+    loadedVideoFixtureIds.value = [...loadedVideoFixtureIds.value, fixture.id];
+  } catch (reason) {
+    editingVideoFixtureIds.value = editingVideoFixtureIds.value.filter((id) => id !== fixture.id);
+    error.value = getErrorMessage(reason);
+  }
+}
+
+async function saveYoutubeVideo(fixture: SchoolFixture) {
+  const url = youtubeUrls[fixture.id] || '';
+  if (!normalizeYoutubeVideoUrl(url)) {
+    error.value = 'Enter a valid HTTPS YouTube watch, youtu.be share, or youtube.com/live URL.';
+    return;
+  }
+  error.value = '';
+  success.value = '';
+  try {
+    await updateSchoolFixtureYoutubeVideo(
+      organizationId.value,
+      selectedId.value,
+      fixture.id,
+      url,
+    );
+    success.value = 'YouTube association saved. It may appear on an already-published scorecard.';
+  } catch (reason) {
+    error.value = getErrorMessage(reason);
+  }
+}
+
+async function removeYoutubeVideo(fixture: SchoolFixture) {
+  error.value = '';
+  success.value = '';
+  try {
+    await updateSchoolFixtureYoutubeVideo(
+      organizationId.value,
+      selectedId.value,
+      fixture.id,
+      null,
+    );
+    youtubeUrls[fixture.id] = '';
+    success.value = 'YouTube association removed. This does not delete or unpublish the YouTube video.';
+  } catch (reason) {
+    error.value = getErrorMessage(reason);
+  }
 }
 
 watch(organizationId, load, { immediate: true });
@@ -342,6 +427,46 @@ watch(organizationId, load, { immediate: true });
               <p>
                 {{ fixture.game_id ? `Linked match: ${fixture.game_id}` : 'Not linked to a match' }}
               </p>
+              <section v-if="canManageCommunity && fixture.game_id" class="video-editor">
+                <button type="button" class="compact" @click="toggleVideoEditor(fixture)">
+                  {{ editingVideoFixtureIds.includes(fixture.id) ? 'Close YouTube video editor' : 'Associate YouTube video' }}
+                </button>
+                <form
+                  v-if="editingVideoFixtureIds.includes(fixture.id)"
+                  class="video-editor-form"
+                  @submit.prevent="saveYoutubeVideo(fixture)"
+                >
+                  <label :for="`youtube-video-${fixture.id}`">
+                    YouTube URL
+                    <input
+                      :id="`youtube-video-${fixture.id}`"
+                      v-model="youtubeUrls[fixture.id]"
+                      type="url"
+                      maxlength="2048"
+                      placeholder="https://youtu.be/VIDEO_ID"
+                      required
+                    />
+                  </label>
+                  <p>
+                    Accepted HTTPS forms: https://www.youtube.com/watch?v=VIDEO_ID,
+                    https://youtu.be/VIDEO_ID, or https://youtube.com/live/VIDEO_ID.
+                    An unlisted link is not access control.
+                  </p>
+                  <p>The association does not publish the match. It may appear on an already-published scorecard.</p>
+                  <div class="inline-form">
+                    <button type="submit">Save video association</button>
+                    <button
+                      v-if="youtubeUrls[fixture.id]"
+                      type="button"
+                      class="compact danger"
+                      @click="removeYoutubeVideo(fixture)"
+                    >
+                      Remove association
+                    </button>
+                  </div>
+                  <small>Removing this association does not delete or unpublish content on YouTube.</small>
+                </form>
+              </section>
               <form
                 v-if="canManageCompetitions"
                 class="inline-form"
@@ -498,6 +623,18 @@ label {
   padding: 1rem;
   border: 1px solid #39445f;
   border-radius: 8px;
+}
+.video-editor {
+  margin: 0.8rem 0;
+}
+.video-editor-form {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 0.65rem;
+}
+.video-editor-form p,
+.video-editor-form small {
+  margin: 0;
 }
 .compact {
   padding: 0.3rem 0.5rem;

@@ -22,6 +22,7 @@ const auth = useAuthStore()
 const route = useRoute()
 const showBetaGuide = computed(() => Boolean(auth.user && auth.user.beta_tag))
 const isObsOverlay = computed(() => route.meta.layout === 'obs-overlay')
+const isPublicScorecard = computed(() => route.name === 'public-competition-scorecard')
 
 function handleFeedbackSubmit(payload: { text: string; email?: string }) {
   // TODO: Send feedback to backend API
@@ -132,7 +133,7 @@ const showAdminNav = computed(() => auth.isSuper)
     </header>
 
     <!-- AI Quota Warning Banner -->
-    <QuotaWarningBanner v-if="!isObsOverlay" />
+    <QuotaWarningBanner v-if="!isObsOverlay && !isPublicScorecard" />
 
     <main class="app-main">
       <RouterView />

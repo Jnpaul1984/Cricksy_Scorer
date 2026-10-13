@@ -6,6 +6,7 @@ import PublicShareLinkButton from '@/components/PublicShareLinkButton.vue';
 import { getErrorMessage } from '@/services/api';
 import { getPublicCompetitionScorecard, getPublicSchoolScorecard } from '@/services/schoolAdminApi';
 import type { PublicOpaqueSchoolScorecard, PublicSchoolScorecard } from '@/types/schoolAdmin';
+import { youtubeVideoUrls } from '@/utils/youtubeVideo';
 
 const props = defineProps<{ gameId?: string; publicIdentifier?: string; competitionPublicKey?: string; scorecardPublicIdentifier?: string; overlay?: boolean }>();
 const scorecard = ref<(PublicSchoolScorecard | PublicOpaqueSchoolScorecard) | null>(null);
@@ -19,6 +20,7 @@ const overlayRefreshInterval = 12_000;
 const finalOverlayRefreshInterval = 300_000;
 const maxOverlayRefreshInterval = 60_000;
 const offline = ref(false);
+const activeVideoId = ref<string | null>(null);
 let refreshTimer: ReturnType<typeof window.setInterval> | undefined;
 let overlayRefreshTimer: ReturnType<typeof window.setTimeout> | undefined;
 let inFlight = false;
@@ -32,6 +34,18 @@ const canonicalSharePath = computed(() => (
     : null
 ));
 const overlaySharePath = computed(() => canonicalSharePath.value ? `${canonicalSharePath.value}/overlay` : null);
+const youtubeVideoId = computed(() => {
+  const current = scorecard.value;
+  return current && 'youtube_video_id' in current && typeof current.youtube_video_id === 'string'
+    ? current.youtube_video_id
+    : null;
+});
+const youtubeUrls = computed(() => (
+  !props.overlay && youtubeVideoId.value ? youtubeVideoUrls(youtubeVideoId.value) : null
+));
+const youtubePlayerActive = computed(() => (
+  youtubeUrls.value !== null && activeVideoId.value === youtubeVideoId.value
+));
 
 const routeKey = () => [props.overlay, props.gameId, props.publicIdentifier, props.competitionPublicKey, props.scorecardPublicIdentifier].join('\u001f');
 
@@ -88,6 +102,7 @@ async function load({ background = false } = {}) {
       ? await getPublicCompetitionScorecard(props.publicIdentifier, props.competitionPublicKey, props.scorecardPublicIdentifier)
       : await getPublicSchoolScorecard(props.gameId || '');
     if (version !== requestVersion || requestedRoute !== routeKey()) return;
+    if (youtubeVideoIdFor(nextScorecard) !== youtubeVideoId.value) activeVideoId.value = null;
     scorecard.value = nextScorecard;
     lastUpdated.value = new Date();
     freshness.value = 'current';
@@ -100,6 +115,7 @@ async function load({ background = false } = {}) {
     const status = (reason as { status?: number })?.status;
     if (status === 404) {
       scorecard.value = null;
+      activeVideoId.value = null;
       lastUpdated.value = null;
       freshness.value = 'current';
       error.value = 'This scorecard is not published or is no longer available.';
@@ -162,6 +178,16 @@ function startPolling() {
   refreshTimer = window.setInterval(() => void load({ background: true }), refreshInterval);
 }
 
+function youtubeVideoIdFor(value: PublicSchoolScorecard | PublicOpaqueSchoolScorecard): string | null {
+  return 'youtube_video_id' in value && typeof value.youtube_video_id === 'string'
+    ? value.youtube_video_id
+    : null;
+}
+
+function activateYoutubePlayer() {
+  if (youtubeUrls.value && youtubeVideoId.value) activeVideoId.value = youtubeVideoId.value;
+}
+
 function onVisibilityChange() {
   if (document.visibilityState === 'hidden') stopPolling();
   else if (props.overlay) {
@@ -205,6 +231,7 @@ watch(() => routeKey(), () => {
   revoked = false;
   offline.value = typeof navigator !== 'undefined' && navigator.onLine === false;
   scorecard.value = null;
+  activeVideoId.value = null;
   lastUpdated.value = null;
   freshness.value = 'current';
   void load();
@@ -275,6 +302,32 @@ onBeforeUnmount(() => {
         <strong>{{ scorecard.batting_team_name || 'Current innings' }}</strong>
         <span>{{ scorecard.total_runs }}/{{ scorecard.total_wickets }}</span>
         <span>{{ scorecard.overs_completed }}.{{ scorecard.balls_this_over }} overs</span>
+      </section>
+      <section v-if="youtubeUrls" class="youtube-player" aria-labelledby="youtube-video-heading">
+        <h2 id="youtube-video-heading">Associated YouTube video</h2>
+        <p v-if="!youtubePlayerActive" id="youtube-player-help">
+          Choose to load the video. The player is not contacted until you activate it.
+        </p>
+        <button
+          v-if="!youtubePlayerActive"
+          type="button"
+          aria-describedby="youtube-player-help"
+          @click="activateYoutubePlayer"
+        >
+          Load YouTube video
+        </button>
+        <div v-else class="youtube-frame">
+          <iframe
+            :src="youtubeUrls.embedUrl"
+            title="Associated YouTube video"
+            referrerpolicy="strict-origin-when-cross-origin"
+            allow="encrypted-media; picture-in-picture; fullscreen"
+            allowfullscreen
+          />
+        </div>
+        <a :href="youtubeUrls.watchUrl" target="_blank" rel="noopener noreferrer">
+          Watch on YouTube
+        </a>
       </section>
       <p class="freshness" :class="freshness" role="status">
         <template v-if="freshness === 'refreshing'">Refreshing live score…</template>
@@ -469,6 +522,25 @@ header,
   gap: 1rem;
   margin: 1rem 0;
   font-size: 1.2rem;
+}
+.youtube-player {
+  display: grid;
+  justify-items: start;
+  gap: 0.6rem;
+  margin: 1rem 0;
+}
+.youtube-player h2,
+.youtube-player p {
+  margin: 0;
+}
+.youtube-frame {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+}
+.youtube-frame iframe {
+  width: 100%;
+  height: 100%;
+  border: 0;
 }
 .tables {
   display: grid;
