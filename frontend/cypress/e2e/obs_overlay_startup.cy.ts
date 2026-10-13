@@ -63,37 +63,63 @@ describe('production app startup', () => {
   overlayUrlCases.forEach(([overrideType, makeUrl]) => {
     it(`starts the public overlay without credentialed or arbitrary-origin requests (${overrideType} override)`, () => {
       const apiRequests: Array<{ url: string; headers: Record<string, string> }> = [];
+      const unexpectedRequests: Array<{ url: string; method: string; resourceType: string }> = [];
+      const appOrigin = new URL(Cypress.config('baseUrl')!).origin;
+      const configuredApiBase = Cypress.env('API_BASE') || 'http://127.0.0.1:8000';
+      const canonicalApiOrigin = new URL(configuredApiBase).origin;
+      const staticResourceTypes = new Set(['document', 'stylesheet', 'script', 'image', 'font', 'manifest']);
 
       cy.intercept('**/*', (request) => {
         const url = new URL(request.url);
-        const isApiOrSocket = url.pathname.includes('/api/') || url.pathname.includes('/socket.io');
-        if (isApiOrSocket) {
+        const resourceType = request.resourceType || 'unknown';
+        const hasAuthorization = Object.keys(request.headers).some(
+          (header) => header.toLowerCase() === 'authorization',
+        );
+        const isCanonicalScorecardRequest =
+          request.method === 'GET' &&
+          url.origin === canonicalApiOrigin &&
+          url.pathname === scorecardPath &&
+          !url.search &&
+          !hasAuthorization &&
+          (resourceType === 'fetch' || resourceType === 'xhr');
+
+        if (isCanonicalScorecardRequest) {
           apiRequests.push({ url: request.url, headers: request.headers });
-          if (url.hostname === 'unsafe.example.invalid') {
-            request.reply({ statusCode: 599, body: {} });
-            return;
-          }
-          if (url.pathname === scorecardPath) {
-            request.reply({ statusCode: 200, body: syntheticScorecard });
-            return;
-          }
-          request.reply({ statusCode: 599, body: {} });
+          request.reply({ statusCode: 200, body: syntheticScorecard });
           return;
         }
-        request.continue();
+
+        if (
+          url.origin === appOrigin &&
+          request.method === 'GET' &&
+          staticResourceTypes.has(resourceType)
+        ) {
+          request.continue();
+          return;
+        }
+
+        if (url.origin === canonicalApiOrigin || resourceType === 'fetch' || resourceType === 'xhr') {
+          apiRequests.push({ url: request.url, headers: request.headers });
+        }
+        unexpectedRequests.push({ url: request.url, method: request.method, resourceType });
+        request.reply({ statusCode: 599, body: {} });
       });
 
       cy.visit(makeUrl(overlayPath), {
         onBeforeLoad(win) {
           win.localStorage.setItem('cricksy_token', 'synthetic-overlay-test-token');
           (win as any).__overlaySocketUrls = [];
-          const NativeWebSocket = win.WebSocket;
-          win.WebSocket = new Proxy(NativeWebSocket, {
-            construct(target, args) {
-              (win as any).__overlaySocketUrls.push(String(args[0]));
-              return Reflect.construct(target, args) as WebSocket;
-            },
-          });
+          class BlockedWebSocket {
+            constructor(url: string | URL) {
+              (win as any).__overlaySocketUrls.push(String(url));
+            }
+
+            addEventListener() {}
+            removeEventListener() {}
+            close() {}
+            send() {}
+          }
+          win.WebSocket = BlockedWebSocket as unknown as typeof win.WebSocket;
         },
       });
 
@@ -103,14 +129,14 @@ describe('production app startup', () => {
         expect(apiRequests).to.have.length(1);
         const request = apiRequests[0];
         const actualUrl = new URL(request.url);
-        const configuredApiBase = Cypress.env('API_BASE') || 'http://127.0.0.1:8000';
         expect(actualUrl.pathname).to.equal(scorecardPath);
-        expect(actualUrl.origin).to.equal(new URL(configuredApiBase).origin);
+        expect(actualUrl.origin).to.equal(canonicalApiOrigin);
         expect(request.url).not.to.include('unsafe.example.invalid');
-        expect(request.headers).not.to.have.property('authorization');
+        expect(Object.keys(request.headers).map((header) => header.toLowerCase())).not.to.include('authorization');
         expect(request.url).not.to.match(
           /\/games\/|\/snapshots|\/deliveries|\/api\/ai-usage|socket\.io|private/i,
         );
+        expect(unexpectedRequests).to.deep.equal([]);
       });
       cy.window().its('__overlaySocketUrls').should('deep.equal', []);
     });
