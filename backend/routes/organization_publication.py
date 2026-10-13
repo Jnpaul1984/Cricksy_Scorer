@@ -196,6 +196,7 @@ def _fixture_youtube_video_response(
     fixture: Fixture,
 ) -> OrganizationFixtureYoutubeVideoResponse:
     return OrganizationFixtureYoutubeVideoResponse(
+        game_id=fixture.game_id,
         youtube_video_id=fixture.youtube_video_id,
         updated_by_user_id=fixture.youtube_video_updated_by_user_id,
         updated_at=fixture.youtube_video_updated_at,
@@ -245,6 +246,7 @@ async def update_fixture_youtube_video(
             actor_user_id=current_user.id,
             competition_id=competition_id,
             fixture_id=fixture_id,
+            expected_game_id=payload.expected_game_id,
             youtube_url=payload.youtube_url,
         )
     except OrganizationServiceError as exc:

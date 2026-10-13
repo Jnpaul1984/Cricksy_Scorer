@@ -696,6 +696,7 @@ export interface PublicOpaqueSchoolScorecard extends Omit<PublicSchoolScorecard,
 }
 
 export interface OrganizationFixtureYoutubeVideo {
+  game_id: string;
   youtube_video_id: string | null;
   updated_by_user_id: string | null;
   updated_at: string | null;

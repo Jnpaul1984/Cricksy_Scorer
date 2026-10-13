@@ -263,6 +263,7 @@ async def update_fixture_youtube_video(
     actor_user_id: str,
     competition_id: str,
     fixture_id: str,
+    expected_game_id: str,
     youtube_url: str | None,
 ) -> models.Fixture:
     fixture = await _managed_linked_fixture(
@@ -273,6 +274,10 @@ async def update_fixture_youtube_video(
         fixture_id=fixture_id,
         lock=True,
     )
+    if fixture.game_id != expected_game_id:
+        raise OrganizationServiceError(
+            409, "Fixture match link changed; reload before editing video"
+        )
     fixture.youtube_video_id = (
         normalize_youtube_video_url(youtube_url) if youtube_url is not None else None
     )

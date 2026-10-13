@@ -83,6 +83,7 @@ class OrganizationCompetitionPublicationResponse(BaseModel):
 
 
 class OrganizationFixtureYoutubeVideoUpdate(BaseModel):
+    expected_game_id: str = Field(min_length=1)
     youtube_url: str | None = Field(..., max_length=2048)
 
     @field_validator("youtube_url")
@@ -94,6 +95,7 @@ class OrganizationFixtureYoutubeVideoUpdate(BaseModel):
 
 
 class OrganizationFixtureYoutubeVideoResponse(BaseModel):
+    game_id: str
     youtube_video_id: str | None
     updated_by_user_id: str | None
     updated_at: dt.datetime | None

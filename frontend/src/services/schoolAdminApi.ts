@@ -861,11 +861,15 @@ export const updateSchoolFixtureYoutubeVideo = (
   organizationId: string,
   competitionId: string,
   fixtureId: string,
+  expectedGameId: string,
   youtubeUrl: string | null,
 ) =>
   apiRequest<OrganizationFixtureYoutubeVideo>(
     fixtureYoutubeVideoPath(organizationId, competitionId, fixtureId),
-    { method: 'PUT', body: JSON.stringify({ youtube_url: youtubeUrl }) },
+    {
+      method: 'PUT',
+      body: JSON.stringify({ expected_game_id: expectedGameId, youtube_url: youtubeUrl }),
+    },
   );
 export const getPublicSchoolScorecard = (gameId: string) =>
   apiRequest<PublicSchoolScorecard>(`/public/school-scorecards/${encodeURIComponent(gameId)}`);

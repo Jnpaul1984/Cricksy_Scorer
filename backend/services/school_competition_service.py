@@ -677,13 +677,21 @@ async def link_fixture_game(
         capability="school_competitions",
     )
     fixture = await _fixture(
-        db, organization_id=organization_id, competition_id=competition_id, fixture_id=fixture_id
+        db,
+        organization_id=organization_id,
+        competition_id=competition_id,
+        fixture_id=fixture_id,
+        lock=True,
     )
     game = await db.get(models.Game, game_id)
     if game is None:
         raise _not_found("Game")
     if not school_game_matches_fixture(game, fixture, organization_id=organization_id):
         raise _not_found("Game")
+    if fixture.youtube_video_id is not None and fixture.game_id != game_id:
+        raise SchoolCompetitionServiceError(
+            409, "Remove the YouTube association before changing the linked match"
+        )
     already_linked = await db.scalar(
         select(models.Fixture.id).where(
             models.Fixture.game_id == game_id,

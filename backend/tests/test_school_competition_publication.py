@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 from structlog.testing import capture_logs
 
-from backend.services import school_competition_service
+from backend.services import organization_publication_service, school_competition_service
 from backend.sql_app.models import (
     Fixture,
     Game,
@@ -324,7 +324,7 @@ async def test_youtube_video_edits_use_owner_admin_publication_authority(
     )
     attached = school_client.put(
         path,
-        json={"youtube_url": "https://youtu.be/AbCdEf123_-?si=synthetic"},
+        json={"expected_game_id": game.id, "youtube_url": "https://youtu.be/AbCdEf123_-?si=synthetic"},
         headers=actor.headers,
     )
     assert attached.status_code == expected_status
@@ -335,15 +335,89 @@ async def test_youtube_video_edits_use_owner_admin_publication_authority(
         assert school_client.get(path, headers=actor.headers).json()["youtube_video_id"] == "AbCdEf123_-"
         assert school_client.put(
             path,
-            json={"youtube_url": "<iframe src='https://youtube.com/embed/AbCdEf123_-'></iframe>"},
+            json={
+                "expected_game_id": game.id,
+                "youtube_url": "<iframe src='https://youtube.com/embed/AbCdEf123_-'></iframe>",
+            },
             headers=actor.headers,
         ).status_code == 422
-        assert school_client.put(path, json={}, headers=actor.headers).status_code == 422
+        assert school_client.put(
+            path, json={"youtube_url": None}, headers=actor.headers
+        ).status_code == 422
         assert school_client.get(path, headers=actor.headers).json()["youtube_video_id"] == "AbCdEf123_-"
     else:
         async with school_client.session_maker() as session:  # type: ignore[attr-defined]
             persisted = await session.get(Fixture, fixture["id"])
             assert persisted is not None and persisted.youtube_video_id is None
+
+
+@pytest.mark.parametrize("relink_role", ["coach", "scorer"])
+async def test_associated_video_cannot_follow_relinked_match_and_rejects_stale_editor(
+    school_client: TestClient, relink_role: str
+) -> None:
+    owner = register_user(school_client, f"youtube-relink-owner-{relink_role}@example.com")
+    relinker = register_user(school_client, f"youtube-relink-{relink_role}@example.com")
+    organization = create_school(school_client, owner, f"YouTube Relink {relink_role} School")
+    add_membership(school_client, owner, organization["id"], relinker.id, relink_role)
+    team_a = await _team(school_client, organization["id"], owner.id, "Relink Adult A")
+    team_b = await _team(school_client, organization["id"], owner.id, "Relink Adult B")
+    competition, fixture = await _competition_with_fixture(
+        school_client, owner, organization["id"], team_a, team_b
+    )
+    game_a = await _game(school_client, organization["id"], owner.id, team_a, team_b)
+    game_b = await _game(school_client, organization["id"], owner.id, team_a, team_b)
+    link_path = (
+        f"/api/organizations/{organization['id']}/competitions/{competition['id']}"
+        f"/fixtures/{fixture['id']}/game"
+    )
+    video_path = link_path.removesuffix("/game") + "/youtube-video"
+    assert school_client.put(
+        link_path, json={"game_id": game_a.id}, headers=owner.headers
+    ).status_code == 200
+
+    attach = school_client.put(
+        video_path,
+        json={"expected_game_id": game_a.id, "youtube_url": "https://youtu.be/AbCdEf123_-"},
+        headers=owner.headers,
+    )
+    assert attach.status_code == 200, attach.text
+
+    same_match = school_client.put(
+        link_path, json={"game_id": game_a.id}, headers=relinker.headers
+    )
+    assert same_match.status_code == 200, same_match.text
+    rejected_relink = school_client.put(
+        link_path, json={"game_id": game_b.id}, headers=relinker.headers
+    )
+    assert rejected_relink.status_code == 409
+
+    stale_edit = school_client.put(
+        video_path,
+        json={"expected_game_id": game_b.id, "youtube_url": None},
+        headers=owner.headers,
+    )
+    assert stale_edit.status_code == 409
+    assert school_client.get(video_path, headers=owner.headers).json()["youtube_video_id"] == "AbCdEf123_-"
+
+    removed = school_client.put(
+        video_path,
+        json={"expected_game_id": game_a.id, "youtube_url": None},
+        headers=owner.headers,
+    )
+    assert removed.status_code == 200
+    relinked = school_client.put(
+        link_path, json={"game_id": game_b.id}, headers=relinker.headers
+    )
+    assert relinked.status_code == 200, relinked.text
+    stale_after_relink = school_client.put(
+        video_path,
+        json={"expected_game_id": game_a.id, "youtube_url": "https://youtu.be/ZyXwVu987_-"},
+        headers=owner.headers,
+    )
+    assert stale_after_relink.status_code == 409
+    current = school_client.get(video_path, headers=owner.headers)
+    assert current.json()["game_id"] == game_b.id
+    assert current.json()["youtube_video_id"] is None
 
 
 async def test_youtube_video_edit_fails_closed_for_nonmembers_wrong_tenant_and_removed_members(
@@ -371,7 +445,7 @@ async def test_youtube_video_edit_fails_closed_for_nonmembers_wrong_tenant_and_r
         f"/api/organizations/{organization['id']}/competitions/{competition['id']}"
         f"/fixtures/{fixture['id']}/youtube-video"
     )
-    payload = {"youtube_url": "https://youtu.be/AbCdEf123_-"}
+    payload = {"expected_game_id": game.id, "youtube_url": "https://youtu.be/AbCdEf123_-"}
     assert school_client.put(path, json=payload, headers=outsider.headers).status_code == 404
     assert school_client.put(
         f"/api/organizations/{other_organization['id']}/competitions/{competition['id']}"
@@ -426,7 +500,7 @@ async def test_youtube_video_edit_requires_effective_scorecard_entitlement(
         await session.commit()
     response = school_client.put(
         path,
-        json={"youtube_url": "https://youtu.be/AbCdEf123_-"},
+        json={"expected_game_id": game.id, "youtube_url": "https://youtu.be/AbCdEf123_-"},
         headers=owner.headers,
     )
     assert response.status_code == 403
@@ -454,7 +528,7 @@ async def test_youtube_video_requires_active_organization_and_exact_match_linkag
         f"/api/organizations/{organization['id']}/competitions/{competition['id']}"
         f"/fixtures/{fixture['id']}/youtube-video"
     )
-    payload = {"youtube_url": "https://youtu.be/AbCdEf123_-"}
+    payload = {"expected_game_id": game.id, "youtube_url": "https://youtu.be/AbCdEf123_-"}
     async with school_client.session_maker() as session:  # type: ignore[attr-defined]
         persisted_game = await session.get(Game, game.id)
         assert persisted_game is not None
@@ -465,6 +539,12 @@ async def test_youtube_video_requires_active_organization_and_exact_match_linkag
         await session.commit()
     assert school_client.put(path, json=payload, headers=owner.headers).status_code == 404
     async with school_client.session_maker() as session:  # type: ignore[attr-defined]
+        persisted_game = await session.get(Game, game.id)
+        assert persisted_game is not None
+        persisted_game.team_a = {
+            **persisted_game.team_a,
+            "school_source": {"organization_id": organization["id"], "team_id": team_a.id},
+        }
         organization_row = await session.get(Organization, organization["id"])
         assert organization_row is not None
         organization_row.status = "suspended"
@@ -495,7 +575,10 @@ async def test_youtube_video_is_only_projected_by_canonical_published_scorecard(
     )
     attached = school_client.put(
         editor_path,
-        json={"youtube_url": "https://www.youtube.com/watch?v=AbCdEf123_-&list=synthetic"},
+        json={
+            "expected_game_id": game.id,
+            "youtube_url": "https://www.youtube.com/watch?v=AbCdEf123_-&list=synthetic",
+        },
         headers=owner.headers,
     )
     assert attached.status_code == 200, attached.text
@@ -557,19 +640,21 @@ async def test_youtube_video_is_only_projected_by_canonical_published_scorecard(
 
     replaced = school_client.put(
         editor_path,
-        json={"youtube_url": "https://youtube.com/live/ZyXwVu987_-"},
+        json={"expected_game_id": game.id, "youtube_url": "https://youtube.com/live/ZyXwVu987_-"},
         headers=owner.headers,
     )
     assert replaced.status_code == 200
     assert school_client.get(canonical_path).json()["youtube_video_id"] == "ZyXwVu987_-"
-    removed = school_client.put(editor_path, json={"youtube_url": None}, headers=owner.headers)
+    removed = school_client.put(
+        editor_path, json={"expected_game_id": game.id, "youtube_url": None}, headers=owner.headers
+    )
     assert removed.status_code == 200
     assert removed.json()["youtube_video_id"] is None
     assert school_client.get(canonical_path).json()["youtube_video_id"] is None
 
     attached = school_client.put(
         editor_path,
-        json={"youtube_url": "https://youtu.be/AbCdEf123_-"},
+        json={"expected_game_id": game.id, "youtube_url": "https://youtu.be/AbCdEf123_-"},
         headers=owner.headers,
     )
     assert attached.status_code == 200
@@ -991,3 +1076,93 @@ async def test_concurrent_fixture_game_links_have_one_controlled_loser_on_postgr
             await session.scalar(select(func.count(Fixture.id)).where(Fixture.game_id == game.id))
             == 1
         )
+
+
+async def test_concurrent_video_attach_and_relink_preserve_fixture_binding_on_postgresql(
+    school_client: TestClient,
+) -> None:
+    session_maker = school_client.session_maker  # type: ignore[attr-defined]
+    async with session_maker() as session:
+        if session.bind is None or session.bind.dialect.name != "postgresql":
+            pytest.skip("Video association/relink concurrency requires real PostgreSQL")
+
+    owner = register_user(school_client, "concurrent-video-owner@example.com")
+    organization = create_school(school_client, owner, "Concurrent Video Link School")
+    team_a = await _team(school_client, organization["id"], owner.id, "Concurrent Video A")
+    team_b = await _team(school_client, organization["id"], owner.id, "Concurrent Video B")
+    competition, fixture = await _competition_with_fixture(
+        school_client, owner, organization["id"], team_a, team_b
+    )
+    game_a = await _game(school_client, organization["id"], owner.id, team_a, team_b)
+    game_b = await _game(school_client, organization["id"], owner.id, team_a, team_b)
+    assert school_client.put(
+        f"/api/organizations/{organization['id']}/competitions/{competition['id']}"
+        f"/fixtures/{fixture['id']}/game",
+        json={"game_id": game_a.id},
+        headers=owner.headers,
+    ).status_code == 200
+
+    async def attach(expected_game_id: str, url: str | None) -> Fixture | Exception:
+        async with session_maker() as session:
+            try:
+                return await organization_publication_service.update_fixture_youtube_video(
+                    session,
+                    organization_id=organization["id"],
+                    actor_user_id=owner.id,
+                    competition_id=competition["id"],
+                    fixture_id=fixture["id"],
+                    expected_game_id=expected_game_id,
+                    youtube_url=url,
+                )
+            except Exception as exc:
+                return exc
+
+    async def relink(game_id: str) -> Fixture | Exception:
+        async with session_maker() as session:
+            try:
+                return await school_competition_service.link_fixture_game(
+                    session,
+                    organization_id=organization["id"],
+                    actor_user_id=owner.id,
+                    competition_id=competition["id"],
+                    fixture_id=fixture["id"],
+                    game_id=game_id,
+                )
+            except Exception as exc:
+                return exc
+
+    first_attach = await attach(game_a.id, "https://youtu.be/AbCdEf123_-")
+    assert isinstance(first_attach, Fixture)
+    first_relink = await relink(game_b.id)
+    assert isinstance(first_relink, school_competition_service.SchoolCompetitionServiceError)
+    assert first_relink.status_code == 409
+
+    removed = await attach(game_a.id, None)
+    assert isinstance(removed, Fixture)
+    second_relink = await relink(game_b.id)
+    assert isinstance(second_relink, Fixture)
+    stale_attach = await attach(game_a.id, "https://youtu.be/ZyXwVu987_-")
+    assert isinstance(stale_attach, organization_publication_service.OrganizationServiceError)
+    assert stale_attach.status_code == 409
+
+    assert isinstance(await relink(game_a.id), Fixture)
+    outcomes = await asyncio.gather(
+        attach(game_a.id, "https://youtu.be/AbCdEf123_-"),
+        relink(game_b.id),
+    )
+    assert any(isinstance(result, Fixture) for result in outcomes)
+    assert all(
+        isinstance(
+            result,
+            (
+                Fixture,
+                organization_publication_service.OrganizationServiceError,
+                school_competition_service.SchoolCompetitionServiceError,
+            ),
+        )
+        for result in outcomes
+    )
+    async with session_maker() as session:
+        persisted = await session.get(Fixture, fixture["id"])
+        assert persisted is not None
+        assert persisted.game_id == game_a.id or persisted.youtube_video_id is None
