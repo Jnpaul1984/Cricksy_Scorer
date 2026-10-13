@@ -7,7 +7,7 @@ import { getErrorMessage } from '@/services/api';
 import { getPublicCompetitionScorecard, getPublicSchoolScorecard } from '@/services/schoolAdminApi';
 import type { PublicOpaqueSchoolScorecard, PublicSchoolScorecard } from '@/types/schoolAdmin';
 
-const props = defineProps<{ gameId?: string; publicIdentifier?: string; competitionPublicKey?: string; scorecardPublicIdentifier?: string }>();
+const props = defineProps<{ gameId?: string; publicIdentifier?: string; competitionPublicKey?: string; scorecardPublicIdentifier?: string; overlay?: boolean }>();
 const scorecard = ref<(PublicSchoolScorecard | PublicOpaqueSchoolScorecard) | null>(null);
 const loading = ref(true);
 const error = ref('');
@@ -15,20 +15,42 @@ const freshness = ref<'current' | 'refreshing' | 'stale'>('current');
 const lastUpdated = ref<Date | null>(null);
 const refreshing = ref(false);
 const refreshInterval = 120_000;
+const overlayRefreshInterval = 12_000;
+const maxOverlayRefreshInterval = 60_000;
+const offline = ref(false);
 let refreshTimer: ReturnType<typeof window.setInterval> | undefined;
+let overlayRefreshTimer: ReturnType<typeof window.setTimeout> | undefined;
 let inFlight = false;
 let requestVersion = 0;
+let transientFailures = 0;
+let revoked = false;
+let mounted = false;
 const canonicalSharePath = computed(() => (
   props.publicIdentifier && props.competitionPublicKey && props.scorecardPublicIdentifier
     ? `/community/${props.publicIdentifier}/competitions/${props.competitionPublicKey}/scorecards/${props.scorecardPublicIdentifier}`
     : null
 ));
+const overlaySharePath = computed(() => canonicalSharePath.value ? `${canonicalSharePath.value}/overlay` : null);
 
-const routeKey = () => [props.gameId, props.publicIdentifier, props.competitionPublicKey, props.scorecardPublicIdentifier].join('\u001f');
+const routeKey = () => [props.overlay, props.gameId, props.publicIdentifier, props.competitionPublicKey, props.scorecardPublicIdentifier].join('\u001f');
 
 function stopPolling() {
   if (refreshTimer !== undefined) window.clearInterval(refreshTimer);
   refreshTimer = undefined;
+  if (overlayRefreshTimer !== undefined) window.clearTimeout(overlayRefreshTimer);
+  overlayRefreshTimer = undefined;
+}
+
+function scheduleOverlayRefresh(delay: number) {
+  if (overlayRefreshTimer !== undefined) window.clearTimeout(overlayRefreshTimer);
+  overlayRefreshTimer = undefined;
+  if (!props.overlay || !mounted || revoked || offline.value
+    || document.visibilityState === 'hidden'
+    || scorecard.value?.publication_state === 'published_final') return;
+  overlayRefreshTimer = window.setTimeout(() => {
+    overlayRefreshTimer = undefined;
+    void load({ background: true });
+  }, delay);
 }
 
 function lastUpdatedLabel() {
@@ -37,21 +59,42 @@ function lastUpdatedLabel() {
 
 async function load({ background = false } = {}) {
   if (inFlight) return;
+  if (props.overlay && revoked) return;
   const requestedRoute = routeKey();
   const version = ++requestVersion;
+  if (props.overlay) {
+    if (overlayRefreshTimer !== undefined) window.clearTimeout(overlayRefreshTimer);
+    overlayRefreshTimer = undefined;
+    if (![props.publicIdentifier, props.competitionPublicKey, props.scorecardPublicIdentifier]
+      .every(value => typeof value === 'string' && value.trim().length > 0)) {
+      scorecard.value = null;
+      loading.value = false;
+      refreshing.value = false;
+      error.value = 'This public scorecard link is incomplete or invalid.';
+      revoked = true;
+      stopPolling();
+      return;
+    }
+  }
   inFlight = true;
   refreshing.value = true;
   if (!background || !scorecard.value) loading.value = true;
   else freshness.value = 'refreshing';
   error.value = '';
   try {
-    const nextScorecard = props.scorecardPublicIdentifier && props.publicIdentifier && props.competitionPublicKey
+    const nextScorecard = props.overlay
+      ? await getPublicCompetitionScorecard(props.publicIdentifier!, props.competitionPublicKey!, props.scorecardPublicIdentifier!)
+      : props.scorecardPublicIdentifier && props.publicIdentifier && props.competitionPublicKey
       ? await getPublicCompetitionScorecard(props.publicIdentifier, props.competitionPublicKey, props.scorecardPublicIdentifier)
       : await getPublicSchoolScorecard(props.gameId || '');
     if (version !== requestVersion || requestedRoute !== routeKey()) return;
     scorecard.value = nextScorecard;
     lastUpdated.value = new Date();
     freshness.value = 'current';
+    if (props.overlay) {
+      transientFailures = 0;
+      offline.value = false;
+    }
   } catch (reason) {
     if (version !== requestVersion || requestedRoute !== routeKey()) return;
     const status = (reason as { status?: number })?.status;
@@ -60,15 +103,46 @@ async function load({ background = false } = {}) {
       lastUpdated.value = null;
       freshness.value = 'current';
       error.value = 'This scorecard is not published or is no longer available.';
+      if (props.overlay) revoked = true;
       stopPolling();
     } else if (scorecard.value) {
       freshness.value = 'stale';
-      error.value = 'Live updates are temporarily unavailable. Showing the last verified score; retrying automatically.';
+      if (props.overlay) {
+        transientFailures += 1;
+        offline.value = typeof navigator !== 'undefined' && navigator.onLine === false;
+        error.value = offline.value
+          ? 'The browser is offline. Showing the last verified score until the connection returns.'
+          : 'Live updates are temporarily unavailable. Showing the last verified score; retrying automatically.';
+      } else {
+        error.value = 'Live updates are temporarily unavailable. Showing the last verified score; retrying automatically.';
+      }
+    } else if (props.overlay) {
+      transientFailures += 1;
+      offline.value = typeof navigator !== 'undefined' && navigator.onLine === false;
+      error.value = offline.value
+        ? 'The browser is offline. The score will load when a connection returns.'
+        : 'The published score is temporarily unavailable. Retrying automatically.';
     } else {
       error.value = getErrorMessage(reason);
     }
   } finally {
-    if (version === requestVersion) {
+    if (props.overlay) {
+      inFlight = false;
+      if (version === requestVersion) {
+        loading.value = false;
+        refreshing.value = false;
+      }
+      if (mounted && !revoked) {
+        if (requestedRoute !== routeKey()) {
+          void load();
+        } else if (scorecard.value?.publication_state === 'published_final') {
+          stopPolling();
+        } else {
+          const backoff = Math.min(overlayRefreshInterval * (2 ** transientFailures), maxOverlayRefreshInterval);
+          scheduleOverlayRefresh(transientFailures ? backoff : overlayRefreshInterval);
+        }
+      }
+    } else if (version === requestVersion) {
       loading.value = false;
       inFlight = false;
       refreshing.value = false;
@@ -77,6 +151,10 @@ async function load({ background = false } = {}) {
 }
 
 function startPolling() {
+  if (props.overlay) {
+    scheduleOverlayRefresh(overlayRefreshInterval);
+    return;
+  }
   stopPolling();
   if (document.visibilityState === 'hidden') return;
   refreshTimer = window.setInterval(() => void load({ background: true }), refreshInterval);
@@ -84,20 +162,46 @@ function startPolling() {
 
 function onVisibilityChange() {
   if (document.visibilityState === 'hidden') stopPolling();
-  else {
+  else if (props.overlay) {
+    if (!revoked) void load({ background: true });
+  } else {
     void load({ background: true });
     startPolling();
   }
 }
 
+function onOffline() {
+  if (!props.overlay || revoked) return;
+  offline.value = true;
+  if (scorecard.value) freshness.value = 'stale';
+  error.value = 'The browser is offline. Showing the last verified score until the connection returns.';
+  stopPolling();
+}
+
+function onOnline() {
+  if (!props.overlay) return;
+  offline.value = false;
+  if (!revoked) void load({ background: true });
+}
+
 onMounted(() => {
+  mounted = true;
+  offline.value = typeof navigator !== 'undefined' && navigator.onLine === false;
   void load();
   startPolling();
   document.addEventListener('visibilitychange', onVisibilityChange);
+  if (props.overlay) {
+    window.addEventListener('offline', onOffline);
+    window.addEventListener('online', onOnline);
+  }
 });
 watch(() => routeKey(), () => {
   requestVersion += 1;
-  inFlight = false;
+  if (!props.overlay) inFlight = false;
+  stopPolling();
+  transientFailures = 0;
+  revoked = false;
+  offline.value = typeof navigator !== 'undefined' && navigator.onLine === false;
   scorecard.value = null;
   lastUpdated.value = null;
   freshness.value = 'current';
@@ -105,19 +209,61 @@ watch(() => routeKey(), () => {
   startPolling();
 });
 onBeforeUnmount(() => {
+  mounted = false;
   requestVersion += 1;
   stopPolling();
   document.removeEventListener('visibilitychange', onVisibilityChange);
+  window.removeEventListener('offline', onOffline);
+  window.removeEventListener('online', onOnline);
 });
 </script>
 
 <template>
-  <main class="public-scorecard">
-    <p v-if="loading" role="status">Loading published scorecard…</p>
+  <main class="public-scorecard" :class="{ 'public-scorecard--overlay': overlay }">
+    <p v-if="loading" role="status">{{ overlay ? 'Loading published live score…' : 'Loading published scorecard…' }}</p>
     <section v-else-if="error && !scorecard" class="notice error" role="alert">
-      <h1>Scorecard unavailable</h1>
+      <h1>{{ overlay ? 'Scoreboard unavailable' : 'Scorecard unavailable' }}</h1>
       <p>{{ error }}</p>
     </section>
+    <template v-else-if="scorecard && overlay">
+      <section class="obs-scoreboard" aria-label="OBS team scoreboard">
+        <header class="obs-heading">
+          <p class="eyebrow">{{ scorecard.publication_state === 'published_final' ? 'Final score' : 'Live score' }} · {{ scorecard.organization_type }}</p>
+          <span>{{ scorecard.status.replace('_', ' ') }}</span>
+        </header>
+        <div class="obs-teams">
+          <div>
+            <span>Team A</span>
+            <strong>{{ scorecard.team_a.name }}</strong>
+            <small v-if="scorecard.batting_team_name === scorecard.team_a.name">Batting</small>
+          </div>
+          <div>
+            <span>Team B</span>
+            <strong>{{ scorecard.team_b.name }}</strong>
+            <small v-if="scorecard.batting_team_name === scorecard.team_b.name">Batting</small>
+          </div>
+        </div>
+        <section class="obs-innings" aria-label="Current innings score">
+          <span>{{ scorecard.batting_team_name || 'Current innings' }}</span>
+          <strong>{{ scorecard.total_runs }}/{{ scorecard.total_wickets }}</strong>
+          <span>Legal overs {{ scorecard.overs_completed }}.{{ scorecard.balls_this_over }}</span>
+        </section>
+        <p class="obs-match-state">Innings {{ scorecard.current_inning }} · {{ scorecard.status.replace('_', ' ') }}</p>
+        <p v-if="scorecard.result" class="obs-result">{{ scorecard.result }}</p>
+        <div class="obs-status">
+          <p class="freshness" :class="{ stale: freshness === 'stale' || offline }" role="status">
+            <template v-if="offline">Offline<template v-if="lastUpdated"> · last verified {{ lastUpdatedLabel() }}</template></template>
+            <template v-else-if="freshness === 'stale'">Stale · last verified {{ lastUpdatedLabel() }}</template>
+            <template v-else-if="freshness === 'refreshing'">Refreshing score…</template>
+            <template v-else-if="scorecard.publication_state === 'published_final'">Final result · last verified {{ lastUpdatedLabel() }}</template>
+            <template v-else>Last verified {{ lastUpdatedLabel() }} · checks every 12 seconds while visible</template>
+          </p>
+          <button type="button" class="refresh-now" :disabled="refreshing || revoked" @click="load({ background: true })">
+            {{ refreshing ? 'Refreshing…' : 'Refresh' }}
+          </button>
+        </div>
+      </section>
+    </template>
     <template v-else-if="scorecard">
       <header>
         <p class="eyebrow">Published scorecard</p>
@@ -139,6 +285,7 @@ onBeforeUnmount(() => {
       </button>
       <p v-if="scorecard.result" class="result">{{ scorecard.result }}</p>
       <PublicShareLinkButton v-if="canonicalSharePath" :path="canonicalSharePath" label="Copy scorecard link" />
+      <PublicShareLinkButton v-if="overlaySharePath" :path="overlaySharePath" label="Copy OBS overlay link" />
       <div class="tables">
         <section>
           <h2>Batting</h2>
@@ -210,8 +357,66 @@ onBeforeUnmount(() => {
   padding: 1rem;
   color: #eef2ff;
 }
+.public-scorecard--overlay {
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  color: #f8fafc;
+  background: transparent;
+}
+.obs-scoreboard {
+  width: 100%;
+  max-width: 960px;
+  min-height: 0;
+  margin: 0 auto;
+  padding: clamp(0.4rem, 1.4vw, 0.8rem);
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.94);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+  font-variant-numeric: tabular-nums;
+}
+.obs-heading,
+.obs-teams,
+.obs-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.obs-heading .eyebrow { margin: 0; font-size: 0.72rem; }
+.obs-heading > span,
+.obs-teams > div > span { color: #cbd5e1; font-size: 0.78rem; text-transform: uppercase; }
+.obs-teams { margin: 0.4rem 0; }
+.obs-teams > div { min-width: 0; display: grid; gap: 0.1rem; }
+.obs-teams > div:last-child { text-align: right; }
+.obs-teams strong { overflow-wrap: anywhere; font-size: clamp(1rem, 2.8vw, 1.45rem); }
+.obs-teams small { color: #70d7b0; font-weight: 700; }
+.obs-innings {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.55rem 1rem;
+  padding: 0.35rem 0.6rem;
+  border-radius: 8px;
+  background: rgba(51, 65, 85, 0.72);
+}
+.obs-innings > span:first-child { margin-right: auto; overflow-wrap: anywhere; font-weight: 700; }
+.obs-innings strong { font-size: clamp(1.55rem, 5vw, 2.35rem); line-height: 1.05; }
+.obs-innings > span:last-child { color: #cbd5e1; font-size: 0.9rem; }
+.obs-match-state,
+.obs-result { margin: 0.35rem 0 0; font-size: 0.85rem; }
+.obs-result { color: #86efac; font-weight: 700; }
+.obs-status { margin-top: 0.2rem; }
 .freshness { margin: 0.8rem 0; color: #aebbd7; font-size: 0.9rem; }
 .freshness.stale { color: #ffd08a; }
+.obs-status p.freshness { margin: 0; font-size: 0.72rem; }
+.obs-status .refresh-now { margin: 0; padding: 0.2rem 0.55rem; font-size: 0.75rem; }
+@media (max-width: 520px) {
+  .obs-scoreboard { padding: 0.4rem; }
+  .obs-status { align-items: flex-start; }
+  .obs-innings > span:first-child { flex-basis: 100%; }
+}
 .refresh-now { margin: 0 0 1rem; }
 .support-slot { display: flex; align-items: center; gap: 0.55rem; margin-top: 1.5rem; padding: 0.75rem 1rem; border-top: 1px solid #d5dde7; color: #aebbd7; font-size: 0.9rem; }
 .support-slot img { width: 26px; height: 26px; object-fit: contain; }
