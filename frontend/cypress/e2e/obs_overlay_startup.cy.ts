@@ -6,6 +6,7 @@ const overlayPath = `/community/${publicIdentifier}/competitions/${competitionPu
 
 const syntheticScorecard = {
   public_identifier: scorecardPublicIdentifier,
+  youtube_video_id: 'AbCdEf123_-',
   organization_type: 'club',
   publication_state: 'published_live',
   status: 'in_progress',
@@ -131,6 +132,7 @@ describe('production app startup', () => {
 
       cy.contains('Synthetic Adult XI').should('be.visible');
       cy.contains('42/2').should('be.visible');
+      cy.get('iframe').should('not.exist');
       cy.then(() => {
         expect(apiRequests).to.have.length(1);
         const request = apiRequests[0];
@@ -146,5 +148,121 @@ describe('production app startup', () => {
       });
       cy.window().its('__overlaySocketUrls').should('deep.equal', []);
     });
+  });
+
+  it('loads a published YouTube video only after keyboard activation and keeps the watch fallback', () => {
+    const scorecardUrl =
+      `/community/${publicIdentifier}/competitions/${competitionPublicKey}` +
+      `/scorecards/${scorecardPublicIdentifier}`;
+    const apiRequests: Array<{ url: string; headers: Record<string, string> }> = [];
+    const providerRequests: string[] = [];
+    const unexpectedRequests: Array<{ url: string; method: string; resourceType: string }> = [];
+    const socketUrls: string[] = [];
+    const appOrigin = new URL(Cypress.config('baseUrl')!).origin;
+    const configuredApiBase = Cypress.env('API_BASE') || 'http://127.0.0.1:8000';
+    const canonicalApiOrigin = new URL(configuredApiBase).origin;
+    const expectedFeed = new URL(scorecardPath, configuredApiBase);
+    const staticResourceTypes = new Set(['document', 'stylesheet', 'script', 'image', 'font', 'manifest']);
+
+    cy.viewport(375, 812);
+    cy.intercept('**/*', (request) => {
+      const url = new URL(request.url);
+      const resourceType = request.resourceType || 'unknown';
+      const hasAuthorization = Object.keys(request.headers).some(
+        (header) => header.toLowerCase() === 'authorization',
+      );
+      if (url.origin === 'https://www.youtube-nocookie.com') {
+        providerRequests.push(request.url);
+        request.reply({ statusCode: 503, body: 'Synthetic blocked player' });
+        return;
+      }
+
+      const isCanonicalScorecardRequest =
+        request.method === 'GET' &&
+        url.origin === canonicalApiOrigin &&
+        url.pathname === expectedFeed.pathname &&
+        !url.search &&
+        !hasAuthorization &&
+        (resourceType === 'fetch' || resourceType === 'xhr');
+      const isScorecardDocument =
+        url.origin === appOrigin &&
+        url.pathname === scorecardUrl &&
+        request.method === 'GET' &&
+        resourceType === 'document';
+      const isStaticAsset =
+        url.origin === appOrigin &&
+        request.method === 'GET' &&
+        (url.pathname.startsWith('/assets/') ||
+          url.pathname === '/logo.png' ||
+          url.pathname.startsWith('/favicon')) &&
+        staticResourceTypes.has(resourceType);
+
+      if (isCanonicalScorecardRequest) {
+        apiRequests.push({ url: request.url, headers: request.headers });
+        request.reply({ statusCode: 200, body: syntheticScorecard });
+        return;
+      }
+      if (isScorecardDocument || isStaticAsset) {
+        request.continue();
+        return;
+      }
+      if (url.origin === canonicalApiOrigin || resourceType === 'fetch' || resourceType === 'xhr') {
+        apiRequests.push({ url: request.url, headers: request.headers });
+      }
+      unexpectedRequests.push({ url: request.url, method: request.method, resourceType });
+      request.reply({ statusCode: 599, body: {} });
+    });
+
+    cy.visit(`${scorecardUrl}?apiBase=${encodeURIComponent('https://unsafe.example.invalid')}`, {
+      onBeforeLoad(win) {
+        win.localStorage.setItem('cricksy_token', 'synthetic-video-test-token');
+        (win as any).__scorecardSocketUrls = socketUrls;
+        class BlockedWebSocket {
+          constructor(url: string | URL) {
+            socketUrls.push(String(url));
+          }
+          addEventListener() {}
+          removeEventListener() {}
+          close() {}
+          send() {}
+        }
+        win.WebSocket = BlockedWebSocket as unknown as typeof win.WebSocket;
+      },
+    });
+
+    cy.contains('Synthetic Adult XI').should('be.visible');
+    cy.get('.youtube-player').should('be.visible');
+    cy.get('iframe').should('not.exist');
+    cy.wait(300);
+    cy.then(() => {
+      expect(apiRequests).to.have.length(1);
+      expect(new URL(apiRequests[0].url).pathname).to.equal(expectedFeed.pathname);
+      expect(apiRequests[0].url).not.to.include('unsafe.example.invalid');
+      expect(Object.keys(apiRequests[0].headers).map((header) => header.toLowerCase())).not.to.include('authorization');
+      expect(providerRequests).to.deep.equal([]);
+      expect(unexpectedRequests).to.deep.equal([]);
+      expect(socketUrls).to.deep.equal([]);
+    });
+
+    cy.contains('button', 'Load YouTube video').focus().type('{enter}');
+    cy.get('.youtube-player iframe')
+      .should('have.attr', 'src', 'https://www.youtube-nocookie.com/embed/AbCdEf123_-')
+      .and('have.attr', 'referrerpolicy', 'strict-origin-when-cross-origin')
+      .and('have.attr', 'title', 'Associated YouTube video');
+    cy.contains('a', 'Watch on YouTube')
+      .should('have.attr', 'href', 'https://www.youtube.com/watch?v=AbCdEf123_-')
+      .and('have.attr', 'target', '_blank')
+      .and('have.attr', 'rel', 'noopener noreferrer');
+    cy.wait(300);
+    cy.get('.youtube-player').should('be.visible');
+    cy.get('.youtube-frame').invoke('width').should('be.lte', 375);
+    cy.then(() => {
+      expect(providerRequests).to.deep.equal([
+        'https://www.youtube-nocookie.com/embed/AbCdEf123_-',
+      ]);
+      expect(apiRequests).to.have.length(1);
+      expect(unexpectedRequests).to.deep.equal([]);
+    });
+    cy.screenshot('synthetic-adult-scorecard-video-mobile');
   });
 });

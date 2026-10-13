@@ -55,6 +55,7 @@ import type {
   OrganizationSelectionNotificationResult,
   OrganizationCommunitySettings,
   OrganizationCommunityCompetitionSettings,
+  OrganizationFixtureYoutubeVideo,
   PublicAnonymousLeaderboards,
   PublicOrganizationCommunity,
   PublicCompetition,
@@ -842,6 +843,33 @@ export const updateSchoolMatchPublication = (
   apiRequest<{ game_id: string; organization_id: string; publication_state: SchoolPublicationState }>(
     orgPath(organizationId, `/matches/${encodeURIComponent(gameId)}/publication`),
     { method: 'PATCH', body: JSON.stringify({ publication_state: publicationState }) },
+  );
+const fixtureYoutubeVideoPath = (organizationId: string, competitionId: string, fixtureId: string) =>
+  orgPath(
+    organizationId,
+    `/competitions/${encodeURIComponent(competitionId)}/fixtures/${encodeURIComponent(fixtureId)}/youtube-video`,
+  );
+export const getSchoolFixtureYoutubeVideo = (
+  organizationId: string,
+  competitionId: string,
+  fixtureId: string,
+) =>
+  apiRequest<OrganizationFixtureYoutubeVideo>(
+    fixtureYoutubeVideoPath(organizationId, competitionId, fixtureId),
+  );
+export const updateSchoolFixtureYoutubeVideo = (
+  organizationId: string,
+  competitionId: string,
+  fixtureId: string,
+  expectedGameId: string,
+  youtubeUrl: string | null,
+) =>
+  apiRequest<OrganizationFixtureYoutubeVideo>(
+    fixtureYoutubeVideoPath(organizationId, competitionId, fixtureId),
+    {
+      method: 'PUT',
+      body: JSON.stringify({ expected_game_id: expectedGameId, youtube_url: youtubeUrl }),
+    },
   );
 export const getPublicSchoolScorecard = (gameId: string) =>
   apiRequest<PublicSchoolScorecard>(`/public/school-scorecards/${encodeURIComponent(gameId)}`);

@@ -690,7 +690,17 @@ export interface PublicSchoolScorecard {
   batting_scorecard: PublicScorecardEntry[];
   bowling_scorecard: PublicScorecardEntry[];
 }
-export interface PublicOpaqueSchoolScorecard extends Omit<PublicSchoolScorecard, 'game_id'> { public_identifier: string; }
+export interface PublicOpaqueSchoolScorecard extends Omit<PublicSchoolScorecard, 'game_id'> {
+  public_identifier: string;
+  youtube_video_id: string | null;
+}
+
+export interface OrganizationFixtureYoutubeVideo {
+  game_id: string;
+  youtube_video_id: string | null;
+  updated_by_user_id: string | null;
+  updated_at: string | null;
+}
 
 export interface PublicScorecardEntry {
   player_name: string;

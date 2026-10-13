@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const scorecardResponse = {
   public_identifier: 'sc_0123456789abcdef01234567',
+  youtube_video_id: 'AbCdEf123_-',
   organization_type: 'club',
   publication_state: 'published_live',
   status: 'in_progress',
@@ -138,5 +139,170 @@ describe('safe public scorecard network boundary', () => {
     expect(document.querySelector('.app--obs-overlay')).toBeNull();
     expect(document.querySelector('.app-footer')).not.toBeNull();
 
+  });
+
+  it('keeps the canonical scorecard request no-auth and delays the provider iframe until activation', async () => {
+    const publicIdentifier = 'org_0123456789abcdef01234567';
+    const competitionPublicKey = 'cmp_0123456789abcdef01234567';
+    const scorecardPublicIdentifier = 'sc_0123456789abcdef01234567';
+    const endpoint =
+      `/api/public/organizations/${publicIdentifier}/competitions/${competitionPublicKey}` +
+      `/scorecards/${scorecardPublicIdentifier}`;
+    const scorecardPath =
+      `/community/${publicIdentifier}/competitions/${competitionPublicKey}` +
+      `/scorecards/${scorecardPublicIdentifier}`;
+    window.history.replaceState(
+      null,
+      '',
+      `${scorecardPath}?apiBase=${encodeURIComponent('https://unsafe.example.invalid')}`,
+    );
+    localStorage.setItem('cricksy_token', 'synthetic-scorecard-test-token');
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      json: async () => scorecardResponse,
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    vi.stubGlobal('WebSocket', vi.fn());
+    document.body.innerHTML = '<div id="app"></div>';
+
+    await import('@/main');
+    await vi.waitFor(() => {
+      expect(document.querySelector('.youtube-player')).not.toBeNull();
+    });
+    await flushPromises();
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [requestedUrl, requestInit] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(new URL(requestedUrl).pathname).toBe(endpoint);
+    expect(requestedUrl).not.toContain('unsafe.example.invalid');
+    expect(new Headers(requestInit.headers).has('Authorization')).toBe(false);
+    expect(document.querySelector('iframe')).toBeNull();
+    expect(
+      document.querySelector('a[href="https://www.youtube.com/watch?v=AbCdEf123_-"]')
+        ?.getAttribute('rel'),
+    ).toBe('noopener noreferrer');
+
+    (document.querySelector('button[aria-describedby="youtube-player-help"]') as HTMLButtonElement)
+      .click();
+    await flushPromises();
+    const iframe = document.querySelector('iframe');
+    expect(iframe?.getAttribute('src')).toBe(
+      'https://www.youtube-nocookie.com/embed/AbCdEf123_-',
+    );
+    expect(iframe?.getAttribute('allow')).not.toContain('autoplay');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    const router = (window as any).app.config.globalProperties.$router;
+    await router.push({
+      name: 'public-competition-scorecard',
+      params: {
+        publicIdentifier,
+        competitionPublicKey,
+        scorecardPublicIdentifier: 'sc_1123456789abcdef01234567',
+      },
+    });
+    await flushPromises();
+    expect(document.querySelector('iframe')).toBeNull();
+
+    (window as any).app?.unmount?.();
+    document.body.innerHTML = '';
+    delete (window as any).app;
+  });
+
+  it('clears the activated player and watch link when revalidation removes the association', async () => {
+    const publicIdentifier = 'org_0123456789abcdef01234567';
+    const competitionPublicKey = 'cmp_0123456789abcdef01234567';
+    const scorecardPublicIdentifier = 'sc_0123456789abcdef01234567';
+    window.history.replaceState(
+      null,
+      '',
+      `/community/${publicIdentifier}/competitions/${competitionPublicKey}/scorecards/${scorecardPublicIdentifier}`,
+    );
+    const response = (body: unknown) => ({
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      json: async () => body,
+    });
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(response(scorecardResponse))
+      .mockResolvedValueOnce(response({ ...scorecardResponse, youtube_video_id: null }));
+    vi.stubGlobal('fetch', fetchMock);
+    vi.stubGlobal('WebSocket', vi.fn());
+    document.body.innerHTML = '<div id="app"></div>';
+
+    await import('@/main');
+    await vi.waitFor(() => expect(document.querySelector('.youtube-player')).not.toBeNull());
+    (document.querySelector('button[aria-describedby="youtube-player-help"]') as HTMLButtonElement)
+      .click();
+    await flushPromises();
+    expect(document.querySelector('iframe')).not.toBeNull();
+
+    document.dispatchEvent(new Event('visibilitychange'));
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    await flushPromises();
+    expect(document.querySelector('iframe')).toBeNull();
+    expect(
+      document.querySelector('a[href="https://www.youtube.com/watch?v=AbCdEf123_-"]'),
+    ).toBeNull();
+
+    (window as any).app?.unmount?.();
+    document.body.innerHTML = '';
+    delete (window as any).app;
+  });
+
+  it('does not restore a previous-match video when its delayed response arrives after navigation', async () => {
+    const publicIdentifier = 'org_0123456789abcdef01234567';
+    const competitionPublicKey = 'cmp_0123456789abcdef01234567';
+    const firstScorecard = 'sc_0123456789abcdef01234567';
+    const nextScorecard = 'sc_1123456789abcdef01234567';
+    window.history.replaceState(
+      null,
+      '',
+      `/community/${publicIdentifier}/competitions/${competitionPublicKey}/scorecards/${firstScorecard}`,
+    );
+    localStorage.setItem('cricksy_token', 'synthetic-scorecard-race-token');
+    let resolveFirstRequest!: (value: unknown) => void;
+    const firstRequest = new Promise((resolve) => {
+      resolveFirstRequest = resolve;
+    });
+    const response = (body: unknown) => ({
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      json: async () => body,
+    });
+    const fetchMock = vi.fn()
+      .mockReturnValueOnce(firstRequest)
+      .mockResolvedValueOnce(response({ ...scorecardResponse, youtube_video_id: null }));
+    vi.stubGlobal('fetch', fetchMock);
+    vi.stubGlobal('WebSocket', vi.fn());
+    document.body.innerHTML = '<div id="app"></div>';
+
+    await import('@/main');
+    await flushPromises();
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const router = (window as any).app.config.globalProperties.$router;
+    await router.push({
+      name: 'public-competition-scorecard',
+      params: {
+        publicIdentifier,
+        competitionPublicKey,
+        scorecardPublicIdentifier: nextScorecard,
+      },
+    });
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    await flushPromises();
+    expect(document.querySelector('.youtube-player')).toBeNull();
+
+    resolveFirstRequest(response(scorecardResponse));
+    await flushPromises();
+    expect(document.querySelector('.youtube-player')).toBeNull();
+
+    (window as any).app?.unmount?.();
+    document.body.innerHTML = '';
+    delete (window as any).app;
   });
 });

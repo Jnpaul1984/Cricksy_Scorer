@@ -5,6 +5,7 @@ from __future__ import annotations
 import datetime as dt
 from typing import Literal
 
+from backend.services.youtube_video_service import normalize_youtube_video_url
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
@@ -77,6 +78,27 @@ class OrganizationCompetitionPublicationResponse(BaseModel):
     published_at: dt.datetime | None
     unpublished_at: dt.datetime | None
     updated_by_user_id: str | None
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class OrganizationFixtureYoutubeVideoUpdate(BaseModel):
+    expected_game_id: str = Field(min_length=1)
+    youtube_url: str | None = Field(..., max_length=2048)
+
+    @field_validator("youtube_url")
+    @classmethod
+    def validate_youtube_url(cls, value: str | None) -> str | None:
+        if value is not None:
+            normalize_youtube_video_url(value)
+        return value
+
+
+class OrganizationFixtureYoutubeVideoResponse(BaseModel):
+    game_id: str
+    youtube_video_id: str | None
+    updated_by_user_id: str | None
+    updated_at: dt.datetime | None
 
     model_config = ConfigDict(extra="forbid")
 

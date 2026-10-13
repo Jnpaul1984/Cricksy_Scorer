@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue';
 
 import { useSchoolContext } from '@/composables/useSchoolContext';
 import { getErrorMessage } from '@/services/api';
@@ -10,6 +10,7 @@ import {
   deleteSchoolCompetition,
   deleteSchoolFixture,
   getSchoolStandings,
+  getSchoolFixtureYoutubeVideo,
   linkSchoolFixtureGame,
   listSchoolCompetitionFixtures,
   listSchoolCompetitions,
@@ -18,6 +19,7 @@ import {
   removeSchoolCompetitionTeam,
   updateSchoolCompetition,
   updateSchoolFixture,
+  updateSchoolFixtureYoutubeVideo,
 } from '@/services/schoolAdminApi';
 import type {
   SchoolCompetition,
@@ -26,12 +28,14 @@ import type {
   SchoolStandings,
   SchoolTeam,
 } from '@/types/schoolAdmin';
+import { normalizeYoutubeVideoUrl } from '@/utils/youtubeVideo';
 
 const {
   organizationId,
   terminology,
   canViewCompetitions,
   canManageCompetitions,
+  canManageCommunity,
   canDeleteCompetitions,
   canLinkFixtures,
 } = useSchoolContext();
@@ -54,27 +58,65 @@ const competitionStatus = ref<SchoolCompetition['status']>('upcoming');
 const fixtureForm = reactive({ team_a_id: '', team_b_id: '', venue: '', scheduled_date: '' });
 const linkGameIds = reactive<Record<string, string>>({});
 const fixtureStatuses = reactive<Record<string, SchoolFixture['status']>>({});
+const editingVideoFixtureIds = ref<string[]>([]);
+const loadedVideoFixtureIds = ref<string[]>([]);
+const loadingVideoFixtureIds = ref<string[]>([]);
+const mutatingVideoFixtureIds = ref<string[]>([]);
+const youtubeUrls = reactive<Record<string, string>>({});
+const youtubeGameIds = reactive<Record<string, string>>({});
+const confirmedYoutubeVideoIds = reactive<Record<string, string | null>>({});
 const selected = computed(() => competitions.value.find((row) => row.id === selectedId.value));
+const videoRequestVersions = reactive<Record<string, number>>({});
+let videoRequestSequence = 0;
+let organizationLoadVersion = 0;
+let competitionLoadVersion = 0;
+
+function invalidateVideoEditors() {
+  for (const fixtureId of Object.keys(videoRequestVersions)) {
+    videoRequestVersions[fixtureId] = ++videoRequestSequence;
+  }
+  editingVideoFixtureIds.value = [];
+  loadedVideoFixtureIds.value = [];
+  loadingVideoFixtureIds.value = [];
+  for (const fixtureId of Object.keys(youtubeUrls)) delete youtubeUrls[fixtureId];
+  for (const fixtureId of Object.keys(youtubeGameIds)) delete youtubeGameIds[fixtureId];
+  for (const fixtureId of Object.keys(confirmedYoutubeVideoIds)) delete confirmedYoutubeVideoIds[fixtureId];
+}
 
 async function loadCompetitionDetails() {
+  invalidateVideoEditors();
+  const version = ++competitionLoadVersion;
+  const competitionId = selectedId.value;
+  const organizationIdForRequest = organizationId.value;
   if (!selectedId.value) {
     entrants.value = [];
     fixtures.value = [];
     standings.value = null;
     return;
   }
-  [entrants.value, fixtures.value, standings.value] = await Promise.all([
-    listSchoolCompetitionTeams(organizationId.value, selectedId.value),
-    listSchoolCompetitionFixtures(organizationId.value, selectedId.value),
-    getSchoolStandings(organizationId.value, selectedId.value),
+  const [nextEntrants, nextFixtures, nextStandings] = await Promise.all([
+    listSchoolCompetitionTeams(organizationIdForRequest, competitionId),
+    listSchoolCompetitionFixtures(organizationIdForRequest, competitionId),
+    getSchoolStandings(organizationIdForRequest, competitionId),
   ]);
-  const competition = competitions.value.find((row) => row.id === selectedId.value);
+  if (
+    version !== competitionLoadVersion
+    || competitionId !== selectedId.value
+    || organizationIdForRequest !== organizationId.value
+  ) return;
+  entrants.value = nextEntrants;
+  fixtures.value = nextFixtures;
+  standings.value = nextStandings;
+  const competition = competitions.value.find((row) => row.id === competitionId);
   competitionName.value = competition?.name || '';
   competitionStatus.value = competition?.status || 'upcoming';
   for (const fixture of fixtures.value) fixtureStatuses[fixture.id] = fixture.status;
 }
 
 async function load() {
+  const version = ++organizationLoadVersion;
+  invalidateVideoEditors();
+  const organizationIdForRequest = organizationId.value;
   competitions.value = [];
   entrants.value = [];
   fixtures.value = [];
@@ -85,17 +127,18 @@ async function load() {
   error.value = '';
   try {
     [competitions.value, schoolTeams.value] = await Promise.all([
-      listSchoolCompetitions(organizationId.value),
-      listSchoolTeams(organizationId.value),
+      listSchoolCompetitions(organizationIdForRequest),
+      listSchoolTeams(organizationIdForRequest),
     ]);
+    if (version !== organizationLoadVersion || organizationIdForRequest !== organizationId.value) return;
     if (!competitions.value.some((row) => row.id === selectedId.value)) {
       selectedId.value = competitions.value[0]?.id || '';
     }
     await loadCompetitionDetails();
   } catch (reason) {
-    error.value = getErrorMessage(reason);
+    if (version === organizationLoadVersion) error.value = getErrorMessage(reason);
   } finally {
-    loading.value = false;
+    if (version === organizationLoadVersion) loading.value = false;
   }
 }
 
@@ -202,7 +245,173 @@ async function linkFixture(fixture: SchoolFixture) {
   );
 }
 
+async function toggleVideoEditor(fixture: SchoolFixture) {
+  const current = editingVideoFixtureIds.value;
+  if (current.includes(fixture.id)) {
+    videoRequestVersions[fixture.id] = ++videoRequestSequence;
+    editingVideoFixtureIds.value = current.filter((id) => id !== fixture.id);
+    loadedVideoFixtureIds.value = loadedVideoFixtureIds.value.filter((id) => id !== fixture.id);
+    loadingVideoFixtureIds.value = loadingVideoFixtureIds.value.filter((id) => id !== fixture.id);
+    delete youtubeUrls[fixture.id];
+    delete youtubeGameIds[fixture.id];
+    delete confirmedYoutubeVideoIds[fixture.id];
+    return;
+  }
+  editingVideoFixtureIds.value = [...current, fixture.id];
+  if (!selectedId.value || mutatingVideoFixtureIds.value.includes(fixture.id)) return;
+  await loadYoutubeAssociation(fixture);
+}
+
+async function loadYoutubeAssociation(fixture: SchoolFixture) {
+  const competitionId = selectedId.value;
+  const organizationIdForRequest = organizationId.value;
+  if (!competitionId || !editingVideoFixtureIds.value.includes(fixture.id)) return;
+  const requestVersion = ++videoRequestSequence;
+  videoRequestVersions[fixture.id] = requestVersion;
+  loadingVideoFixtureIds.value = [...loadingVideoFixtureIds.value, fixture.id];
+  error.value = '';
+  try {
+    const association = await getSchoolFixtureYoutubeVideo(
+      organizationIdForRequest,
+      competitionId,
+      fixture.id,
+    );
+    if (
+      competitionId !== selectedId.value
+      || organizationIdForRequest !== organizationId.value
+      || !editingVideoFixtureIds.value.includes(fixture.id)
+      || !fixtures.value.some((row) => row.id === fixture.id)
+      || videoRequestVersions[fixture.id] !== requestVersion
+    ) return;
+    if (!fixture.game_id || association.game_id !== fixture.game_id) {
+      error.value = 'The fixture match link changed. Reload the competition before editing this video.';
+      editingVideoFixtureIds.value = editingVideoFixtureIds.value.filter((id) => id !== fixture.id);
+      return;
+    }
+    youtubeUrls[fixture.id] = association.youtube_video_id
+      ? `https://youtu.be/${association.youtube_video_id}`
+      : '';
+    youtubeGameIds[fixture.id] = association.game_id;
+    confirmedYoutubeVideoIds[fixture.id] = association.youtube_video_id;
+    loadedVideoFixtureIds.value = [...loadedVideoFixtureIds.value, fixture.id];
+  } catch (reason) {
+    if (videoRequestVersions[fixture.id] === requestVersion) {
+      editingVideoFixtureIds.value = editingVideoFixtureIds.value.filter((id) => id !== fixture.id);
+      error.value = getErrorMessage(reason);
+    }
+  } finally {
+    if (videoRequestVersions[fixture.id] === requestVersion) {
+      loadingVideoFixtureIds.value = loadingVideoFixtureIds.value.filter((id) => id !== fixture.id);
+    }
+  }
+}
+
+async function saveYoutubeVideo(fixture: SchoolFixture) {
+  if (loadingVideoFixtureIds.value.includes(fixture.id) || mutatingVideoFixtureIds.value.includes(fixture.id)) return;
+  const url = youtubeUrls[fixture.id] || '';
+  const expectedGameId = youtubeGameIds[fixture.id];
+  if (!expectedGameId || !normalizeYoutubeVideoUrl(url)) {
+    error.value = 'Enter a valid HTTPS YouTube watch, youtu.be share, or youtube.com/live URL.';
+    return;
+  }
+  error.value = '';
+  success.value = '';
+  const version = ++videoRequestSequence;
+  videoRequestVersions[fixture.id] = version;
+  mutatingVideoFixtureIds.value = [...mutatingVideoFixtureIds.value, fixture.id];
+  const competitionId = selectedId.value;
+  const organizationIdForRequest = organizationId.value;
+  try {
+    const association = await updateSchoolFixtureYoutubeVideo(
+      organizationIdForRequest,
+      competitionId,
+      fixture.id,
+      expectedGameId,
+      url,
+    );
+    if (
+      videoRequestVersions[fixture.id] !== version
+      || competitionId !== selectedId.value
+      || organizationIdForRequest !== organizationId.value
+      || !editingVideoFixtureIds.value.includes(fixture.id)
+    ) return;
+    if (association.game_id !== expectedGameId) {
+      error.value = 'The fixture match link changed. Reload the competition before editing this video.';
+      return;
+    }
+    youtubeUrls[fixture.id] = association.youtube_video_id
+      ? `https://youtu.be/${association.youtube_video_id}`
+      : '';
+    confirmedYoutubeVideoIds[fixture.id] = association.youtube_video_id;
+    success.value = 'YouTube association saved. It may appear on an already-published scorecard.';
+  } catch (reason) {
+    if (videoRequestVersions[fixture.id] === version) error.value = getErrorMessage(reason);
+  } finally {
+    mutatingVideoFixtureIds.value = mutatingVideoFixtureIds.value.filter((id) => id !== fixture.id);
+    if (
+      editingVideoFixtureIds.value.includes(fixture.id)
+      && !loadedVideoFixtureIds.value.includes(fixture.id)
+    ) {
+      const currentFixture = fixtures.value.find((row) => row.id === fixture.id);
+      if (currentFixture) void loadYoutubeAssociation(currentFixture);
+    }
+  }
+}
+
+async function removeYoutubeVideo(fixture: SchoolFixture) {
+  if (loadingVideoFixtureIds.value.includes(fixture.id) || mutatingVideoFixtureIds.value.includes(fixture.id)) return;
+  const expectedGameId = youtubeGameIds[fixture.id];
+  if (!expectedGameId) return;
+  error.value = '';
+  success.value = '';
+  const version = ++videoRequestSequence;
+  videoRequestVersions[fixture.id] = version;
+  mutatingVideoFixtureIds.value = [...mutatingVideoFixtureIds.value, fixture.id];
+  const competitionId = selectedId.value;
+  const organizationIdForRequest = organizationId.value;
+  try {
+    const association = await updateSchoolFixtureYoutubeVideo(
+      organizationIdForRequest,
+      competitionId,
+      fixture.id,
+      expectedGameId,
+      null,
+    );
+    if (
+      videoRequestVersions[fixture.id] !== version
+      || competitionId !== selectedId.value
+      || organizationIdForRequest !== organizationId.value
+      || !editingVideoFixtureIds.value.includes(fixture.id)
+    ) return;
+    if (association.game_id !== expectedGameId) {
+      error.value = 'The fixture match link changed. Reload the competition before editing this video.';
+      return;
+    }
+    youtubeUrls[fixture.id] = association.youtube_video_id
+      ? `https://youtu.be/${association.youtube_video_id}`
+      : '';
+    confirmedYoutubeVideoIds[fixture.id] = association.youtube_video_id;
+    success.value = 'YouTube association removed. This does not delete or unpublish the YouTube video.';
+  } catch (reason) {
+    if (videoRequestVersions[fixture.id] === version) error.value = getErrorMessage(reason);
+  } finally {
+    mutatingVideoFixtureIds.value = mutatingVideoFixtureIds.value.filter((id) => id !== fixture.id);
+    if (
+      editingVideoFixtureIds.value.includes(fixture.id)
+      && !loadedVideoFixtureIds.value.includes(fixture.id)
+    ) {
+      const currentFixture = fixtures.value.find((row) => row.id === fixture.id);
+      if (currentFixture) void loadYoutubeAssociation(currentFixture);
+    }
+  }
+}
+
 watch(organizationId, load, { immediate: true });
+onBeforeUnmount(() => {
+  organizationLoadVersion += 1;
+  competitionLoadVersion += 1;
+  invalidateVideoEditors();
+});
 </script>
 
 <template>
@@ -342,6 +551,67 @@ watch(organizationId, load, { immediate: true });
               <p>
                 {{ fixture.game_id ? `Linked match: ${fixture.game_id}` : 'Not linked to a match' }}
               </p>
+              <section v-if="canManageCommunity && fixture.game_id" class="video-editor">
+                <button
+                  type="button"
+                  class="compact"
+                  :aria-expanded="editingVideoFixtureIds.includes(fixture.id)"
+                  @click="toggleVideoEditor(fixture)"
+                >
+                  {{ editingVideoFixtureIds.includes(fixture.id) ? 'Close YouTube video editor' : 'Associate YouTube video' }}
+                </button>
+                <p
+                  v-if="editingVideoFixtureIds.includes(fixture.id) && loadingVideoFixtureIds.includes(fixture.id)"
+                  role="status"
+                >
+                  Loading the current video association…
+                </p>
+                <form
+                  v-if="editingVideoFixtureIds.includes(fixture.id) && loadedVideoFixtureIds.includes(fixture.id)"
+                  class="video-editor-form"
+                  @submit.prevent="saveYoutubeVideo(fixture)"
+                >
+                  <label :for="`youtube-video-${fixture.id}`">
+                    YouTube URL
+                    <input
+                      :id="`youtube-video-${fixture.id}`"
+                      v-model="youtubeUrls[fixture.id]"
+                      type="url"
+                      maxlength="2048"
+                      placeholder="https://youtu.be/VIDEO_ID"
+                      required
+                      :disabled="mutatingVideoFixtureIds.includes(fixture.id)"
+                    />
+                  </label>
+                  <p v-if="confirmedYoutubeVideoIds[fixture.id]" role="status">
+                    A video association is currently saved for this match.
+                  </p>
+                  <p>
+                    Accepted HTTPS forms: https://www.youtube.com/watch?v=VIDEO_ID,
+                    https://youtu.be/VIDEO_ID, or https://youtube.com/live/VIDEO_ID.
+                    An unlisted link is not access control.
+                  </p>
+                  <p>The association does not publish the match. It may appear on an already-published scorecard.</p>
+                  <div class="inline-form">
+                    <button
+                      type="submit"
+                      :disabled="mutatingVideoFixtureIds.includes(fixture.id)"
+                    >
+                      {{ mutatingVideoFixtureIds.includes(fixture.id) ? 'Saving…' : 'Save video association' }}
+                    </button>
+                    <button
+                      v-if="confirmedYoutubeVideoIds[fixture.id]"
+                      type="button"
+                      class="compact danger"
+                      :disabled="mutatingVideoFixtureIds.includes(fixture.id)"
+                      @click="removeYoutubeVideo(fixture)"
+                    >
+                      {{ mutatingVideoFixtureIds.includes(fixture.id) ? 'Saving…' : 'Remove association' }}
+                    </button>
+                  </div>
+                  <small>Removing this association does not delete or unpublish content on YouTube.</small>
+                </form>
+              </section>
               <form
                 v-if="canManageCompetitions"
                 class="inline-form"
@@ -498,6 +768,18 @@ label {
   padding: 1rem;
   border: 1px solid #39445f;
   border-radius: 8px;
+}
+.video-editor {
+  margin: 0.8rem 0;
+}
+.video-editor-form {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 0.65rem;
+}
+.video-editor-form p,
+.video-editor-form small {
+  margin: 0;
 }
 .compact {
   padding: 0.3rem 0.5rem;
