@@ -31,6 +31,9 @@ if (!mountEl.__vue_app__) {
   app.use(pinia)
   app.use(router)
 
+  // Wait for the initial route so route-specific shell boundaries apply on first render.
+  await router.isReady()
+
   const authStore = useAuthStore(pinia)
   setUnauthorizedHandler(() => {
     authStore.logout()

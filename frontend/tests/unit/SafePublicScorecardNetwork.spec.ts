@@ -73,4 +73,64 @@ describe('safe public scorecard network boundary', () => {
     expect(wrapper.text()).not.toContain('Synthetic Player B');
     wrapper.unmount();
   });
+
+  it.each([
+    ['query', (path: string) => `${path}?apiBase=${encodeURIComponent('https://unsafe.example.invalid')}`],
+    ['hash', (path: string) => `${path}#/?apiBase=${encodeURIComponent('https://unsafe.example.invalid')}`],
+  ])('isolates the real app startup from saved auth and hostile %s apiBase overrides', async (_overrideType, makeUrl) => {
+    const publicIdentifier = 'org_0123456789abcdef01234567';
+    const competitionPublicKey = 'cmp_0123456789abcdef01234567';
+    const scorecardPublicIdentifier = 'sc_0123456789abcdef01234567';
+    const endpoint = `/api/public/organizations/${publicIdentifier}/competitions/${competitionPublicKey}/scorecards/${scorecardPublicIdentifier}`;
+    const overlayPath = `/community/${publicIdentifier}/competitions/${competitionPublicKey}/scorecards/${scorecardPublicIdentifier}/overlay`;
+    window.history.replaceState(null, '', makeUrl(overlayPath));
+    localStorage.setItem('cricksy_token', 'synthetic-overlay-test-token');
+
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      json: async () => scorecardResponse,
+    });
+    const webSocketMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    vi.stubGlobal('WebSocket', webSocketMock);
+    document.body.innerHTML = '<div id="app"></div>';
+
+    await import('@/main');
+    await flushPromises();
+
+    expect(document.querySelector('.app--obs-overlay')).not.toBeNull();
+    expect(document.querySelector('.app-header')).toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [requestedUrl, requestInit] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const url = new URL(requestedUrl);
+    expect(url.pathname).toBe(endpoint);
+    expect(url.origin).toBe(window.location.origin);
+    expect(requestedUrl).not.toContain('unsafe.example.invalid');
+    expect(new Headers(requestInit.headers).has('Authorization')).toBe(false);
+    expect(requestedUrl).not.toMatch(/\/games\/|\/snapshots|\/deliveries|\/api\/ai-usage|socket\.io|private/i);
+    expect(webSocketMock).not.toHaveBeenCalled();
+
+    (window as any).app?.unmount?.();
+    document.body.innerHTML = '';
+    delete (window as any).app;
+  });
+
+  it('continues mounting the regular app shell after normal initial navigation', async () => {
+    window.history.replaceState(null, '', '/help');
+    vi.stubGlobal('fetch', vi.fn());
+    document.body.innerHTML = '<div id="app"></div>';
+
+    await import('@/main');
+    await flushPromises();
+
+    expect(document.querySelector('.app--obs-overlay')).toBeNull();
+    expect(document.querySelector('.app-header')).not.toBeNull();
+    expect(document.querySelector('.app-footer')).not.toBeNull();
+
+    (window as any).app?.unmount?.();
+    document.body.innerHTML = '';
+    delete (window as any).app;
+  });
 });
