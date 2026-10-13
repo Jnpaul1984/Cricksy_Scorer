@@ -13,6 +13,7 @@ import {
 import { schoolContextKey, type SchoolContext } from '@/composables/useSchoolContext';
 import router from '@/router';
 import * as schoolApi from '@/services/schoolAdminApi';
+import { useAuthStore } from '@/stores/authStore';
 import type { SchoolMembershipRole } from '@/types/schoolAdmin';
 import SchoolCompetitionsView from '@/views/school/SchoolCompetitionsView.vue';
 import SchoolFixturesResultsView from '@/views/school/SchoolFixturesResultsView.vue';
@@ -426,9 +427,14 @@ describe('Phase 7J School statistics and competition experience', () => {
   it('allows anonymous routing to the canonical overlay without a staff login', async () => {
     localStorage.clear();
     setActivePinia(createPinia());
+    localStorage.setItem('cricksy_token', 'synthetic-overlay-test-token');
+    const auth = useAuthStore();
+    const loadUser = vi.spyOn(auth, 'loadUser');
     await router.push('/community/org_opaque/competitions/cmp_opaque/scorecards/sc_opaque/overlay');
     expect(router.currentRoute.value.name).toBe('public-competition-scorecard-overlay');
     expect(router.currentRoute.value.meta.requiresAuth).not.toBe(true);
+    expect(loadUser).not.toHaveBeenCalled();
+    localStorage.clear();
     await router.push('/landing');
   });
 
@@ -679,6 +685,49 @@ describe('Phase 7J School statistics and competition experience', () => {
     expect(wrapper.text()).toContain('North Adult XI won');
     await vi.advanceTimersByTimeAsync(120_000);
     expect(schoolApi.getPublicCompetitionScorecard).toHaveBeenCalledTimes(1);
+    wrapper.unmount();
+  });
+
+  it('revalidates final results for corrections and clears them after revocation', async () => {
+    vi.useFakeTimers();
+    vi.mocked(schoolApi.getPublicCompetitionScorecard)
+      .mockResolvedValueOnce({
+        ...publicScorecard(90),
+        publication_state: 'published_final',
+        result: 'North Adult XI won',
+        public_identifier: 'sc_opaque',
+      } as never)
+      .mockResolvedValueOnce({
+        ...publicScorecard(91),
+        publication_state: 'published_final',
+        result: 'East Adult XI won',
+        public_identifier: 'sc_opaque',
+      } as never)
+      .mockRejectedValueOnce(Object.assign(new Error('revoked'), { status: 404 }));
+    const wrapper = mount(SchoolPublicScorecardView, {
+      props: {
+        overlay: true,
+        publicIdentifier: 'org_opaque',
+        competitionPublicKey: 'cmp_opaque',
+        scorecardPublicIdentifier: 'sc_opaque',
+      },
+    });
+    await flushPromises();
+    expect(wrapper.text()).toContain('North Adult XI won');
+    expect(wrapper.text()).toContain('rechecked every 5 minutes');
+    await vi.advanceTimersByTimeAsync(299_999);
+    expect(schoolApi.getPublicCompetitionScorecard).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1);
+    await flushPromises();
+    expect(wrapper.text()).toContain('East Adult XI won');
+    expect(wrapper.text()).toContain('91/1');
+    expect(schoolApi.getPublicCompetitionScorecard).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(300_000);
+    await flushPromises();
+    expect(wrapper.text()).toContain('not published or is no longer available');
+    expect(wrapper.text()).not.toContain('East Adult XI won');
+    await vi.advanceTimersByTimeAsync(600_000);
+    expect(schoolApi.getPublicCompetitionScorecard).toHaveBeenCalledTimes(3);
     wrapper.unmount();
   });
 

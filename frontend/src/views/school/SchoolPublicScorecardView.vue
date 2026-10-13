@@ -16,6 +16,7 @@ const lastUpdated = ref<Date | null>(null);
 const refreshing = ref(false);
 const refreshInterval = 120_000;
 const overlayRefreshInterval = 12_000;
+const finalOverlayRefreshInterval = 300_000;
 const maxOverlayRefreshInterval = 60_000;
 const offline = ref(false);
 let refreshTimer: ReturnType<typeof window.setInterval> | undefined;
@@ -45,8 +46,7 @@ function scheduleOverlayRefresh(delay: number) {
   if (overlayRefreshTimer !== undefined) window.clearTimeout(overlayRefreshTimer);
   overlayRefreshTimer = undefined;
   if (!props.overlay || !mounted || revoked || offline.value
-    || document.visibilityState === 'hidden'
-    || scorecard.value?.publication_state === 'published_final') return;
+    || document.visibilityState === 'hidden') return;
   overlayRefreshTimer = window.setTimeout(() => {
     overlayRefreshTimer = undefined;
     void load({ background: true });
@@ -135,11 +135,13 @@ async function load({ background = false } = {}) {
       if (mounted && !revoked) {
         if (requestedRoute !== routeKey()) {
           void load();
-        } else if (scorecard.value?.publication_state === 'published_final') {
-          stopPolling();
         } else {
-          const backoff = Math.min(overlayRefreshInterval * (2 ** transientFailures), maxOverlayRefreshInterval);
-          scheduleOverlayRefresh(transientFailures ? backoff : overlayRefreshInterval);
+          const delay = scorecard.value?.publication_state === 'published_final'
+            ? finalOverlayRefreshInterval
+            : transientFailures
+              ? Math.min(overlayRefreshInterval * (2 ** transientFailures), maxOverlayRefreshInterval)
+              : overlayRefreshInterval;
+          scheduleOverlayRefresh(delay);
         }
       }
     } else if (version === requestVersion) {
@@ -255,7 +257,7 @@ onBeforeUnmount(() => {
             <template v-if="offline">Offline<template v-if="lastUpdated"> · last verified {{ lastUpdatedLabel() }}</template></template>
             <template v-else-if="freshness === 'stale'">Stale · last verified {{ lastUpdatedLabel() }}</template>
             <template v-else-if="freshness === 'refreshing'">Refreshing score…</template>
-            <template v-else-if="scorecard.publication_state === 'published_final'">Final result · last verified {{ lastUpdatedLabel() }}</template>
+            <template v-else-if="scorecard.publication_state === 'published_final'">Final result · rechecked every 5 minutes · last verified {{ lastUpdatedLabel() }}</template>
             <template v-else>Last verified {{ lastUpdatedLabel() }} · checks every 12 seconds while visible</template>
           </p>
           <button type="button" class="refresh-now" :disabled="refreshing || revoked" @click="load({ background: true })">
@@ -375,6 +377,12 @@ onBeforeUnmount(() => {
   background: rgba(15, 23, 42, 0.94);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
   font-variant-numeric: tabular-nums;
+}
+.obs-scoreboard header {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 .obs-heading,
 .obs-teams,

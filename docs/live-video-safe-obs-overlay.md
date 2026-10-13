@@ -19,7 +19,7 @@ Do not replace or edit the identifiers with a game ID, and do not use `/view/:ga
 1. In OBS, add a **Browser Source** and paste the copied overlay URL.
 2. Use **960 × 240 px** as the recommended source size. A compact **640 × 180 px** source is also supported; check team-name wrapping at the chosen size.
 3. Keep the browser source background transparent. The score card itself has a dark, high-contrast background.
-4. The page checks every 12 seconds while visible. Transient failures back off exponentially, capped at 60 seconds; the last verified score remains marked stale. A browser offline event pauses polling until connectivity returns.
+4. The page checks every 12 seconds while visible. Transient failures back off exponentially, capped at 60 seconds; the last verified score remains marked stale. Final scorecards continue to revalidate every 5 minutes so later revocation or result correction is detected. A browser offline event pauses polling until connectivity returns.
 5. OBS/browser visibility signals do not establish whether a source is actually on-air. Validate the source manually during a rehearsal; this engineering work is not an actual OBS rehearsal.
 
 ## Synthetic, adult-only rehearsal

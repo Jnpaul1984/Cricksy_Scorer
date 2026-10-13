@@ -445,7 +445,7 @@ router.beforeEach(async (to, _from, next) => {
     }
   }
 
-  if (!auth.user && auth.token) {
+  if (!auth.user && auth.token && to.name !== 'public-competition-scorecard-overlay') {
     await auth.loadUser()
   }
 
