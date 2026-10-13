@@ -28,6 +28,11 @@ const scorecardResponse = {
 
 describe('safe public scorecard network boundary', () => {
   afterEach(() => {
+    (window as any).app?.unmount?.();
+    const mount = document.getElementById('app') as (HTMLElement & { __vue_app__?: unknown }) | null;
+    if (mount) delete mount.__vue_app__;
+    delete (window as any).app;
+    document.body.innerHTML = '';
     localStorage.clear();
     window.history.replaceState(null, '', '/');
     vi.unstubAllGlobals();
@@ -98,9 +103,11 @@ describe('safe public scorecard network boundary', () => {
     document.body.innerHTML = '<div id="app"></div>';
 
     await import('@/main');
+    await vi.waitFor(() => {
+      expect(document.querySelector('.app--obs-overlay')).not.toBeNull();
+    });
     await flushPromises();
 
-    expect(document.querySelector('.app--obs-overlay')).not.toBeNull();
     expect(document.querySelector('.app-header')).toBeNull();
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [requestedUrl, requestInit] = fetchMock.mock.calls[0] as [string, RequestInit];
@@ -123,14 +130,13 @@ describe('safe public scorecard network boundary', () => {
     document.body.innerHTML = '<div id="app"></div>';
 
     await import('@/main');
+    await vi.waitFor(() => {
+      expect(document.querySelector('.app-header')).not.toBeNull();
+    });
     await flushPromises();
 
     expect(document.querySelector('.app--obs-overlay')).toBeNull();
-    expect(document.querySelector('.app-header')).not.toBeNull();
     expect(document.querySelector('.app-footer')).not.toBeNull();
 
-    (window as any).app?.unmount?.();
-    document.body.innerHTML = '';
-    delete (window as any).app;
   });
 });
