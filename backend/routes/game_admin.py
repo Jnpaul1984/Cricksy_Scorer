@@ -1,16 +1,18 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, cast
+from typing import Annotated, Any, cast
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.security import get_current_active_user
 from backend.services import game_helpers as gh
+from backend.services.game_access_service import require_game_mutation_access
 from backend.services.live_bus import emit_state_update
 from backend.services.snapshot_service import build_snapshot as _snapshot_from_game
-from backend.sql_app import crud, schemas
+from backend.sql_app import crud, models, schemas
 from backend.sql_app.database import get_db
 
 
@@ -36,11 +38,13 @@ class OversLimitBody(BaseModel):
 async def set_overs_limit(
     game_id: str,
     body: OversLimitBody,
+    current_user: Annotated[models.User, Depends(get_current_active_user)],
     db: AsyncSession = Depends(get_db),
 ):
     db_game = await crud.get_game(db, game_id=game_id)
     if not db_game:
         raise HTTPException(status_code=404, detail="Game not found")
+    await require_game_mutation_access(db, game=db_game, user=current_user)
 
     g: Any = db_game
 
@@ -83,11 +87,13 @@ async def set_overs_limit(
 async def set_team_roles(
     game_id: str,
     payload: schemas.TeamRoleUpdate,
+    current_user: Annotated[models.User, Depends(get_current_active_user)],
     db: AsyncSession = Depends(get_db),
 ):
     db_game = await crud.get_game(db, game_id=game_id)
     if not db_game:
         raise HTTPException(status_code=404, detail="Game not found")
+    await require_game_mutation_access(db, game=db_game, user=current_user)
 
     g: Any = db_game
 

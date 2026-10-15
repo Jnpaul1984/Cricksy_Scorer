@@ -633,12 +633,37 @@ def _school_source(team: dict[str, Any]) -> tuple[str | None, str | None]:
     )
 
 
+GameOwnership = Literal["legacy", "organization", "unresolved"]
+
+
+def school_game_ownership(game: models.Game) -> tuple[GameOwnership, str | None]:
+    """Classify a Game's frozen School/Club ownership.
+
+    ``legacy``: neither side carries a ``school_source``.
+    ``organization``: every present source names the same organization.
+    ``unresolved``: a present source has no usable organization ID, or the sides
+    name different organizations. Callers must deny access rather than treat the
+    Game as legacy.
+    """
+    organizations: set[str] = set()
+    for team in (game.team_a, game.team_b):
+        if not isinstance(team, dict) or "school_source" not in team:
+            continue
+        organization_id, _ = _school_source(team)
+        if organization_id is None:
+            return "unresolved", None
+        organizations.add(organization_id)
+    if not organizations:
+        return "legacy", None
+    if len(organizations) > 1:
+        return "unresolved", None
+    return "organization", next(iter(organizations))
+
+
 def school_game_organization_id(game: models.Game) -> str | None:
-    org_a, _ = _school_source(game.team_a)
-    org_b, _ = _school_source(game.team_b)
-    if org_a is not None and org_b is not None:
-        return org_a if org_a == org_b else None
-    return org_a or org_b
+    """Return the single owning organization, or None for legacy/unresolved Games."""
+    ownership, organization_id = school_game_ownership(game)
+    return organization_id if ownership == "organization" else None
 
 
 def school_game_matches_fixture(
@@ -853,9 +878,11 @@ async def standings(
 async def require_school_game_member(
     db: AsyncSession, *, game: models.Game, user: models.User | None
 ) -> None:
-    organization_id = school_game_organization_id(game)
-    if organization_id is None:
+    ownership, organization_id = school_game_ownership(game)
+    if ownership == "legacy":
         return
+    if ownership == "unresolved" or organization_id is None:
+        raise _not_found("Game")
     if user is None or not user.is_active:
         raise _not_found("Game")
     try:
@@ -870,17 +897,11 @@ async def school_game_scoring_authorization(
     db: AsyncSession, *, game: models.Game, user: models.User | None
 ) -> tuple[str | None, bool]:
     """Resolve contextual scoring authority from a Game's frozen School source."""
-    organization_a, _ = _school_source(game.team_a)
-    organization_b, _ = _school_source(game.team_b)
-    if (
-        organization_a is not None
-        and organization_b is not None
-        and organization_a != organization_b
-    ):
-        raise _not_found("Game")
-    organization_id = organization_a or organization_b
-    if organization_id is None:
+    ownership, organization_id = school_game_ownership(game)
+    if ownership == "legacy":
         return None, False
+    if ownership == "unresolved" or organization_id is None:
+        raise _not_found("Game")
     if user is None or not user.is_active:
         raise _not_found("Game")
     try:
@@ -992,22 +1013,37 @@ def _public_card(card: dict[str, Any]) -> list[dict[str, Any]]:
     return rows
 
 
-async def public_scorecard(db: AsyncSession, *, game_id: str) -> PublicSchoolScorecard:
-    game = await db.get(models.Game, game_id)
-    if game is None:
-        raise _not_found("Scorecard")
+def is_organization_game(game: models.Game) -> bool:
+    """Return whether either side carries a School/Club source, resolvable or not."""
+    return school_game_ownership(game)[0] != "legacy"
+
+
+async def public_school_game_organization(
+    db: AsyncSession, game: models.Game
+) -> models.Organization | None:
+    """Return the owning organization only when a School/Club Game is deliberately public."""
     organization_id = school_game_organization_id(game)
     if organization_id is None or not await organization_has_capability(
         db, organization_id=organization_id, capability="school_live_scorecards"
     ):
-        raise _not_found("Scorecard")
+        return None
     organization = await db.get(models.Organization, organization_id)
     if (
         organization is None
         or organization.organization_type not in FREE_CRICKET_ORGANIZATION_TYPES
     ):
-        raise _not_found("Scorecard")
+        return None
     if game.publication_state not in {"published_live", "published_final"}:
+        return None
+    return organization
+
+
+async def public_scorecard(db: AsyncSession, *, game_id: str) -> PublicSchoolScorecard:
+    game = await db.get(models.Game, game_id)
+    if game is None:
+        raise _not_found("Scorecard")
+    organization = await public_school_game_organization(db, game)
+    if organization is None:
         raise _not_found("Scorecard")
     return PublicSchoolScorecard(
         game_id=game.id,

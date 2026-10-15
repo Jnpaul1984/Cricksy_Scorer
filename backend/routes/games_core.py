@@ -36,10 +36,14 @@ class CreateGameRequest(BaseModel):
 
 @router.post("/games", response_model=schemas.Game)
 async def create_game(
-    payload: CreateGameRequest, db: Annotated[AsyncSession, Depends(get_db)]
+    payload: CreateGameRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[models.User | None, Depends(get_current_user_optional)],
 ) -> schemas.Game:
-    # Delegate to the existing implementation to avoid duplication
-    db_game = await _games_impl.create_game_impl(payload, db)
+    # The owner is always the authenticated caller; the request body cannot set it
+    # (CreateGameRequest has no such field and ignores unknown keys).
+    creator_id = current_user.id if current_user is not None and current_user.is_active else None
+    db_game = await _games_impl.create_game_impl(payload, db, created_by_user_id=creator_id)
     return schemas.Game.model_validate(db_game, from_attributes=True)
 
 

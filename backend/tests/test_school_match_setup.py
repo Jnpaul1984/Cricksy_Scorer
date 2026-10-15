@@ -508,9 +508,10 @@ async def test_match_snapshot_and_canonical_identity_survive_roster_lifecycle_ch
             "team_a_score": 120,
             "team_b_score": 100,
         },
+        headers=actor.headers,
     )
     assert result.status_code == 201, result.text
-    persisted_result = school_client.get(f"/games/{first_id}/results")
+    persisted_result = school_client.get(f"/games/{first_id}/results", headers=actor.headers)
     assert persisted_result.status_code == 200
     assert persisted_result.json()["winner_team_name"] == frozen_team_a["name"]
 

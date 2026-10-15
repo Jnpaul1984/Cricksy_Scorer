@@ -1,13 +1,60 @@
+import { randomUUID } from 'node:crypto'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 
 const API_HEADERS = { 'Content-Type': 'application/json' }
 
+// One synthetic account per API base, registered on demand against the live
+// test backend. Email and password are generated at runtime and never reused.
+const syntheticTokens = new Map()
+
+async function syntheticAuthToken(apiBase) {
+  const base = apiBase.replace(/\/+$/, '')
+  if (!syntheticTokens.has(base)) {
+    syntheticTokens.set(
+      base,
+      (async () => {
+        const email = `cypress-synthetic-${randomUUID()}@example.test`
+        const password = randomUUID()
+        const register = await fetch(`${base}/auth/register`, {
+          method: 'POST',
+          headers: API_HEADERS,
+          body: JSON.stringify({ email, password }),
+        })
+        if (!register.ok) {
+          throw new Error(`Synthetic registration failed: ${register.status}`)
+        }
+        const login = await fetch(`${base}/auth/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({ username: email, password }).toString(),
+        })
+        if (!login.ok) {
+          throw new Error(`Synthetic login failed: ${login.status}`)
+        }
+        const { access_token: accessToken } = await login.json()
+        if (!accessToken) throw new Error('Synthetic login returned no access token')
+        return accessToken
+      })(),
+    )
+  }
+  try {
+    return await syntheticTokens.get(base)
+  } catch (err) {
+    syntheticTokens.delete(base)
+    throw err
+  }
+}
+
 async function httpRequest(base, urlPath, options = {}) {
   const url = `${base.replace(/\/+$/, '')}${urlPath}`
-  const init = { method: options.method ?? 'GET' }
+  const token = await syntheticAuthToken(base)
+  const init = {
+    method: options.method ?? 'GET',
+    headers: { Authorization: `Bearer ${token}` },
+  }
   if (options.body !== undefined) {
-    init.headers = API_HEADERS
+    init.headers = { ...init.headers, ...API_HEADERS }
     init.body = JSON.stringify(options.body)
   }
   const res = await fetch(url, init)
@@ -381,4 +428,5 @@ export {
   seedOverComplete,
   seedInningsBreak,
   seedWeatherDelay,
+  syntheticAuthToken,
 }

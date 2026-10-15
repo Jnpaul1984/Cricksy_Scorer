@@ -13,7 +13,7 @@ describe('Weather interruption start/resume flow', () => {
   })
 
   it('shows a pause banner and disables scoring until play resumes', () => {
-    cy.visitWithSnapshot(`/game/${matchCtx.gameId}/scoring`)
+    cy.visitWithSyntheticSnapshot(`/game/${matchCtx.gameId}/scoring`)
     cy.get('[data-testid="submit-delivery"]').should('not.be.disabled')
 
     cy.get('[data-testid="btn-open-weather"]').click()

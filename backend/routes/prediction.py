@@ -4,11 +4,13 @@ API routes for win probability predictions.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Annotated, Any
 
 from backend.domain.ai_boundary import AiOutputMetadata, AiOutputType, AiSourceReference
+from backend.security import get_current_user_optional
+from backend.services.game_access_service import require_game_read_access
 from backend.services.prediction_service import get_win_probability
-from backend.sql_app import crud
+from backend.sql_app import crud, models
 from backend.sql_app.database import get_db
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -167,6 +169,7 @@ def _build_prediction_grounding_summary(source_refs: list[AiSourceReference]) ->
 @router.get("/games/{game_id}/win-probability")
 async def get_game_win_probability(
     game_id: str,
+    current_user: Annotated[models.User | None, Depends(get_current_user_optional)],
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     """
@@ -192,6 +195,7 @@ async def get_game_win_probability(
 
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
+    await require_game_read_access(db, game=game, user=current_user)
 
     # Build game state dictionary
     game_state = {

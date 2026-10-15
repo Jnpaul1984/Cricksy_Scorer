@@ -77,6 +77,7 @@ async def create_game(
     team_b: dict[str, Any],
     batting_scorecard: dict[str, Any],
     bowling_scorecard: dict[str, Any],
+    created_by_user_id: str | None = None,
 ) -> models.Game:
     """
     Insert a new game row. Status string remains 'in_progress' to match current code paths.
@@ -100,6 +101,7 @@ async def create_game(
         # Start at innings 0 / break so the UI prompts "Start Innings"
         current_inning=0,
         status="innings_break",
+        created_by_user_id=created_by_user_id,
     )
     db.add(db_game)
     await db.commit()

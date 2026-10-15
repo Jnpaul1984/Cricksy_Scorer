@@ -54,9 +54,12 @@ async def create_game(
     # to avoid circular typing import
     payload: Any,
     db: AsyncSession,
+    *,
+    created_by_user_id: str | None = None,
 ) -> models.Game:
     """
     Orchestrate creating a Game row + pre-seeded scorecards.
+    ``created_by_user_id`` is the server-resolved creator (None for anonymous).
     Returns the db Game (ORM row) as main.create_game did.
     """
     # --- Build players lists (prefer explicit lists, otherwise generate) ---
@@ -138,6 +141,7 @@ async def create_game(
         team_b=cast(dict[str, Any], team_b),
         batting_scorecard=cast(dict[str, Any], batting_scorecard),
         bowling_scorecard=cast(dict[str, Any], bowling_scorecard),
+        created_by_user_id=created_by_user_id,
     )
 
     return db_game

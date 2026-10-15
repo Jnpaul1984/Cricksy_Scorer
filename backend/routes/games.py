@@ -28,12 +28,15 @@ def _gh(name: str, *args: Any, **kwargs: Any) -> Any:
     return None
 
 
-async def create_game_impl(payload: Any, db: AsyncSession) -> schemas.Game:
+async def create_game_impl(
+    payload: Any, db: AsyncSession, *, created_by_user_id: str | None = None
+) -> schemas.Game:
     """
     Delegate orchestration of game creation to game_service.
     Payload is the Pydantic CreateGameRequest instance passed from main.py.
+    ``created_by_user_id`` must come from the authenticated user, never the payload.
     """
-    db_game = await game_service.create_game(payload, db)
+    db_game = await game_service.create_game(payload, db, created_by_user_id=created_by_user_id)
     return db_game
 
 

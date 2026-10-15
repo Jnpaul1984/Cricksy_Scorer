@@ -1,14 +1,16 @@
 # routers/games_dls.py
 from __future__ import annotations
 
-from typing import Literal
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.security import get_current_active_user
 from backend.services.dls_service import calc_target, resource_remaining
+from backend.services.game_access_service import require_game_mutation_access
 
 # Live-bus broadcast for real-time updates
 from backend.services.live_bus import publish_game_update
@@ -163,12 +165,16 @@ async def dls_apply(
 
 @router.patch("/{game_id}/overs/reduce", response_model=ReduceOversOut)
 async def reduce_overs(
-    game_id: str, body: ReduceOversIn, db: AsyncSession = Depends(get_db)
+    game_id: str,
+    body: ReduceOversIn,
+    current_user: Annotated[models.User, Depends(get_current_active_user)],
+    db: AsyncSession = Depends(get_db),
 ) -> ReduceOversOut:
     result = await db.execute(select(models.Game).where(models.Game.id == game_id))
     g: models.Game | None = result.scalar_one_or_none()
     if g is None:
         raise HTTPException(404, "Game not found")
+    await require_game_mutation_access(db, game=g, user=current_user)
 
     # Business rules are up to you; these are soft examples:
     if body.innings == 1 and getattr(g, "innings1_completed", False):

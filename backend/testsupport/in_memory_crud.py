@@ -37,6 +37,7 @@ class InMemoryCrudRepository:
         team_b: dict[str, Any],
         batting_scorecard: dict[str, Any],
         bowling_scorecard: dict[str, Any],
+        created_by_user_id: str | None = None,
     ) -> models.Game:
         g = models.Game(
             id=game_id,
@@ -64,6 +65,7 @@ class InMemoryCrudRepository:
             deliveries=[],
             batting_scorecard=batting_scorecard,
             bowling_scorecard=bowling_scorecard,
+            created_by_user_id=created_by_user_id,
         )
 
         g.current_inning = 0
