@@ -385,11 +385,18 @@ def test_real_postgres_reporting_rate_limit_replay_and_retention_boundary(
         )
         assert sum(status == 202 for status, _ in results) == 60
         assert sum(status == 429 for status, _ in results) == 1
+        accepted_event_id = next(
+            event_id
+            for event_id, (status, body) in zip(event_ids, results, strict=True)
+            if status == 202 and body == {"accepted": True, "duplicate": False}
+        )
 
         # A duplicate must remain idempotent after the shared bucket is full and
         # must not burn a newly-issued one-time capability.
         replay_nonce = (await _issue_reporting_nonces(session_maker, placement_id, 1))[0]
-        replay_status, replay_body = await _record_reporting_nonce(session_maker, replay_nonce, event_ids[0])
+        replay_status, replay_body = await _record_reporting_nonce(
+            session_maker, replay_nonce, accepted_event_id
+        )
         assert (replay_status, replay_body) == (202, {"accepted": True, "duplicate": True})
 
         now = dt.datetime.now(dt.UTC)
