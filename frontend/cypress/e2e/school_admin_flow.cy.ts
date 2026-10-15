@@ -1,3 +1,5 @@
+import { expectRendered, expectRenderedInputs } from '../support/renderedInputs'
+
 const organization = {
   id: 'school-a',
   name: 'Central School',
@@ -160,6 +162,74 @@ describe('Phase 7H School administration flow', () => {
     cy.contains('button', 'Edit metadata').should('not.exist')
     cy.contains('button', 'Deactivate').should('not.exist')
     cy.contains('a', 'Import').should('not.exist')
+  })
+
+  it('lets a coach add a School player by name only and keeps existing metadata and IDs', () => {
+    cy.viewport(1440, 1000)
+    stubSchool('coach')
+    const roster = [activePlayer]
+    const created = {
+      ...activePlayer,
+      id: 'school-player-generated',
+      player_profile_id: 'profile-generated',
+      player_name: 'Maya Singh',
+      student_identifier: null,
+      year_group: null,
+    }
+    cy.intercept('GET', '**/api/organizations/school-a/players?status=active', req =>
+      req.reply(roster),
+    ).as('activePlayers')
+    cy.intercept('POST', '**/api/organizations/school-a/players', req => {
+      // Name only: no identifier, group or role is sent, and IDs come from the server.
+      expect(req.body).to.deep.equal({ player_name: 'Maya Singh' })
+      roster.push(created)
+      req.reply({ statusCode: 201, body: created })
+    }).as('createPlayer')
+    cy.intercept('PATCH', '**/api/organizations/school-a/players/school-player-active', req => {
+      // Only the changed field is sent; the existing external reference is left untouched.
+      expect(req.body).to.deep.equal({ year_group: 'Year 9' })
+      roster[0] = { ...activePlayer, year_group: 'Year 9' }
+      req.reply(roster[0])
+    }).as('updatePlayer')
+
+    cy.visitWithAuth('/schools/school-a/players')
+    cy.contains('h2', 'School master roster').should('be.visible')
+    cy.wait('@activePlayers')
+
+    const optionalDetails = '[data-test="add-player-optional-details"]'
+    cy.contains('label', 'Local player identifier').should('not.exist')
+    cy.get(optionalDetails).should('not.have.attr', 'open')
+    expectRenderedInputs('form.editor', ['Player name'])
+    cy.contains(`${optionalDetails} summary`, 'Optional details').click()
+    expectRenderedInputs('form.editor', ['Player name', 'Group', 'External reference'])
+    cy.contains(`${optionalDetails} summary`, 'Optional details').click()
+    cy.get(optionalDetails).should('not.have.attr', 'open')
+    expectRenderedInputs('form.editor', ['Player name'])
+
+    cy.contains('label', 'Player name').find('input').type('Maya Singh')
+    cy.contains('button', 'Add to roster').click()
+    cy.wait('@createPlayer')
+    cy.contains('Player added to the School master roster.').should('be.visible')
+    cy.contains('tr', 'Maya Singh').should('not.contain', 'Ref:')
+    cy.contains('tr', 'Asha Khan').should('contain', 'Ref: S-1').and('contain', 'Year 8')
+    cy.contains('th', 'Local player ID').should('not.exist')
+
+    cy.contains('tr', 'Asha Khan').contains('button', 'Edit metadata').click()
+    cy.get('dialog').within(() => {
+      cy.contains('label', 'External reference (optional)').find('input').should('have.value', 'S-1')
+      expectRendered('[data-test="player-support-details"] code', false)
+      cy.contains('summary', 'Support details').click()
+      expectRendered('[data-test="player-support-details"] code', true)
+      cy.get('[data-test="player-support-details"]')
+        .should('contain', 'school-player-active')
+        .and('contain', 'profile-active')
+        .find('input')
+        .should('not.exist')
+      cy.contains('label', 'Group').find('input').clear().type('Year 9')
+      cy.contains('button', 'Save').click()
+    })
+    cy.wait('@updatePlayer')
+    cy.contains('tr', 'Asha Khan').should('contain', 'Ref: S-1').and('contain', 'Year 9')
   })
 
   it('keeps labeled actions keyboard-operable and confirms destructive Team archival', () => {
