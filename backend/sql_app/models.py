@@ -619,6 +619,12 @@ class Game(Base):
     match_type: Mapped[str] = mapped_column(
         String, default="custom", nullable=False
     )  # e.g., T20, ODI, Test, custom
+    # Deliberately separate from match_type: B1 persists the dormant purpose,
+    # but does not wire any creation or scoring behavior to it yet.
+    match_purpose: Mapped[str] = mapped_column(
+        String(16), default="official", server_default="official", nullable=False
+    )
+    match_rules: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     overs_limit: Mapped[int | None] = mapped_column(Integer, nullable=True)  # None for unlimited
     days_limit: Mapped[int | None] = mapped_column(Integer, nullable=True)  # For multi-day matches
     dls_enabled: Mapped[bool] = mapped_column(
@@ -754,6 +760,10 @@ class Game(Base):
     )
 
     __table_args__ = (
+        CheckConstraint(
+            "match_purpose IN ('official', 'practice')",
+            name="ck_games_match_purpose",
+        ),
         CheckConstraint(
             "publication_state IS NULL OR publication_state IN "
             "('private', 'published_live', 'published_final')",
