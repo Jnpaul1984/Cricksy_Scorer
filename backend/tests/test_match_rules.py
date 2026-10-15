@@ -4,14 +4,15 @@ import importlib.util
 from pathlib import Path
 
 import pytest
+from sqlalchemy import create_engine, inspect, text
+from sqlalchemy.exc import IntegrityError
+
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
-from sqlalchemy import create_engine, inspect, text
-
 from backend.services.match_rules import (
     DEFAULT_PRACTICE_OVERS,
-    MatchRulesValidationError,
     PRACTICE_MATCH_PURPOSE,
+    MatchRulesValidationError,
     build_practice_match_rules,
     resolve_match_rules,
     serialize_match_rules,
@@ -174,7 +175,7 @@ def test_additive_migration_applies_official_default_and_constraint_on_disposabl
                 connection.execute(text("SELECT match_purpose FROM games")).scalar_one()
                 == "official"
             )
-            with pytest.raises(Exception):
+            with pytest.raises(IntegrityError):
                 connection.execute(
                     text(
                         "INSERT INTO games (id, match_purpose) VALUES ('invalid-purpose', 'invalid')"
