@@ -465,7 +465,7 @@ async def list_game_results(
     rows = await publicly_listable_games(db, rows)
 
     out: list[dict[str, Any]] = []
-    for g in rows:
+    for g in rows or []:
         # g may be a SQLAlchemy model instance or an in-memory model stub
         raw = getattr(g, "result", None)
         if not raw:
