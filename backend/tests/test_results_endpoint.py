@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import uuid
 from typing import Any
 
 import pytest
@@ -27,9 +28,29 @@ def client() -> TestClient:
 
 def _create_game(client: TestClient, payload: dict[str, Any] | None = None) -> str:
     body = {**DEFAULT_GAME, **(payload or {})}
-    resp = client.post("/games", json=body)
+    # Created by the synthetic account so it is the recorded owner allowed to post results.
+    resp = client.post("/games", json=body, headers=_auth_headers(client))
     assert resp.status_code == 200, resp.text
     return resp.json()["id"]
+
+
+def _auth_headers(client: TestClient) -> dict[str, str]:
+    """Register one synthetic account per client; posting results requires auth."""
+    headers = getattr(client, "_synthetic_auth_headers", None)
+    if headers is None:
+        email = f"results-{uuid.uuid4()}@example.test"
+        password = uuid.uuid4().hex
+        registered = client.post("/auth/register", json={"email": email, "password": password})
+        assert registered.status_code == 201, registered.text
+        login = client.post(
+            "/auth/login",
+            data={"username": email, "password": password},
+            headers={"content-type": "application/x-www-form-urlencoded"},
+        )
+        assert login.status_code == 200, login.text
+        headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+        client._synthetic_auth_headers = headers  # type: ignore[attr-defined]
+    return headers
 
 
 def _post_results(
@@ -54,6 +75,7 @@ def _post_results(
             **({"margin": margin} if margin is not None else {}),
             **({"result_text": result_text} if result_text is not None else {}),
         },
+        headers=_auth_headers(client),
     )
     assert resp.status_code in (200, 201), resp.text
     return resp.json()

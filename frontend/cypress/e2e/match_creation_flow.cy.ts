@@ -39,7 +39,7 @@ describe('Match creation → XI selection → scoring console', () => {
 
     cy.intercept('POST', '**/games').as('createGame')
 
-    cy.visitWithAuth('/setup')
+    cy.visitWithSyntheticAuth('/setup')
     cy.get('[data-testid="input-team-a"]').type(teamAName)
     cy.get('[data-testid="input-team-b"]').type(teamBName)
 
@@ -95,7 +95,7 @@ describe('Match creation → XI selection → scoring console', () => {
 
     cy.then(() => {
       return cy
-        .visitWithSnapshot(`/game/${createdGameId}/scoring`)
+        .visitWithSyntheticSnapshot(`/game/${createdGameId}/scoring`)
         .its('response.body')
         .then((snap) => {
           expect(Boolean(snap?.needs_new_innings)).to.be.true

@@ -73,6 +73,45 @@ Cypress.Commands.add("visitWithAuth", (path: string, role = "org_pro") => {
 })
 
 /**
+ * Visit a route with a real token for a synthetic account on the live backend.
+ * Backend authorization uses the real token. Only the client-side role gate is
+ * satisfied by stubbing /auth/me, because synthetic accounts register as "free".
+ */
+Cypress.Commands.add("visitWithSyntheticAuth", (path: string, role = "org_pro") => {
+  cy.task("auth:synthetic-token").then((token) => {
+    cy.intercept("GET", "**/auth/me", {
+      id: "cypress-synthetic-user",
+      email: "cypress-synthetic@example.test",
+      role,
+      is_superuser: role === "superuser",
+    }).as("authMe")
+
+    cy.visit(path, {
+      onBeforeLoad(win) {
+        win.localStorage.setItem(TOKEN_KEY, String(token))
+      },
+    })
+
+    cy.wait("@authMe")
+  })
+})
+
+/**
+ * Same as visitWithSnapshot, but authenticated with a real synthetic account.
+ */
+Cypress.Commands.add("visitWithSyntheticSnapshot", (path: string, role = "org_pro") => {
+  cy.intercept("GET", "**/games/*").as("snapshot")
+  cy.visitWithSyntheticAuth(path, role)
+
+  return cy.wait("@snapshot", { timeout: 20000 }).then((interception) => {
+    const body = interception?.response?.body as SnapshotBody
+    expect(interception?.response?.statusCode, "snapshot status").to.eq(200)
+    expect(body, "snapshot body").to.exist
+    return interception
+  })
+})
+
+/**
  * Visit a page & wait for the first snapshot response.
  */
 Cypress.Commands.add("visitWithSnapshot", (path: string, role = "org_pro") => {
@@ -161,6 +200,16 @@ declare global {
        * Visit a route that triggers /games/:id/snapshot and wait for the first response
        */
       visitWithSnapshot(path: string, role?: string): Chainable<any>
+
+      /**
+       * Visit a route using a real token for a synthetic account on the live backend
+       */
+      visitWithSyntheticAuth(path: string, role?: string): Chainable<void>
+
+      /**
+       * visitWithSnapshot with a real token for a synthetic account on the live backend
+       */
+      visitWithSyntheticSnapshot(path: string, role?: string): Chainable<any>
 
       /**
        * Wait for the next snapshot response that satisfies the provided predicate.

@@ -9,9 +9,14 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.security import get_current_active_user, get_current_user_optional
+from backend.services.game_access_service import (
+    require_game_mutation_access,
+    require_game_read_access,
+)
 from backend.sql_app import crud
 from backend.sql_app.database import get_db
-from backend.sql_app.models import Game
+from backend.sql_app.models import Game, User
 
 UTC = getattr(dt, "UTC", dt.UTC)
 
@@ -131,9 +136,12 @@ def _stop_core(game: Game, kind: Kind | None, at_utc: dt.datetime | None) -> lis
 
 @router.get("/{game_id}/interruptions")
 async def list_interruptions(
-    game_id: str, db: Annotated[AsyncSession, Depends(get_db)]
+    game_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User | None, Depends(get_current_user_optional)],
 ) -> dict[str, Any]:
     game = _ensure_game(await crud.get_game(db, game_id))
+    await require_game_read_access(db, game=game, user=current_user)
     game.interruptions = _normalize_history(list(game.interruptions or []))
     return {"ok": True, "interruptions": game.interruptions or []}
 
@@ -144,8 +152,10 @@ async def start_interruption(
     payload: InterruptionStart,
     request: Request,  # â¬…ï, add Request
     db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_active_user)],
 ) -> dict[str, Any]:
     game = _ensure_game(await crud.get_game(db, game_id))
+    await require_game_mutation_access(db, game=game, user=current_user)
     _start_core(game, payload.kind, payload.note, payload.at_utc)
     await db.commit()
     await db.refresh(game)
@@ -166,8 +176,10 @@ async def stop_interruption(
     payload: InterruptionStop,
     request: Request,  # â¬…ï, add Request
     db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_active_user)],
 ) -> dict[str, Any]:
     game = _ensure_game(await crud.get_game(db, game_id))
+    await require_game_mutation_access(db, game=game, user=current_user)
     _stop_core(game, payload.kind, payload.at_utc)
     await db.commit()
     await db.refresh(game)
@@ -188,8 +200,10 @@ async def upsert_interruption(
     payload: InterruptionUpsert,
     request: Request,  # â¬…ï, add Request
     db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_active_user)],
 ) -> dict[str, Any]:
     game = _ensure_game(await crud.get_game(db, game_id))
+    await require_game_mutation_access(db, game=game, user=current_user)
 
     act = (
         payload.action

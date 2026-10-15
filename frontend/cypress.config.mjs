@@ -8,6 +8,7 @@ import {
   seedOverComplete,
   seedInningsBreak,
   seedWeatherDelay,
+  syntheticAuthToken,
 } from "./cypress/support/matchSimulator.runtime.js";
 
 export default defineConfig({
@@ -64,6 +65,13 @@ export default defineConfig({
             process.env.API_BASE ||
             "http://127.0.0.1:8000";
           return await seedWeatherDelay(apiBase);
+        },
+        "auth:synthetic-token": async () => {
+          const apiBase =
+            (typeof config.env.API_BASE === "string" ? config.env.API_BASE : undefined) ||
+            process.env.API_BASE ||
+            "http://127.0.0.1:8000";
+          return await syntheticAuthToken(apiBase);
         },
       });
 

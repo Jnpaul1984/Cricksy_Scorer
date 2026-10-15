@@ -4,6 +4,7 @@ import { useRoute, useRouter, RouterLink } from 'vue-router'
 
 import { useAuthStore } from '@/stores/authStore'
 import { useGameStore } from '@/stores/gameStore'
+import { getStoredToken } from '@/services/api'
 import { API_BASE } from '@/utils/api'
 
 type XI = {
@@ -147,9 +148,14 @@ async function persistXIIfSupported() {
     keeper_b:  keeperB.value,
   }
 
+  const token = getStoredToken()
   const res = await fetch(`${base}/games/${encodeURIComponent(gameId.value)}/playing-xi`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
     body: JSON.stringify(payload),
   })
 

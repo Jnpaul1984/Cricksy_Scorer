@@ -7,6 +7,12 @@ from typing import Annotated, Any, TypedDict, cast
 from uuid import UUID
 
 # NOTE: add crud here so we can honor in-memory mode via dependency overrides
+from backend.security import get_current_active_user, get_current_user_optional
+from backend.services.game_access_service import (
+    publicly_listable_games,
+    require_game_mutation_access,
+    require_game_read_access,
+)
 from backend.sql_app import crud, models, schemas
 from backend.sql_app.database import get_db  # async generator -> AsyncSession
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -47,10 +53,12 @@ async def set_playing_xi(
     game_id: UUID,
     payload: schemas.PlayingXIRequest,
     db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[models.User, Depends(get_current_active_user)],
 ) -> schemas.PlayingXIResponse:
     game = await crud.get_game(db, game_id=str(game_id))
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
+    await require_game_mutation_access(db, game=game, user=current_user)
 
     team_a_json: dict[str, Any] = (game.team_a or {}).copy()
     team_b_json: dict[str, Any] = (game.team_b or {}).copy()
@@ -95,8 +103,9 @@ async def set_playing_xi_alias(
     game_id: UUID,
     payload: schemas.PlayingXIRequest,
     db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[models.User, Depends(get_current_active_user)],
 ) -> schemas.PlayingXIResponse:
-    return await set_playing_xi(game_id, payload, db)
+    return await set_playing_xi(game_id, payload, db, current_user)
 
 
 # NOTE: _name function retained for potential future use / testing / debugging
@@ -210,6 +219,7 @@ async def search_games(
         pass  # nosec
     # Ensure rows is an iterable for the loop (avoid mypy union-attr error)
     rows = rows or []
+    rows = await publicly_listable_games(db, rows)
 
     out: list[dict[str, Any]] = []
     for g in rows:
@@ -240,14 +250,23 @@ async def search_games(
 async def get_game_results(
     game_id: UUID,
     db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[models.User | None, Depends(get_current_user_optional)],
 ) -> schemas.MatchResult:
     """Retrieve results for a specific game (CRUD-backed)."""
+    not_found = HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail="Results not found for the game",
+    )
     game = await crud.get_game(db, game_id=str(game_id))
-    if not game or not getattr(game, "result", None):
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Results not found for the game",
-        )
+    if not game:
+        raise not_found
+    try:
+        await require_game_read_access(db, game=game, user=current_user)
+    except HTTPException as exc:
+        # Same response as a missing Game so private Games are not enumerable.
+        raise not_found from exc
+    if not getattr(game, "result", None):
+        raise not_found
 
     raw = getattr(game, "result", None)
     try:
@@ -281,6 +300,7 @@ async def post_game_results(
     game_id: UUID,
     payload: schemas.MatchResultRequest,
     db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[models.User, Depends(get_current_active_user)],
 ) -> schemas.MatchResult:
     """
     Create/update results for a specific game (CRUD-backed).
@@ -292,6 +312,7 @@ async def post_game_results(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Game not found",
         )
+    await require_game_mutation_access(db, game=game, user=current_user)
 
     try:
         ta: int = int(payload.team_a_score)
@@ -441,6 +462,7 @@ async def list_game_results(
 
     # Make sure rows is iterable for the loop (fix mypy union-attr error)
     rows = rows or []
+    rows = await publicly_listable_games(db, rows)
 
     out: list[dict[str, Any]] = []
     for g in rows:
@@ -488,6 +510,7 @@ async def list_game_results(
 async def get_game_metrics(
     game_id: str,
     db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[models.User | None, Depends(get_current_user_optional)],
 ) -> dict[str, Any]:
     """
     Get lightweight game metrics snapshot for REST fallback.
@@ -498,6 +521,7 @@ async def get_game_metrics(
     game = await crud.get_game(db, game_id=game_id)
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
+    await require_game_read_access(db, game=game, user=current_user)
 
     # Get extras from the game's extras_totals field
     extras_totals = game.extras_totals or {}
