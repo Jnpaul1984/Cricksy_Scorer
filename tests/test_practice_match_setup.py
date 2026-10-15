@@ -9,6 +9,7 @@ from backend.services import practice_match_setup_service
 from backend.services.practice_match_setup_service import (
     PracticeSideSelection,
     prepare_practice_match_setup,
+    serialize_practice_match_setup,
 )
 from backend.sql_app import models
 
@@ -160,6 +161,19 @@ async def test_allows_one_source_squad_to_be_split_and_clears_deselected_roles(
     assert setup.team_a.wicketkeeper_canonical_player_id is None
     assert setup.match_rules["overs"] == 12
     assert setup.match_rules["wicket_limits"] == {"team_a": 5, "team_b": 5}
+    handoff = serialize_practice_match_setup(setup)
+    assert handoff["team_a"]["source_squad_id"] == "shared-squad"  # type: ignore[index]
+    assert handoff["team_b"]["source_squad_id"] == "shared-squad"  # type: ignore[index]
+    assert handoff["match_rules"]["sides"] == {  # type: ignore[index]
+        "team_a": {
+            "source_squad_id": "shared-squad",
+            "canonical_player_ids": list(setup.team_a.canonical_player_ids),
+        },
+        "team_b": {
+            "source_squad_id": "shared-squad",
+            "canonical_player_ids": list(setup.team_b.canonical_player_ids),
+        },
+    }
 
 
 @pytest.mark.asyncio
