@@ -248,7 +248,7 @@ watch(organizationId, resetImport);
             >Player name header
             <input v-model="mapping.player_name" placeholder="Student Name" /></label
           ><label
-            >Student ID header
+            >External reference header (optional)
             <input v-model="mapping.student_identifier" placeholder="ID Number" /></label
           ><label>Year group header <input v-model="mapping.year_group" placeholder="Form" /></label
           ><label
@@ -292,7 +292,7 @@ watch(organizationId, resetImport);
               <td>{{ row.source_row_number }}</td>
               <td>
                 <strong>{{ row.values.player_name || 'Missing name' }}</strong
-                ><br />ID: {{ row.values.student_identifier || '—' }}<br />Year:
+                ><br />External ref: {{ row.values.student_identifier || '—' }}<br />Year:
                 {{ row.values.year_group || '—' }}<br />Team: {{ row.values.team_name || '—' }}
               </td>
               <td>

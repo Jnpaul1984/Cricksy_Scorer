@@ -129,7 +129,8 @@ describe('Club Free shared organization journey', () => {
       req.reply(players),
     )
     cy.intercept('POST', '**/api/organizations/club-a/players', req => {
-      expect(req.body.player_name).to.equal(player.player_name)
+      // Issue 608: coaches add players by name only; IDs are generated server-side.
+      expect(req.body).to.deep.equal({ player_name: player.player_name })
       req.reply({ statusCode: 201, body: player })
     }).as('createPlayer')
     cy.intercept('POST', '**/api/organizations/club-a/player-imports/preview', {
@@ -264,6 +265,8 @@ describe('Club Free shared organization journey', () => {
     cy.wait('@createTeam')
 
     cy.contains('a', 'Players').click()
+    cy.contains('label', 'Local player identifier').should('not.exist')
+    cy.get('form.editor input:visible').should('have.length', 1)
     cy.contains('label', 'Player name').find('input').type(player.player_name)
     cy.contains('button', 'Add to roster').click()
     cy.wait('@createPlayer')

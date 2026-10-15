@@ -916,3 +916,53 @@ async def test_postgres_import_schema_contract(school_client: TestClient) -> Non
         assert "ON DELETE SET NULL" in definitions["fk_school_player_imports_actor"]
         assert "previewed" in definitions["ck_school_player_imports_status"]
         assert "applied" in definitions["ck_school_player_imports_status"]
+
+
+async def test_issue_608_name_only_import_reuses_name_only_roster_identity_explicitly(
+    school_client: TestClient,
+) -> None:
+    owner = register_user(school_client, "import-name-only@example.com")
+    organization = create_school(school_client, owner, "Name Only Import School")
+    existing = _create_roster_player(school_client, owner, organization["id"], name="Maya Singh")
+    assert existing["student_identifier"] is None
+
+    preview = _preview(
+        school_client, owner, organization["id"], b"player_name\nMaya Singh\n"
+    ).json()
+    row = preview["rows"][0]
+    # A matching name alone is a review signal, never proof of identity.
+    assert row["classification"] == "ambiguous_needs_review"
+    assert [c["school_player_membership_id"] for c in row["candidate_memberships"]] == [
+        existing["id"]
+    ]
+
+    applied = school_client.post(
+        _apply_url(organization["id"], preview["import_id"]),
+        json={
+            "resolutions": [
+                {
+                    "source_row_number": 2,
+                    "action": "use_existing",
+                    "school_player_membership_id": existing["id"],
+                }
+            ]
+        },
+        headers=owner.headers,
+    )
+    assert applied.status_code == 200, applied.text
+    result_row = applied.json()["rows"][0]
+    assert result_row["school_player_membership_id"] == existing["id"]
+    assert result_row["player_profile_id"] == existing["player_profile_id"]
+
+    session_maker = school_client.session_maker  # type: ignore[attr-defined]
+    async with session_maker() as session:
+        profile_count = await session.scalar(
+            select(func.count())
+            .select_from(PlayerProfile)
+            .where(PlayerProfile.player_name == "Maya Singh")
+        )
+        membership = await session.get(SchoolPlayerMembership, existing["id"])
+    assert profile_count == 1
+    assert membership is not None
+    assert membership.player_profile_id == existing["player_profile_id"]
+    assert membership.student_identifier is None

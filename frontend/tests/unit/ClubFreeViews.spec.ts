@@ -30,7 +30,8 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/services/schoolAdminApi');
-vi.mock('vue-router', async () => {
+vi.mock('vue-router', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('vue-router')>();
   const { reactive } = await import('vue');
   const route = reactive(mocks.route);
   mocks.setRoute = (organizationType, organizationId) => {
@@ -39,6 +40,7 @@ vi.mock('vue-router', async () => {
     route.fullPath = `/${organizationType === 'club' ? 'clubs' : 'schools'}/${organizationId}`;
   };
   return {
+    ...actual,
     useRoute: () => route,
     useRouter: () => ({ push: mocks.push }),
     RouterLink: { props: ['to'], template: '<a :href="String(to)"><slot /></a>' },
