@@ -17,7 +17,8 @@ import SchoolTeamRosterView from '@/views/school/SchoolTeamRosterView.vue';
 import SchoolTeamsView from '@/views/school/SchoolTeamsView.vue';
 
 vi.mock('@/services/schoolAdminApi');
-vi.mock('vue-router', () => ({
+vi.mock('vue-router', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('vue-router')>()),
   useRoute: () => ({
     params: { organizationId: 'school-a', teamId: 'team-a' },
     meta: { organizationType: 'school' },
@@ -584,5 +585,174 @@ describe('Phase 7H School administration views', () => {
     organizationId.value = 'school-b';
     await flushPromises();
     expect(wrapper.text()).not.toContain('Alex Lee');
+  });
+});
+
+describe('Issue 608 Workstream A: name-only School and Club player entry', () => {
+  const legacyPlayer = {
+    id: 'sp-legacy',
+    organization_id: 'school-a',
+    player_profile_id: 'profile-legacy',
+    player_name: 'Asha',
+    status: 'active' as const,
+    student_identifier: 'Legacy  S1',
+    year_group: 'Year 8',
+    created_by_user_id: null,
+    created_at: '',
+    updated_at: '',
+  };
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    vi.mocked(schoolApi.listSchoolPlayers).mockResolvedValue([]);
+    vi.mocked(schoolApi.createSchoolPlayer).mockResolvedValue({} as never);
+    vi.mocked(schoolApi.updateSchoolPlayer).mockResolvedValue({} as never);
+  });
+
+  function mountClub(role: SchoolMembershipRole) {
+    const clubContext: SchoolContext = {
+      ...context(role),
+      organizationType: computed(() => 'club'),
+      organizationBasePath: computed(() => organizationBasePath('club')),
+      terminology: computed(() => organizationTerminology('club')),
+    };
+    return mount(SchoolPlayersView, {
+      global: { provide: { [schoolContextKey as symbol]: clubContext } },
+    });
+  }
+
+  it.each(['school', 'club'] as const)(
+    'adds a %s player with a name only and sends no identifier, group or role',
+    async (kind) => {
+      const wrapper =
+        kind === 'club' ? mountClub('coach') : mountWithContext(SchoolPlayersView, 'coach');
+      await flushPromises();
+      const form = wrapper.get('form.editor');
+      const requiredInputs = form.findAll('input[required]');
+      expect(requiredInputs).toHaveLength(1);
+      expect(form.text()).toContain('Player name');
+      expect(form.text()).not.toMatch(/Local player/i);
+      expect(form.text()).not.toMatch(/captain|wicketkeeper/i);
+      // Optional details are collapsed by default and nothing outside them is an ID field.
+      const optional = form.get('[data-test="add-player-optional-details"]');
+      expect(optional.attributes('open')).toBeUndefined();
+      expect(
+        form.findAll('input').filter((input) => !optional.element.contains(input.element)),
+      ).toHaveLength(1);
+
+      await requiredInputs[0].setValue('Maya Singh');
+      await form.trigger('submit');
+      await flushPromises();
+
+      expect(schoolApi.createSchoolPlayer).toHaveBeenCalledTimes(1);
+      expect(schoolApi.createSchoolPlayer).toHaveBeenCalledWith('school-a', {
+        player_name: 'Maya Singh',
+      });
+      expect(wrapper.text()).toContain(
+        `Player added to the ${kind === 'club' ? 'Club' : 'School'} master roster.`,
+      );
+    },
+  );
+
+  it('still accepts an optional group and external reference without requiring them', async () => {
+    const wrapper = mountWithContext(SchoolPlayersView, 'coach');
+    await flushPromises();
+    const form = wrapper.get('form.editor');
+    const optional = form.get('[data-test="add-player-optional-details"]');
+    expect(optional.text()).toContain('External reference');
+    expect(optional.text()).toContain('need not be unique');
+    const [group, reference] = optional.findAll('input');
+    await form.get('input[required]').setValue('Maya Singh');
+    await group.setValue('Year 9');
+    await reference.setValue('REG-7');
+    await form.trigger('submit');
+    await flushPromises();
+
+    expect(schoolApi.createSchoolPlayer).toHaveBeenCalledWith('school-a', {
+      player_name: 'Maya Singh',
+      year_group: 'Year 9',
+      student_identifier: 'REG-7',
+    });
+  });
+
+  it('lists same-name players as distinct rows without a technical ID column', async () => {
+    vi.mocked(schoolApi.listSchoolPlayers).mockResolvedValue([
+      { ...legacyPlayer, id: 'sp-one', player_profile_id: 'profile-one', student_identifier: null },
+      { ...legacyPlayer, id: 'sp-two', player_profile_id: 'profile-two', student_identifier: 'S1' },
+    ]);
+    const wrapper = mountWithContext(SchoolPlayersView, 'coach');
+    await flushPromises();
+    const headers = wrapper.findAll('th').map((th) => th.text());
+    expect(headers).toEqual(['Player', 'Group', 'Status', 'Actions']);
+    const rows = wrapper.findAll('tbody tr');
+    expect(rows).toHaveLength(2);
+    expect(rows[0].text()).toContain('Asha');
+    expect(rows[0].text()).not.toContain('Ref:');
+    expect(rows[1].text()).toContain('Ref: S1');
+    expect(wrapper.text()).not.toContain('profile-one');
+    expect(wrapper.text()).not.toContain('sp-one');
+  });
+
+  it('shows automatic IDs read-only and leaves untouched legacy references unchanged', async () => {
+    vi.mocked(schoolApi.listSchoolPlayers).mockResolvedValue([legacyPlayer]);
+    const wrapper = mountWithContext(SchoolPlayersView, 'coach');
+    await flushPromises();
+    await wrapper
+      .findAll('button')
+      .find((b) => b.text() === 'Edit metadata')!
+      .trigger('click');
+
+    const dialog = wrapper.get('dialog');
+    expect(dialog.text()).toContain('External reference (optional)');
+    expect(dialog.text()).not.toContain('Local player identifier');
+    const support = dialog.get('[data-test="player-support-details"]');
+    expect(support.text()).toContain('sp-legacy');
+    expect(support.text()).toContain('profile-legacy');
+    expect(support.findAll('input')).toHaveLength(0);
+
+    // Change only the group: the legacy reference (with its original spacing) is not resent.
+    await dialog.findAll('input')[0].setValue('Year 9');
+    await dialog.get('form').trigger('submit');
+    await flushPromises();
+    expect(schoolApi.updateSchoolPlayer).toHaveBeenCalledWith('school-a', 'sp-legacy', {
+      year_group: 'Year 9',
+    });
+  });
+
+  it('makes no update request when nothing was changed', async () => {
+    vi.mocked(schoolApi.listSchoolPlayers).mockResolvedValue([legacyPlayer]);
+    const wrapper = mountWithContext(SchoolPlayersView, 'coach');
+    await flushPromises();
+    await wrapper
+      .findAll('button')
+      .find((b) => b.text() === 'Edit metadata')!
+      .trigger('click');
+    await wrapper.get('dialog form').trigger('submit');
+    await flushPromises();
+    expect(schoolApi.updateSchoolPlayer).not.toHaveBeenCalled();
+    expect(wrapper.find('dialog form').exists()).toBe(false);
+  });
+
+  it('clears an external reference only when the coach explicitly empties it', async () => {
+    vi.mocked(schoolApi.listSchoolPlayers).mockResolvedValue([legacyPlayer]);
+    const wrapper = mountWithContext(SchoolPlayersView, 'coach');
+    await flushPromises();
+    await wrapper
+      .findAll('button')
+      .find((b) => b.text() === 'Edit metadata')!
+      .trigger('click');
+    await wrapper.get('dialog').findAll('input')[1].setValue('');
+    await wrapper.get('dialog form').trigger('submit');
+    await flushPromises();
+    expect(schoolApi.updateSchoolPlayer).toHaveBeenCalledWith('school-a', 'sp-legacy', {
+      student_identifier: null,
+    });
+  });
+
+  it('relabels the import identifier column as an optional external reference', async () => {
+    const wrapper = mountWithContext(SchoolImportView, 'coach');
+    await flushPromises();
+    expect(wrapper.text()).toContain('External reference header (optional)');
+    expect(wrapper.text()).not.toContain('Student ID header');
   });
 });

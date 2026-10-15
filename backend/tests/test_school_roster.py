@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import uuid
 
 import pytest
 from fastapi.testclient import TestClient
@@ -20,6 +21,7 @@ from backend.sql_app.models import (
 from backend.tests.school_test_helpers import (
     RegisteredUser,
     add_membership,
+    create_club,
     create_school,
     register_user,
 )
@@ -745,3 +747,117 @@ async def test_postgres_schema_creator_delete_and_organization_delete_contract(
     async with session_maker() as session:
         assert await session.get(SchoolPlayerMembership, player["id"]) is None
         assert await session.get(PlayerProfile, player["player_profile_id"]) is not None
+
+
+def _assert_uuid(value: str) -> None:
+    assert str(uuid.UUID(value)) == value
+
+
+@pytest.mark.parametrize("organization_kind", ["school", "club"])
+async def test_issue_608_name_only_entry_generates_stable_distinct_ids(
+    school_client: TestClient,
+    organization_kind: str,
+) -> None:
+    owner = register_user(school_client, f"name-only-{organization_kind}@example.com")
+    coach = register_user(school_client, f"name-only-{organization_kind}-coach@example.com")
+    create_org = create_club if organization_kind == "club" else create_school
+    organization = create_org(school_client, owner, f"Name Only {organization_kind.title()}")
+    add_membership(school_client, owner, organization["id"], coach.id, "coach")
+    url = _players_url(organization["id"])
+
+    first = school_client.post(url, json={"player_name": "Maya Singh"}, headers=coach.headers)
+    second = school_client.post(url, json={"player_name": "Maya Singh"}, headers=coach.headers)
+    assert first.status_code == second.status_code == 201, (first.text, second.text)
+    first_body, second_body = first.json(), second.json()
+    for body in (first_body, second_body):
+        _assert_uuid(body["id"])
+        _assert_uuid(body["player_profile_id"])
+        assert body["student_identifier"] is None
+        assert body["year_group"] is None
+        assert body["status"] == "active"
+    # Same-name players are never merged: each gets its own membership and canonical profile.
+    assert first_body["id"] != second_body["id"]
+    assert first_body["player_profile_id"] != second_body["player_profile_id"]
+
+    def ids(body: dict) -> tuple[str, str]:
+        return body["id"], body["player_profile_id"]
+
+    reloaded = school_client.get(f"{url}/{first_body['id']}", headers=coach.headers)
+    grouped = school_client.patch(
+        f"{url}/{first_body['id']}", json={"year_group": "Under 13"}, headers=coach.headers
+    )
+    deactivated = school_client.patch(
+        f"{url}/{first_body['id']}", json={"status": "inactive"}, headers=owner.headers
+    )
+    reactivated = school_client.patch(
+        f"{url}/{first_body['id']}", json={"status": "active"}, headers=owner.headers
+    )
+    for response in (reloaded, grouped, deactivated, reactivated):
+        assert response.status_code == 200, response.text
+        assert ids(response.json()) == ids(first_body)
+    assert reactivated.json()["year_group"] == "Under 13"
+    assert reactivated.json()["student_identifier"] is None
+
+    listed = school_client.get(url, params={"status": "all"}, headers=coach.headers)
+    assert sorted(ids(item) for item in listed.json()) == sorted(
+        [ids(first_body), ids(second_body)]
+    )
+
+    session_maker = school_client.session_maker  # type: ignore[attr-defined]
+    async with session_maker() as session:
+        profile_count = await session.scalar(
+            select(func.count())
+            .select_from(PlayerProfile)
+            .where(PlayerProfile.player_name == "Maya Singh")
+        )
+    assert profile_count == 2
+
+
+async def test_issue_608_external_references_stay_optional_nonunique_and_untouched(
+    school_client: TestClient,
+) -> None:
+    owner = register_user(school_client, "external-ref-owner@example.com")
+    organization = create_school(school_client, owner, "External Reference School")
+    url = _players_url(organization["id"])
+
+    shared_a = _create_player(
+        school_client, owner, organization["id"], name="Ref A", student_identifier="REG-1"
+    )
+    shared_b = _create_player(
+        school_client, owner, organization["id"], name="Ref B", student_identifier="REG-1"
+    )
+    blank = _create_player(
+        school_client,
+        owner,
+        organization["id"],
+        name="No Ref",
+        student_identifier=None,
+        year_group=None,
+    )
+    assert shared_a["student_identifier"] == shared_b["student_identifier"] == "REG-1"
+    assert shared_a["player_profile_id"] != shared_b["player_profile_id"]
+    assert blank["student_identifier"] is None
+
+    # A legacy, un-normalized manual value survives an unrelated group-only update.
+    session_maker = school_client.session_maker  # type: ignore[attr-defined]
+    async with session_maker() as session:
+        session.add(PlayerProfile(player_id="legacy-profile", player_name="Legacy Player"))
+        session.add(
+            SchoolPlayerMembership(
+                id="legacy-membership",
+                organization_id=organization["id"],
+                player_profile_id="legacy-profile",
+                status="active",
+                student_identifier="  Legacy   ID 7 ",
+                year_group="Old Group",
+            )
+        )
+        await session.commit()
+
+    updated = school_client.patch(
+        f"{url}/legacy-membership", json={"year_group": "New Group"}, headers=owner.headers
+    )
+    assert updated.status_code == 200, updated.text
+    assert updated.json()["student_identifier"] == "  Legacy   ID 7 "
+    assert updated.json()["year_group"] == "New Group"
+    assert updated.json()["player_profile_id"] == "legacy-profile"

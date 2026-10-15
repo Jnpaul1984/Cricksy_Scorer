@@ -455,6 +455,65 @@ describe('Phase 7I School match setup', () => {
     },
   );
 
+  it('offers match-day roles only from the selected XI and clears them on deselection', async () => {
+    const wrapper = mountView();
+    await flushPromises();
+    await chooseTeams(wrapper);
+    const sideA = wrapper.get('ul[aria-label="Team A roster"]');
+    for (const checkbox of sideA.findAll('input[type="checkbox"]').slice(0, 11)) {
+      await checkbox.trigger('change');
+    }
+    const captainOptions = wrapper
+      .get('#captain-a')
+      .findAll('option')
+      .map((option) => option.attributes('value'))
+      .filter(Boolean);
+    expect(captainOptions).toEqual(roster('team-a').slice(0, 11).map((player) => player.id));
+
+    // Existing dual-role support: one selected player may be captain and wicketkeeper.
+    await wrapper.get('#captain-a').setValue('team-a-membership-0');
+    await wrapper.get('#keeper-a').setValue('team-a-membership-0');
+    await sideA.findAll('input[type="checkbox"]')[0].trigger('change');
+
+    expect(wrapper.text()).toContain('Selected 10/11');
+    expect(wrapper.get('#captain-a').element).toHaveProperty('value', '');
+    expect(wrapper.get('#keeper-a').element).toHaveProperty('value', '');
+    expect(
+      wrapper
+        .get('#keeper-a')
+        .findAll('option')
+        .map((option) => option.attributes('value')),
+    ).not.toContain('team-a-membership-0');
+  });
+
+  it('submits one selected player as both captain and wicketkeeper', async () => {
+    const wrapper = mountView();
+    await flushPromises();
+    await chooseTeams(wrapper);
+    for (const side of ['Team A', 'Team B']) {
+      const list = wrapper.get(`ul[aria-label="${side} roster"]`);
+      for (const checkbox of list.findAll('input[type="checkbox"]').slice(0, 11)) {
+        await checkbox.trigger('change');
+      }
+    }
+    await wrapper.get('#captain-a').setValue('team-a-membership-2');
+    await wrapper.get('#keeper-a').setValue('team-a-membership-2');
+    await wrapper.get('#captain-b').setValue('team-b-membership-0');
+    await wrapper.get('#keeper-b').setValue('team-b-membership-1');
+    await wrapper.get('[data-testid="create-school-match"]').trigger('submit');
+    await flushPromises();
+
+    expect(schoolApi.createSchoolMatch).toHaveBeenCalledWith(
+      'school-a',
+      expect.objectContaining({
+        team_a: expect.objectContaining({
+          captain_membership_id: 'team-a-membership-2',
+          wicketkeeper_membership_id: 'team-a-membership-2',
+        }),
+      }),
+    );
+  });
+
   it('does not expose or call match setup for a viewer', async () => {
     const wrapper = mountView(context(ref('school-a'), false));
     await flushPromises();

@@ -1,3 +1,5 @@
+import { expectRenderedInputs } from '../support/renderedInputs'
+
 const timestamp = '2026-01-01T00:00:00Z'
 
 describe('Club Free shared organization journey', () => {
@@ -129,7 +131,8 @@ describe('Club Free shared organization journey', () => {
       req.reply(players),
     )
     cy.intercept('POST', '**/api/organizations/club-a/players', req => {
-      expect(req.body.player_name).to.equal(player.player_name)
+      // Issue 608: coaches add players by name only; IDs are generated server-side.
+      expect(req.body).to.deep.equal({ player_name: player.player_name })
       req.reply({ statusCode: 201, body: player })
     }).as('createPlayer')
     cy.intercept('POST', '**/api/organizations/club-a/player-imports/preview', {
@@ -264,6 +267,17 @@ describe('Club Free shared organization journey', () => {
     cy.wait('@createTeam')
 
     cy.contains('a', 'Players').click()
+    // Issue 608: Player name is the only input shown until Optional details is expanded.
+    const optionalDetails = '[data-test="add-player-optional-details"]'
+    cy.contains('label', 'Local player identifier').should('not.exist')
+    cy.get(optionalDetails).should('not.have.attr', 'open')
+    expectRenderedInputs('form.editor', ['Player name'])
+    cy.contains(`${optionalDetails} summary`, 'Optional details').click()
+    cy.get(optionalDetails).should('have.attr', 'open')
+    expectRenderedInputs('form.editor', ['Player name', 'Group', 'External reference'])
+    cy.contains(`${optionalDetails} summary`, 'Optional details').click()
+    cy.get(optionalDetails).should('not.have.attr', 'open')
+    expectRenderedInputs('form.editor', ['Player name'])
     cy.contains('label', 'Player name').find('input').type(player.player_name)
     cy.contains('button', 'Add to roster').click()
     cy.wait('@createPlayer')
