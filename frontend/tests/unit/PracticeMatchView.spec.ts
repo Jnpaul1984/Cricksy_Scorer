@@ -69,6 +69,25 @@ describe('PracticeMatchView', () => {
     expect(api.getPracticeMatch).toHaveBeenLastCalledWith('org-1', 'practice-1');
     expect(wrapper.text()).toContain('latest private state');
   });
+  it('renders the familiar private scorer from frozen labels and sends supported runs, extras, and wicket only to private endpoints', async () => {
+    routeQuery.value = { gameId: 'practice-1' };
+    vi.mocked(api.getPracticeMatch).mockResolvedValue(state(4, 'in_progress'));
+    vi.mocked(api.scorePracticeDelivery).mockResolvedValue(state(5, 'in_progress'));
+    const wrapper = mount(PracticeMatchView, { global: { provide: { [schoolContextKey as symbol]: context } } });
+    await flushPromises();
+    expect(wrapper.get('[data-testid="practice-familiar-scorer"]').text()).toContain('PRIVATE PRACTICE');
+    expect(wrapper.text()).toContain('A 0');
+    expect(wrapper.text()).toContain('B 0');
+    for (const runs of [0, 1, 2, 3, 4, 5, 6]) expect(wrapper.get(`[data-testid="score-${runs}"]`).exists()).toBe(true);
+    for (const extra of ['wd', 'nb', 'b', 'lb']) expect(wrapper.get(`[data-testid="extra-${extra}"]`).exists()).toBe(true);
+    await wrapper.get('[data-testid="extra-wd"]').trigger('click');
+    await flushPromises();
+    expect(api.scorePracticeDelivery).toHaveBeenLastCalledWith('org-1', 'practice-1', expect.objectContaining({ expected_revision: 4, extra: 'wd', runs_scored: 1 }));
+    await wrapper.get('[data-testid="wicket"]').trigger('click');
+    await flushPromises();
+    expect(api.scorePracticeDelivery).toHaveBeenLastCalledWith('org-1', 'practice-1', expect.objectContaining({ is_wicket: true, dismissal_type: 'bowled', dismissed_player_id: 'a-player-0' }));
+    expect(api.createPracticeMatch).not.toHaveBeenCalled();
+  });
   it('recovers a persisted started practice by starting its first innings once', async () => {
     routeQuery.value = { gameId: 'practice-1' };
     vi.mocked(api.getPracticeMatch).mockResolvedValue(state(1, 'started', 1, 'team_a', null));
