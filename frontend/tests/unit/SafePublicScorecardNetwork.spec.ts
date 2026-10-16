@@ -305,4 +305,26 @@ describe('safe public scorecard network boundary', () => {
     document.body.innerHTML = '';
     delete (window as any).app;
   });
+
+  it('uses the dedicated no-auth practice endpoint and presents a revoked practice scorecard as unavailable', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 404,
+      statusText: 'Not Found',
+      json: async () => ({ detail: 'Practice scorecard not found' }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { default: SchoolPublicScorecardView } = await import('@/views/school/SchoolPublicScorecardView.vue');
+    const wrapper = mount(SchoolPublicScorecardView, {
+      props: { gameId: 'practice_0123456789abcdef', practice: true },
+    });
+    await flushPromises();
+
+    expect(wrapper.text()).toContain('Practice scorecard unavailable');
+    const [requestedUrl, requestInit] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(new URL(requestedUrl).pathname).toBe('/public/practice-scorecards/practice_0123456789abcdef');
+    expect(new Headers(requestInit.headers).has('Authorization')).toBe(false);
+    wrapper.unmount();
+  });
 });

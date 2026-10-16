@@ -1088,3 +1088,52 @@ async def public_scorecard(db: AsyncSession, *, game_id: str) -> PublicSchoolSco
         batting_scorecard=_public_card(game.batting_scorecard),
         bowling_scorecard=_public_card(game.bowling_scorecard),
     )
+
+
+async def public_practice_scorecard(db: AsyncSession, *, game_id: str) -> PublicSchoolScorecard:
+    """Purpose-labelled public projection available only after explicit coach publication.
+
+    It intentionally bypasses neither the official scorecard route nor any aggregate.
+    """
+    game = await db.get(models.Game, game_id)
+    if (
+        game is None
+        or game.match_purpose != "practice"
+        or game.publication_state not in {"published_live", "published_final"}
+    ):
+        raise _not_found("Practice scorecard")
+    organization_id = school_game_organization_id(game)
+    if organization_id is None or not await organization_has_capability(
+        db, organization_id=organization_id, capability="school_live_scorecards"
+    ):
+        raise _not_found("Practice scorecard")
+    organization = await db.get(models.Organization, organization_id)
+    if (
+        organization is None
+        or organization.organization_type not in FREE_CRICKET_ORGANIZATION_TYPES
+    ):
+        raise _not_found("Practice scorecard")
+    return PublicSchoolScorecard(
+        game_id=game.id,
+        organization_type=organization.organization_type,
+        publication_state=game.publication_state,
+        status=game.status.value,
+        team_a=_public_team(game.team_a),
+        team_b=_public_team(game.team_b),
+        match_type=game.match_type,
+        overs_limit=game.overs_limit,
+        days_limit=game.days_limit,
+        overs_per_day=game.overs_per_day,
+        toss_winner_team=game.toss_winner_team,
+        decision=game.decision,
+        batting_team_name=game.batting_team_name,
+        bowling_team_name=game.bowling_team_name,
+        total_runs=game.total_runs,
+        total_wickets=game.total_wickets,
+        overs_completed=game.overs_completed,
+        balls_this_over=game.balls_this_over,
+        current_inning=game.current_inning,
+        result=authoritative_result_text(game.result),
+        batting_scorecard=_public_card(game.batting_scorecard),
+        bowling_scorecard=_public_card(game.bowling_scorecard),
+    )

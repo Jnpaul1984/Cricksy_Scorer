@@ -39,6 +39,9 @@ const bowling = computed(() => batting.value === sideA.value ? sideB.value : sid
 const scorer = usePrivatePracticeScorerAdapter(state, sideA, sideB, batting, bowling);
 const canCreate = computed(() => canCreateSchoolMatch.value && teamAId.value && teamBId.value && sideA.value.length >= 2 && sideB.value.length >= 2);
 const revision = computed(() => state.value?.revision ?? 0);
+const publicPracticeHref = computed(() => gameId.value
+  ? router.resolve({ name: 'public-practice-scorecard', params: { gameId: gameId.value } }).href
+  : '');
 const currentStriker = scorer.strikerId;
 const currentNonStriker = scorer.nonStrikerId;
 const currentBowler = scorer.bowlerId;
@@ -198,21 +201,9 @@ watch(() => route.query.gameId, async () => { clearPrivateWorkflow(); const requ
       <button :disabled="!canCreate || loading" data-testid="create-practice" @click="createAndStart">Create and start private practice</button>
     </template>
     <section v-else-if="state" class="scoring" data-testid="practice-scoring">
-      <PracticeScorerShell :status="state.status" :revision="revision" :total-runs="scorer.totalRuns.value" :total-wickets="scorer.totalWickets.value" :overs="scorer.overs.value" :inning="scorer.inning.value" :target="scorer.target.value" :striker-name="scorer.strikerName.value" :non-striker-name="scorer.nonStrikerName.value" :bowler-name="scorer.bowlerName.value" :can-score="state.status === 'in_progress' && !needsNextOver" :needs-next-over="needsNextOver" :loading="loading" :start-locked="firstInningsStartAttempted" :publication-state="state.publication_state" :can-publish="canPublishScorecards" @score="score" @extra="scoreExtra" @wicket="scoreWicket" @publication="setPracticePublication" @undo="undo" @start-over="beginNextOver" @start-innings="startVisibleInnings" @reload="reloadPrivateWorkflow" />
+      <PracticeScorerShell :status="state.status" :revision="revision" :total-runs="scorer.totalRuns.value" :total-wickets="scorer.totalWickets.value" :overs="scorer.overs.value" :inning="scorer.inning.value" :target="scorer.target.value" :striker-name="scorer.strikerName.value" :non-striker-name="scorer.nonStrikerName.value" :bowler-name="scorer.bowlerName.value" :can-score="state.status === 'in_progress' && !needsNextOver" :needs-next-over="needsNextOver" :loading="loading" :start-locked="firstInningsStartAttempted" :publication-state="state.publication_state" :can-publish="canPublishScorecards" :public-href="publicPracticeHref" @score="score" @extra="scoreExtra" @wicket="scoreWicket" @publication="setPracticePublication" @undo="undo" @start-over="beginNextOver" @start-innings="startVisibleInnings" @reload="reloadPrivateWorkflow" />
       <div v-if="needsNextOver"><label>Next over bowler <select v-model="nextOverBowlerId" data-testid="next-over-bowler"><option v-for="player in bowling" :key="player.player_profile_id" :value="player.player_profile_id">{{ player.player_name }}</option></select></label></div>
     </section>
-    <section v-else-if="state && false" class="scoring"><!-- legacy minimal controls retained only as source history
-      <p>Private revision {{ revision }} · {{ state.status }} · {{ String(state.snapshot.total_runs ?? 0) }}/{{ String(state.snapshot.total_wickets ?? 0) }}</p>
-      <p v-if="state.snapshot.target">Target {{ String(state.snapshot.target) }}</p>
-      <template v-if="state.status === 'started'">
-        <button :disabled="loading || firstInningsStartAttempted" data-testid="start-first-innings" @click="startFirstInnings">Start first innings</button>
-        <button :disabled="loading" data-testid="reload-practice" @click="reloadPrivateWorkflow">Reload private practice</button>
-      </template>
-      <button v-for="runs in [0, 1, 4, 6]" :key="runs" :disabled="loading || state.status !== 'in_progress' || needsNextOver" :data-testid="`score-${runs}`" @click="score(runs)">+{{ runs }}</button>
-      <button :disabled="loading || state.status !== 'in_progress' || needsNextOver" @click="score(0, true)">Wicket</button><button :disabled="loading" data-testid="undo-ball" @click="undo">Undo last ball</button>
-      <div v-if="needsNextOver"><label>Next over bowler <select v-model="nextOverBowlerId" data-testid="next-over-bowler"><option v-for="player in bowling" :key="player.player_profile_id" :value="player.player_profile_id">{{ player.player_name }}</option></select></label><button :disabled="loading" data-testid="start-next-over" @click="beginNextOver">Start next over</button></div>
-      <button v-if="state.status === 'innings_break' && inning === 1" :disabled="loading" data-testid="start-second-innings" @click="startSecondInnings">Start second innings</button>
-    --></section>
     <section v-else-if="gameId" class="scoring">
       <p>Private practice setup is still loading.</p>
       <button :disabled="loading" data-testid="reload-practice" @click="reloadPrivateWorkflow">Reload private practice</button>

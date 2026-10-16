@@ -236,6 +236,7 @@ const router = createRouter({
       component: () => import('@/views/school/SchoolPublicScorecardView.vue'),
       props: true,
     },
+    { path: '/practice-scorecards/:gameId', name: 'public-practice-scorecard', component: () => import('@/views/school/SchoolPublicScorecardView.vue'), props: route => ({ gameId: String(route.params.gameId), practice: true }) },
     { path: '/community/:publicIdentifier/competitions/:competitionPublicKey', name: 'public-competition', component: () => import('@/views/PublicCompetitionView.vue'), props: true },
     { path: '/community/:publicIdentifier/competitions/:competitionPublicKey/fixtures/:fixturePublicIdentifier', name: 'public-fixture', component: () => import('@/views/PublicFixtureView.vue'), props: true },
     { path: '/community/:publicIdentifier/competitions/:competitionPublicKey/results/:fixturePublicIdentifier', name: 'public-result', component: () => import('@/views/PublicFixtureView.vue'), props: route => ({ ...route.params, resultOnly: true }) },

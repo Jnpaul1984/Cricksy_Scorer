@@ -7,10 +7,13 @@ import { schoolContextKey, type SchoolContext } from '@/composables/useSchoolCon
 import * as api from '@/services/schoolAdminApi';
 import PracticeMatchView from '@/views/school/PracticeMatchView.vue';
 
-const { routeQuery, replace } = vi.hoisted(() => ({ routeQuery: { value: {} as Record<string, string> }, replace: vi.fn() }));
+const { routeQuery, replace, resolve } = vi.hoisted(() => ({
+  routeQuery: { value: {} as Record<string, string> }, replace: vi.fn(),
+  resolve: vi.fn(({ params }: { params: { gameId: string } }) => ({ href: `/practice-scorecards/${params.gameId}` })),
+}));
 vi.mock('vue-router', () => ({
   useRoute: () => ({ query: routeQuery.value }),
-  useRouter: () => ({ replace }),
+  useRouter: () => ({ replace, resolve }),
 }));
 vi.mock('@/services/schoolAdminApi');
 
@@ -100,6 +103,7 @@ describe('PracticeMatchView', () => {
     await flushPromises();
     expect(api.updateSchoolMatchPublication).toHaveBeenCalledWith('org-1', 'practice-1', 'published_live');
     expect(wrapper.get('[data-testid="unpublish-practice"]').exists()).toBe(true);
+    expect(wrapper.get('[data-testid="public-practice-link"]').attributes('href')).toBe('/practice-scorecards/practice-1');
   });
   it('recovers a persisted started practice by starting its first innings once', async () => {
     routeQuery.value = { gameId: 'practice-1' };

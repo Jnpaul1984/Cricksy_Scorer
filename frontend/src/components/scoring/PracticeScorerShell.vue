@@ -4,7 +4,7 @@ import { computed, ref } from 'vue';
 const props = defineProps<{
   status: string; revision: number; totalRuns: number; totalWickets: number; overs: string; inning: number; target: number | null;
   strikerName: string; nonStrikerName: string; bowlerName: string; canScore: boolean; needsNextOver: boolean; loading: boolean; startLocked: boolean;
-  publicationState: 'private' | 'published_live' | 'published_final'; canPublish: boolean;
+  publicationState: 'private' | 'published_live' | 'published_final'; canPublish: boolean; publicHref: string;
 }>();
 const emit = defineEmits<{
   (event: 'score', runs: number): void; (event: 'extra', extra: 'wd' | 'nb' | 'b' | 'lb', runs: number): void;
@@ -41,7 +41,7 @@ const dismissalTypes = ['bowled', 'caught', 'lbw', 'stumped', 'run_out', 'hit_wi
       <div class="actions"><button class="wicket" data-testid="wicket" :disabled="!props.canScore || props.loading" @click="showWicket = true">Wicket</button><button class="undo" data-testid="undo-ball" :disabled="props.loading" @click="emit('undo')">Undo last ball</button></div>
       <div v-if="showWicket" class="wicket-dialog" role="dialog" aria-label="Record wicket"><h4>Record wicket</h4><label>Dismissal <select v-model="dismissalType"><option v-for="type in dismissalTypes" :key="type" :value="type">{{ type.replace('_', ' ') }}</option></select></label><fieldset><legend>Dismissed batter</legend><label><input v-model="dismissed" type="radio" value="striker"> {{ props.strikerName }}</label><label><input v-model="dismissed" type="radio" value="non_striker"> {{ props.nonStrikerName }}</label></fieldset><div><button class="quiet" type="button" @click="showWicket = false">Cancel</button><button class="wicket" type="button" data-testid="confirm-wicket" :disabled="!props.canScore || props.loading" @click="emit('wicket', { type: dismissalType, dismissed }); showWicket = false">Record wicket</button></div></div>
     </section>
-    <section class="publication" aria-label="Practice publication"><p><strong>{{ isPublished ? 'Organization publication is on' : 'Private by default' }}</strong> — practice results are excluded from public scorecards and team statistics.</p><template v-if="props.canPublish"><button v-if="!isPublished" class="publish" :disabled="props.loading" data-testid="publish-practice" @click="emit('publication', 'published_live')">Publish to organization</button><button v-else class="quiet" :disabled="props.loading" data-testid="unpublish-practice" @click="emit('publication', 'private')">Keep private</button></template></section>
+    <section class="publication" aria-label="Practice publication"><p><strong>{{ isPublished ? 'Practice scorecard published' : 'Private by default' }}</strong> — practice results remain excluded from official scorecards and team statistics.</p><a v-if="isPublished" :href="props.publicHref" data-testid="public-practice-link">View published practice scorecard</a><template v-if="props.canPublish"><button v-if="!isPublished" class="publish" :disabled="props.loading" data-testid="publish-practice" @click="emit('publication', 'published_live')">Publish practice scorecard</button><button v-else class="quiet" :disabled="props.loading" data-testid="unpublish-practice" @click="emit('publication', 'private')">Keep private</button></template></section>
     <p class="scope-note">Practice supports complete run, extra, wicket, undo, innings and over scoring. Shot maps, commentary, fielder attribution, delivery correction and analytics require dedicated private contracts.</p>
   </section>
 </template>

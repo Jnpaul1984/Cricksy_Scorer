@@ -923,6 +923,8 @@ export const updateSchoolFixtureYoutubeVideo = (
   );
 export const getPublicSchoolScorecard = (gameId: string) =>
   apiRequest<PublicSchoolScorecard>(`/public/school-scorecards/${encodeURIComponent(gameId)}`);
+export const getPublicPracticeScorecard = (gameId: string) =>
+  apiRequest<PublicSchoolScorecard>(`/public/practice-scorecards/${encodeURIComponent(gameId)}`);
 
 export const getOrganizationCommunitySettings = (organizationId: string) =>
   apiRequest<OrganizationCommunitySettings>(orgPath(organizationId, '/community-settings'));

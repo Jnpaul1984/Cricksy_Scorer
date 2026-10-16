@@ -5,6 +5,8 @@ from __future__ import annotations
 import pytest
 from sqlalchemy import select
 
+from backend.routes.school_matches import _practice_workflow_state
+from backend.services import school_competition_service
 from backend.services.practice_match_persistence_service import start_private_practice_match
 from backend.services.practice_match_workflow_service import (
     _persist,
@@ -13,7 +15,6 @@ from backend.services.practice_match_workflow_service import (
     start_practice_innings,
     undo_last_practice_delivery,
 )
-from backend.routes.school_matches import _practice_workflow_state
 from backend.sql_app.database import SessionLocal
 from backend.sql_app.models import Game, OrganizationMembership, PlayerProfile, User
 from backend.tests.test_practice_start_context import _draft
@@ -38,7 +39,9 @@ async def test_private_workflow_response_resolves_frozen_profile_labels_after_re
         profiles = {
             profile.player_id: profile.player_name
             for profile in (
-                await session.execute(select(PlayerProfile).where(PlayerProfile.player_id.in_(frozen_ids)))
+                await session.execute(
+                    select(PlayerProfile).where(PlayerProfile.player_id.in_(frozen_ids))
+                )
             ).scalars()
         }
         assert set(profiles) == set(frozen_ids)
@@ -65,7 +68,9 @@ async def test_private_workflow_response_resolves_frozen_profile_labels_after_re
         reloaded, reloaded_snapshot = await read_practice_workflow(
             session, organization_id=organization_id, actor_user_id=owner_id, game_id=game_id
         )
-        response = await _practice_workflow_state(session, reloaded, organization_id, reloaded_snapshot)
+        response = await _practice_workflow_state(
+            session, reloaded, organization_id, reloaded_snapshot
+        )
         assert response.frozen_sides["team_a"][0] == {
             "id": missing_id,
             "label": "Unavailable participant",
@@ -169,7 +174,9 @@ async def test_private_workflow_scores_two_short_innings_and_undoes(
         assert game.practice_start_context == {"version": 1, "first_batting_side": first_side}
 
 
-async def test_private_workflow_rejects_stale_revision_and_foreign_runtime_before_mutation() -> None:
+async def test_private_workflow_rejects_stale_revision_and_foreign_runtime_before_mutation() -> (
+    None
+):
     organization_id, owner_id, game_id = await _draft()
     async with SessionLocal() as session:
         game = await start_private_practice_match(
@@ -218,6 +225,38 @@ async def test_private_workflow_rejects_stale_revision_and_foreign_runtime_befor
                 expected_revision=game.practice_workflow_revision - 1,
             )
         assert getattr(exc_info.value, "status_code", None) == 409
+
+
+async def test_explicit_public_practice_scorecard_is_purpose_isolated_and_revocable() -> None:
+    organization_id, owner_id, game_id = await _draft(organization_type="club")
+    async with SessionLocal() as session:
+        game = await start_private_practice_match(
+            session,
+            organization_id=organization_id,
+            actor_user_id=owner_id,
+            game_id=game_id,
+            first_batting_side="team_a",
+        )
+        game.publication_state = "published_live"
+        await session.commit()
+
+        projection = await school_competition_service.public_practice_scorecard(
+            session, game_id=game_id
+        )
+        assert projection.game_id == game_id
+        assert projection.organization_type == "club"
+        assert projection.publication_state == "published_live"
+
+        # Practice must never leak through the official scorecard endpoint.
+        with pytest.raises(Exception) as official_error:
+            await school_competition_service.public_scorecard(session, game_id=game_id)
+        assert getattr(official_error.value, "status_code", None) == 404
+
+        game.publication_state = "private"
+        await session.commit()
+        with pytest.raises(Exception) as revoked_error:
+            await school_competition_service.public_practice_scorecard(session, game_id=game_id)
+        assert getattr(revoked_error.value, "status_code", None) == 404
 
 
 async def test_private_workflow_denies_viewer_and_disabled_membership() -> None:

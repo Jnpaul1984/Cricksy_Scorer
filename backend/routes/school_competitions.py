@@ -461,3 +461,13 @@ async def public_school_scorecard(
         return await school_competition_service.public_scorecard(db, game_id=game_id)
     except school_competition_service.SchoolCompetitionServiceError as exc:
         _raise_service_error(exc)
+
+
+@router.get("/public/practice-scorecards/{game_id}", response_model=PublicSchoolScorecard)
+async def public_practice_scorecard(
+    game_id: str, db: Annotated[AsyncSession, Depends(get_db)]
+) -> PublicSchoolScorecard:
+    try:
+        return await school_competition_service.public_practice_scorecard(db, game_id=game_id)
+    except school_competition_service.SchoolCompetitionServiceError as exc:
+        _raise_service_error(exc)
