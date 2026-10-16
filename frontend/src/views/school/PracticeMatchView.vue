@@ -22,6 +22,7 @@ const firstSide = ref<'team_a' | 'team_b'>('team_a'); const overs = ref(2);
 const state = ref<PracticeWorkflowState | null>(null); const gameId = ref('');
 const loading = ref(false); const error = ref(''); const notice = ref('');
 const nextOverBowlerId = ref('');
+const firstInningsStartAttempted = ref(false);
 let loadGeneration = 0;
 let organizationGeneration = 0;
 
@@ -55,17 +56,18 @@ function toggle(side: 'a' | 'b', id: string) {
   const selected = side === 'a' ? selectedA : selectedB;
   selected.value = selected.value.includes(id) ? selected.value.filter((value) => value !== id) : [...selected.value, id];
 }
-async function refetch(conflict = false) {
-  if (!gameId.value) return;
+async function refetch(conflict = false): Promise<boolean> {
+  if (!gameId.value) return false;
   const generation = ++loadGeneration; const requestedGameId = gameId.value; const requestedOrganizationId = organizationId.value;
   const loaded = await getPracticeMatch(requestedOrganizationId, requestedGameId);
-  if (generation !== loadGeneration || requestedGameId !== gameId.value || requestedOrganizationId !== organizationId.value) return;
+  if (generation !== loadGeneration || requestedGameId !== gameId.value || requestedOrganizationId !== organizationId.value) return false;
   state.value = loaded;
   frozenA.value = state.value.frozen_sides.team_a.map((player) => ({ id: player.id, player_profile_id: player.id, player_name: player.label || 'Unavailable participant', operationally_available: true } as SchoolTeamRosterPlayer));
   frozenB.value = state.value.frozen_sides.team_b.map((player) => ({ id: player.id, player_profile_id: player.id, player_name: player.label || 'Unavailable participant', operationally_available: true } as SchoolTeamRosterPlayer));
   if (conflict) notice.value = 'This practice match changed in another tab. The latest private state has been loaded.';
+  return true;
 }
-function clearPrivateWorkflow() { loadGeneration += 1; gameId.value = ''; state.value = null; frozenA.value = []; frozenB.value = []; nextOverBowlerId.value = ''; notice.value = ''; error.value = ''; }
+function clearPrivateWorkflow() { loadGeneration += 1; gameId.value = ''; state.value = null; frozenA.value = []; frozenB.value = []; nextOverBowlerId.value = ''; firstInningsStartAttempted.value = false; notice.value = ''; error.value = ''; }
 function clearOrganizationState() {
   organizationGeneration += 1; clearPrivateWorkflow(); teams.value = []; teamAId.value = ''; teamBId.value = '';
   rosterA.value = []; rosterB.value = []; selectedA.value = []; selectedB.value = []; loading.value = false;
@@ -87,13 +89,41 @@ async function perform(action: () => Promise<PracticeWorkflowState | void>) {
   try {
     const result = await action();
     if (generation !== organizationGeneration || requestedOrganizationId !== organizationId.value) return;
-    if (result) state.value = result;
+    if (result) {
+      // A route replacement may have started a GET before this private mutation
+      // completed. Do not let that older snapshot restore the "started" state.
+      loadGeneration += 1;
+      state.value = result;
+    }
   }
   catch (reason) {
     if (generation !== organizationGeneration || requestedOrganizationId !== organizationId.value) return;
     if ((reason as { status?: number }).status === 409 && gameId.value) { await refetch(true); }
     else error.value = getErrorMessage(reason);
   } finally { if (generation === organizationGeneration && requestedOrganizationId === organizationId.value) loading.value = false; }
+}
+function startFirstInnings() {
+  if (firstInningsStartAttempted.value) return;
+  firstInningsStartAttempted.value = true;
+  return perform(() => startPracticeInnings(organizationId.value, gameId.value, {
+    expected_revision: revision.value,
+    striker_id: batting.value[0]?.player_profile_id || '',
+    non_striker_id: batting.value[1]?.player_profile_id || '',
+    opening_bowler_id: bowling.value[0]?.player_profile_id || '',
+  }));
+}
+async function reloadPrivateWorkflow() {
+  if (!gameId.value) return;
+  const requestedOrganizationId = organizationId.value; const requestedGameId = gameId.value; const session = organizationGeneration;
+  loading.value = true; error.value = '';
+  try {
+    const applied = await refetch();
+    // An uncertain mutation is never replayed blindly. A newly read, unchanged
+    // `started` workflow is the explicit confirmation needed before trying again.
+    if (applied && session === organizationGeneration && requestedOrganizationId === organizationId.value && requestedGameId === gameId.value) firstInningsStartAttempted.value = state.value?.status !== 'started';
+  }
+  catch (reason) { if (session === organizationGeneration && requestedOrganizationId === organizationId.value && requestedGameId === gameId.value) error.value = getErrorMessage(reason); }
+  finally { if (session === organizationGeneration && requestedOrganizationId === organizationId.value && requestedGameId === gameId.value) loading.value = false; }
 }
 async function createAndStart() {
   await perform(async () => {
@@ -144,10 +174,18 @@ watch(() => route.query.gameId, async () => { clearPrivateWorkflow(); const requ
     <section v-else-if="state" class="scoring" data-testid="practice-scoring">
       <p>Private revision {{ revision }} · {{ state.status }} · {{ String(state.snapshot.total_runs ?? 0) }}/{{ String(state.snapshot.total_wickets ?? 0) }}</p>
       <p v-if="state.snapshot.target">Target {{ String(state.snapshot.target) }}</p>
+      <template v-if="state.status === 'started'">
+        <button :disabled="loading || firstInningsStartAttempted" data-testid="start-first-innings" @click="startFirstInnings">Start first innings</button>
+        <button :disabled="loading" data-testid="reload-practice" @click="reloadPrivateWorkflow">Reload private practice</button>
+      </template>
       <button v-for="runs in [0, 1, 4, 6]" :key="runs" :disabled="loading || state.status !== 'in_progress' || needsNextOver" :data-testid="`score-${runs}`" @click="score(runs)">+{{ runs }}</button>
       <button :disabled="loading || state.status !== 'in_progress' || needsNextOver" @click="score(0, true)">Wicket</button><button :disabled="loading" data-testid="undo-ball" @click="undo">Undo last ball</button>
       <div v-if="needsNextOver"><label>Next over bowler <select v-model="nextOverBowlerId" data-testid="next-over-bowler"><option v-for="player in bowling" :key="player.player_profile_id" :value="player.player_profile_id">{{ player.player_name }}</option></select></label><button :disabled="loading" data-testid="start-next-over" @click="beginNextOver">Start next over</button></div>
       <button v-if="state.status === 'innings_break' && inning === 1" :disabled="loading" data-testid="start-second-innings" @click="startSecondInnings">Start second innings</button>
+    </section>
+    <section v-else-if="gameId" class="scoring">
+      <p>Private practice setup is still loading.</p>
+      <button :disabled="loading" data-testid="reload-practice" @click="reloadPrivateWorkflow">Reload private practice</button>
     </section>
   </section>
 </template>
