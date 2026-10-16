@@ -69,6 +69,46 @@ describe('PracticeMatchView', () => {
     expect(api.getPracticeMatch).toHaveBeenLastCalledWith('org-1', 'practice-1');
     expect(wrapper.text()).toContain('latest private state');
   });
+  it('recovers a persisted started practice by starting its first innings once', async () => {
+    routeQuery.value = { gameId: 'practice-1' };
+    vi.mocked(api.getPracticeMatch).mockResolvedValue(state(1, 'started', 1, 'team_a', null));
+    vi.mocked(api.startPracticeInnings).mockResolvedValue(state(2, 'in_progress'));
+    const wrapper = mount(PracticeMatchView, { global: { provide: { [schoolContextKey as symbol]: context } } });
+    await flushPromises();
+    await wrapper.get('[data-testid="start-first-innings"]').trigger('click');
+    await flushPromises();
+    expect(api.createPracticeMatch).not.toHaveBeenCalled();
+    expect(api.startPracticeInnings).toHaveBeenCalledTimes(1);
+    expect(api.startPracticeInnings).toHaveBeenCalledWith('org-1', 'practice-1', expect.objectContaining({
+      expected_revision: 1, striker_id: 'a-player-0', non_striker_id: 'a-player-1', opening_bowler_id: 'b-player-0',
+    }));
+    expect(wrapper.text()).toContain('Private revision 2');
+  });
+  it('does not repeat an uncertain first-innings mutation before the user reloads', async () => {
+    routeQuery.value = { gameId: 'practice-1' };
+    vi.mocked(api.getPracticeMatch).mockResolvedValue(state(1, 'started', 1, 'team_a', null));
+    vi.mocked(api.startPracticeInnings).mockRejectedValue(new Error('network unavailable'));
+    const wrapper = mount(PracticeMatchView, { global: { provide: { [schoolContextKey as symbol]: context } } });
+    await flushPromises();
+    await wrapper.get('[data-testid="start-first-innings"]').trigger('click');
+    await flushPromises();
+    await wrapper.get('[data-testid="start-first-innings"]').trigger('click');
+    expect(api.startPracticeInnings).toHaveBeenCalledTimes(1);
+    expect(wrapper.get('[data-testid="start-first-innings"]').attributes('disabled')).toBeDefined();
+  });
+  it('permits another first-innings attempt only after a reload confirms it is still started', async () => {
+    routeQuery.value = { gameId: 'practice-1' };
+    vi.mocked(api.getPracticeMatch).mockResolvedValue(state(1, 'started', 1, 'team_a', null));
+    vi.mocked(api.startPracticeInnings).mockRejectedValue(new Error('network unavailable'));
+    const wrapper = mount(PracticeMatchView, { global: { provide: { [schoolContextKey as symbol]: context } } });
+    await flushPromises();
+    await wrapper.get('[data-testid="start-first-innings"]').trigger('click');
+    await flushPromises();
+    await wrapper.get('[data-testid="reload-practice"]').trigger('click');
+    await flushPromises();
+    await wrapper.get('[data-testid="start-first-innings"]').trigger('click');
+    expect(api.startPracticeInnings).toHaveBeenCalledTimes(2);
+  });
   it.each(['school', 'club'])('continues %s through next over and a winning second-innings chase', async () => {
     vi.mocked(api.scorePracticeDelivery).mockResolvedValueOnce(state(3, 'innings_break'))
       .mockResolvedValueOnce(state(6, 'completed', 2, 'team_a', 'a-player-0'));
