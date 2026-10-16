@@ -1,5 +1,6 @@
 {
   "hosting": {
+    "site": "cricksy-ai",
     "public": "frontend/dist",
     "ignore": [
       "firebase.json",
