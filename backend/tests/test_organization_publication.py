@@ -30,6 +30,7 @@ from backend.sql_app.models import (
     OrganizationTeamPublicationAudit,
     Team,
     Tournament,
+    TournamentTeam,
 )
 from backend.tests.school_test_helpers import (
     add_membership,
@@ -672,7 +673,9 @@ def test_postgres_archive_publish_race_never_leaves_archived_team_published(
     ).status_code == 404
 
 
-async def test_public_team_aggregate_counts_only_published_final_games(school_client: TestClient) -> None:
+async def test_public_team_aggregate_counts_only_official_published_final_games(
+    school_client: TestClient,
+) -> None:
     owner = register_user(school_client, "team-aggregate-owner@example.com")
     organization = create_school(school_client, owner, "Aggregate School")
     team = school_client.post(
@@ -686,14 +689,24 @@ async def test_public_team_aggregate_counts_only_published_final_games(school_cl
         tournament = Tournament(name="Aggregate Competition", organization_id=organization["id"])
         unpublished_tournament = Tournament(name="Private Competition", organization_id=organization["id"])
         foreign_tournament = Tournament(name="Foreign Competition", organization_id=other_organization["id"])
-        published_game = Game(status=GameStatus.completed, publication_state="published_final")
+        published_game = Game(
+            status=GameStatus.completed,
+            publication_state="published_final",
+            match_purpose="official",
+        )
+        practice_published_game = Game(
+            status=GameStatus.completed,
+            publication_state="published_final",
+            match_purpose="practice",
+        )
         private_game = Game(status=GameStatus.completed, publication_state="private")
         unpublished_competition_game = Game(status=GameStatus.completed, publication_state="published_final")
         foreign_competition_game = Game(status=GameStatus.completed, publication_state="published_final")
-        session.add_all([tournament, unpublished_tournament, foreign_tournament, published_game, private_game, unpublished_competition_game, foreign_competition_game])
+        session.add_all([tournament, unpublished_tournament, foreign_tournament, published_game, practice_published_game, private_game, unpublished_competition_game, foreign_competition_game])
         await session.flush()
         session.add_all([
             Fixture(tournament_id=tournament.id, team_a_name="Aggregate XI", team_b_name="Opposition", team_a_id=team["id"], game_id=published_game.id, status="completed"),
+            Fixture(tournament_id=tournament.id, team_a_name="Aggregate XI", team_b_name="Practice Opposition", team_a_id=team["id"], game_id=practice_published_game.id, status="completed"),
             Fixture(tournament_id=tournament.id, team_a_name="Aggregate XI", team_b_name="Private Opposition", team_a_id=team["id"], game_id=private_game.id, status="completed"),
             Fixture(tournament_id=unpublished_tournament.id, team_a_name="Aggregate XI", team_b_name="Unpublished", team_a_id=team["id"], game_id=unpublished_competition_game.id, status="completed"),
             Fixture(tournament_id=foreign_tournament.id, team_a_name="Aggregate XI", team_b_name="Foreign", team_a_id=team["id"], game_id=foreign_competition_game.id, status="completed"),
@@ -722,6 +735,132 @@ async def test_public_team_aggregate_counts_only_published_final_games(school_cl
     )
     assert disabled.status_code == 200
     assert disabled.json()["aggregate_stats"] == {"published_games": 0}
+
+
+async def test_publication_projections_exclude_practice_games_from_counts_results_and_scorecards(
+    school_client: TestClient,
+) -> None:
+    """A completed practice row cannot affect any official public projection."""
+    owner = register_user(school_client, "practice-publication-owner@example.com")
+    organization = create_school(school_client, owner, "Practice Isolation School")
+    home = school_client.post(
+        f"/api/organizations/{organization['id']}/teams",
+        json={"name": "Home XI"},
+        headers=owner.headers,
+    )
+    away = school_client.post(
+        f"/api/organizations/{organization['id']}/teams",
+        json={"name": "Away XI"},
+        headers=owner.headers,
+    )
+    assert home.status_code == away.status_code == 201
+    home_id = home.json()["id"]
+    away_id = away.json()["id"]
+    session_maker = school_client.session_maker  # type: ignore[attr-defined]
+    async with session_maker() as session:
+        tournament = Tournament(name="Practice Isolation Cup", organization_id=organization["id"])
+        official_game = Game(
+            status=GameStatus.completed,
+            publication_state="published_final",
+            match_purpose="official",
+            result="Home XI won by 1 run",
+            team_a={"name": "Home XI", "players": [], "school_source": {"organization_id": organization["id"], "team_id": home_id}},
+            team_b={"name": "Away XI", "players": [], "school_source": {"organization_id": organization["id"], "team_id": away_id}},
+        )
+        practice_games = [
+            Game(
+                status=GameStatus.completed,
+                publication_state="published_final",
+                match_purpose="practice",
+                result="Away XI won by 1 run",
+                team_a={"name": "Home XI", "players": [], "school_source": {"organization_id": organization["id"], "team_id": home_id}},
+                team_b={"name": "Away XI", "players": [], "school_source": {"organization_id": organization["id"], "team_id": away_id}},
+            )
+            for _ in range(64)
+        ]
+        session.add_all([tournament, official_game, *practice_games])
+        await session.flush()
+        official_fixture = Fixture(
+            tournament_id=tournament.id,
+            team_a_name="Home XI",
+            team_b_name="Away XI",
+            team_a_id=home_id,
+            team_b_id=away_id,
+            game_id=official_game.id,
+            match_number=1,
+            status="completed",
+        )
+        practice_fixtures = [
+            Fixture(
+                tournament_id=tournament.id,
+                team_a_name="Home XI",
+                team_b_name="Away XI",
+                team_a_id=home_id,
+                team_b_id=away_id,
+                game_id=game.id,
+                match_number=index,
+                status="completed",
+            )
+            for index, game in enumerate(practice_games, start=2)
+        ]
+        session.add_all(
+            [
+                TournamentTeam(tournament_id=tournament.id, team_name="Home XI", team_id=home_id),
+                TournamentTeam(tournament_id=tournament.id, team_name="Away XI", team_id=away_id),
+                official_fixture,
+                *practice_fixtures,
+            ]
+        )
+        await session.commit()
+        await session.refresh(official_fixture)
+        await session.refresh(official_game)
+        await session.refresh(practice_fixtures[0])
+        await session.refresh(practice_games[0])
+
+    published_org = school_client.put(
+        f"/api/organizations/{organization['id']}/public-settings/publish", headers=owner.headers
+    )
+    assert published_org.status_code == 200
+    public_identifier = published_org.json()["public_identifier"]
+    published_competition = school_client.put(
+        f"/api/organizations/{organization['id']}/competitions/{tournament.id}/community-publication/publish",
+        headers=owner.headers,
+    )
+    assert published_competition.status_code == 200
+
+    community = school_client.get(f"/api/public/organizations/{public_identifier}/community")
+    assert community.status_code == 200, community.text
+    competition = community.json()["competitions"][0]
+    competition_key = competition["public_key"]
+    base = f"/api/public/organizations/{public_identifier}/competitions/{competition_key}"
+    fixtures_by_id = {fixture["public_identifier"]: fixture for fixture in competition["fixtures"]}
+    official_projection = fixtures_by_id[official_fixture.public_identifier]
+    practice_projection = fixtures_by_id[practice_fixtures[0].public_identifier]
+    assert official_projection["result"] == "Home XI won by 1 run"
+    assert official_projection["public_result_path"] is not None
+    assert official_projection["public_scorecard_path"] is not None
+    assert practice_projection["result"] is None
+    assert practice_projection["public_result_path"] is None
+    assert practice_projection["public_scorecard_path"] is None
+    assert practice_projection["canonical_scorecard_path"] is None
+    standings = {entry["team_name"]: entry for entry in competition["standings"]}
+    assert standings["Home XI"]["matches_played"] == 1
+    assert standings["Home XI"]["matches_won"] == 1
+    assert standings["Away XI"]["matches_played"] == 1
+    assert standings["Away XI"]["matches_lost"] == 1
+
+    assert school_client.get(
+        f"{base}/results/{official_fixture.public_identifier}"
+    ).status_code == 200
+    assert school_client.get(
+        f"{base}/results/{practice_fixtures[0].public_identifier}"
+    ).status_code == 404
+    assert school_client.get(
+        f"{base}/scorecards/{official_game.public_scorecard_identifier}"
+    ).status_code == 200
+    assert school_client.get(
+        f"{base}/scorecards/{practice_games[0].public_scorecard_identifier}"
+    ).status_code == 404
 
 
 async def test_opaque_entity_share_routes_fail_closed_after_parent_revocation(

@@ -53,6 +53,7 @@ async def calculate_org_stats(db: AsyncSession, org_id: str) -> dict:
 
     # Get all games where org teams participated
     stmt = select(models.Game).where(
+        models.Game.match_purpose == "official",
         (models.Game.team_a_id.in_(team_ids)) | (models.Game.team_b_id.in_(team_ids))
     )
     result = await db.execute(stmt)
@@ -173,6 +174,7 @@ async def get_org_teams_stats(db: AsyncSession, org_id: str) -> list[dict]:
     for team in org_teams:
         # Get all games for this team
         stmt = select(models.Game).where(
+            models.Game.match_purpose == "official",
             (models.Game.team_a_id == team.id) | (models.Game.team_b_id == team.id)
         )
         result = await db.execute(stmt)

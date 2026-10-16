@@ -773,6 +773,7 @@ async def get_public_community(
                 models.Game.status.label("game_status"),
                 models.Game.result.label("game_result"),
                 models.Game.publication_state.label("game_publication_state"),
+                models.Game.match_purpose.label("game_match_purpose"),
                 fixture_rank,
             )
             .outerjoin(models.Game, models.Game.id == models.Fixture.game_id)
@@ -793,8 +794,9 @@ async def get_public_community(
         fixture_rows = (await db.execute(fixture_statement)).all()
         for row in fixture_rows:
             game_status = getattr(row.game_status, "value", row.game_status)
-            completed = game_status == models.GameStatus.completed.value
-            scorecard_is_public = public_scorecards_available and row.game_publication_state in {
+            official_game = row.game_match_purpose == "official"
+            completed = official_game and game_status == models.GameStatus.completed.value
+            scorecard_is_public = official_game and public_scorecards_available and row.game_publication_state in {
                 "published_live",
                 "published_final",
             }
@@ -850,6 +852,7 @@ async def get_public_community(
                     .where(
                         models.Fixture.tournament_id.in_(competition_ids),
                         models.Game.status == models.GameStatus.completed,
+                        models.Game.match_purpose == "official",
                     )
                     .group_by(models.Fixture.tournament_id)
                 )
@@ -870,6 +873,7 @@ async def get_public_community(
                         .where(
                             models.Fixture.tournament_id.in_(standing_competition_ids),
                             models.Game.status == models.GameStatus.completed,
+                            models.Game.match_purpose == "official",
                         )
                         .order_by(models.Fixture.tournament_id, models.Fixture.id)
                     )
@@ -1029,6 +1033,7 @@ async def get_public_scorecard_context(
                 models.Organization.status == ACTIVE_ORGANIZATION_STATUS,
                 models.Game.public_scorecard_identifier == scorecard_public_identifier,
                 models.Game.publication_state.in_(("published_live", "published_final")),
+                models.Game.match_purpose == "official",
             )
             .limit(1)
         )
@@ -1220,6 +1225,7 @@ async def get_public_team(
                     or_(models.Fixture.team_a_id == row[2], models.Fixture.team_b_id == row[2]),
                     models.Game.publication_state == "published_final",
                     models.Game.status == models.GameStatus.completed,
+                    models.Game.match_purpose == "official",
                 )
             )
             or 0

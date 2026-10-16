@@ -116,3 +116,87 @@ class SchoolMatchCreateResponse(BaseModel):
     team_b_name: str
     team_a_player_profile_ids: list[str]
     team_b_player_profile_ids: list[str]
+
+
+class PracticeMatchSideSelection(BaseModel):
+    """A private practice side selected from one active organization squad."""
+
+    source_squad_id: str = Field(min_length=1)
+    participant_membership_ids: list[str] = Field(min_length=2, max_length=11)
+    captain_membership_id: str | None = Field(default=None, min_length=1)
+    wicketkeeper_membership_id: str | None = Field(default=None, min_length=1)
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class PracticeMatchCreate(BaseModel):
+    """Create a private, unstarted practice draft; scoring remains unavailable."""
+
+    team_a: PracticeMatchSideSelection
+    team_b: PracticeMatchSideSelection
+    overs: int = Field(default=20, ge=1, le=120)
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class PracticeMatchCreateResponse(BaseModel):
+    game_id: str
+    organization_id: str
+    match_purpose: Literal["practice"]
+    status: Literal["not_started"]
+    publication_state: Literal["private"]
+
+
+class PracticeMatchStart(BaseModel):
+    """Select the first batting side for a private practice draft."""
+
+    first_batting_side: Literal["team_a", "team_b"]
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class PracticeMatchStartResponse(BaseModel):
+    game_id: str
+    status: Literal["started"]
+    practice_start_context: dict[str, object]
+
+
+class PracticeWorkflowRevision(BaseModel):
+    """Optimistic-concurrency token required by every private mutation."""
+
+    expected_revision: int = Field(ge=1)
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class PracticeInningsStart(PracticeWorkflowRevision):
+    striker_id: str = Field(min_length=1)
+    non_striker_id: str = Field(min_length=1)
+    opening_bowler_id: str = Field(min_length=1)
+
+
+class PracticeOverStart(PracticeWorkflowRevision):
+    bowler_id: str = Field(min_length=1)
+
+
+class PracticeDelivery(PracticeWorkflowRevision):
+    striker_id: str = Field(min_length=1)
+    non_striker_id: str = Field(min_length=1)
+    bowler_id: str = Field(min_length=1)
+    runs_scored: int = Field(ge=0, le=6)
+    extra: Literal["nb", "wd", "b", "lb"] | None = None
+    is_wicket: bool = False
+    dismissal_type: str | None = Field(default=None, max_length=64)
+    dismissed_player_id: str | None = Field(default=None, min_length=1)
+
+
+class PracticeWorkflowState(BaseModel):
+    game_id: str
+    organization_id: str
+    match_purpose: Literal["practice"]
+    publication_state: Literal["private"]
+    status: str
+    revision: int = Field(ge=1)
+    practice_start_context: dict[str, object]
+    frozen_sides: dict[str, list[dict[str, str | None]]]
+    snapshot: dict[str, object]

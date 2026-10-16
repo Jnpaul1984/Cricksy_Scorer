@@ -29,17 +29,17 @@ from backend.api.schemas.tournament_intelligence import (
     ArchiveResearchSection,
     ArchiveResearchSummary,
     ArchiveVenueTrend,
+    ChampionHistoryEntry,
     DerivedStandingsRow,
     HistoricalArchiveExplorerResponse,
-    ChampionHistoryEntry,
     TeamJourneyMatch,
     TeamJourneyResponse,
     TeamJourneySummary,
     TournamentChampionJourney,
     TournamentDataCompleteness,
     TournamentGroupKey,
-    TournamentGroupSummary,
     TournamentGroupsResponse,
+    TournamentGroupSummary,
     TournamentKnockoutContext,
     TournamentMatchHighlight,
     TournamentPlayerLeader,
@@ -52,8 +52,8 @@ from backend.api.schemas.tournament_intelligence import (
     TournamentWicketIntelligence,
 )
 from backend.services.analyst_registry_service import classify_competition, classify_gender
-from backend.services.cpl_venue_alias_registry import resolve_venue_identity
 from backend.services.cpl_team_alias_registry import canonicalize_team_name
+from backend.services.cpl_venue_alias_registry import resolve_venue_identity
 from backend.sql_app.models import Game, GameStatus, HistoricalImportBatch
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -2849,7 +2849,7 @@ async def _fetch_eligible_games(
 
     stmt = (
         scoped_games_stmt(current_user)
-        .where(Game.status == GameStatus.completed)
+        .where(Game.status == GameStatus.completed, Game.match_purpose == "official")
         .order_by(Game.id.desc())
     )
     result = await db.execute(stmt)

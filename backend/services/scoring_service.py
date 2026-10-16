@@ -11,14 +11,14 @@ from __future__ import annotations
 
 from typing import Any, cast
 
-from pydantic import BaseModel
-
 # Centralized constants/rules
 from backend.domain.constants import CREDIT_BOWLER as _CREDIT_BOWLER
 from backend.domain.constants import INVALID_ON_NO_BALL as _INVALID_ON_NO_BALL
 from backend.domain.constants import INVALID_ON_WIDE as _INVALID_ON_WIDE
 from backend.domain.constants import as_extra_code as _as_extra_code
 from backend.domain.constants import norm_extra as _norm_extra
+from backend.services.scoring_rules import innings_is_all_out, validate_delivery_participants
+from pydantic import BaseModel
 
 
 def _complete_over_runtime(g: Any, bowler_id: str | None) -> None:
@@ -115,16 +115,41 @@ def score_one(
     Mutates GameState-like object `g` and returns DeliveryKwargs dict.
     Behaviour matches the original implementation in main._score_one.
     """
+    # Validate the exact effective runtime participants before any scorecard
+    # mutation. A submitted ID may be ignored in favour of an already-selected
+    # runtime player, so checking only submitted values could let a foreign
+    # persisted runtime ID be replayed or recorded unnoticed.
+    effective_striker_id = getattr(g, "current_striker_id", None) or striker_id
+    effective_non_striker_id = getattr(g, "current_non_striker_id", None) or non_striker_id
+    effective_bowler_id = getattr(g, "current_bowler_id", None) or bowler_id
+    # Reject a foreign submitted participant too.  This prevents a client from
+    # smuggling an invalid selection while a valid current player happens to
+    # be active, and preserves the normal explicit-request contract.
+    validate_delivery_participants(
+        g,
+        striker_id=striker_id,
+        non_striker_id=non_striker_id,
+        bowler_id=bowler_id,
+        dismissed_player_id=dismissed_player_id,
+    )
+    validate_delivery_participants(
+        g,
+        striker_id=str(effective_striker_id),
+        non_striker_id=str(effective_non_striker_id),
+        bowler_id=str(effective_bowler_id),
+        dismissed_player_id=dismissed_player_id,
+    )
+
     # Ensure runtime fields exist
     if getattr(g, "current_striker_id", None) is None:
-        g.current_striker_id = striker_id
+        g.current_striker_id = effective_striker_id
     if getattr(g, "current_non_striker_id", None) is None:
-        g.current_non_striker_id = non_striker_id
+        g.current_non_striker_id = effective_non_striker_id
     pre_striker = g.current_striker_id
     pre_non_striker = g.current_non_striker_id
 
     if getattr(g, "current_bowler_id", None) is None:
-        g.current_bowler_id = bowler_id
+        g.current_bowler_id = effective_bowler_id
     if not hasattr(g, "pending_new_batter"):
         g.pending_new_batter = False
     if not hasattr(g, "pending_new_over"):
@@ -181,6 +206,11 @@ def score_one(
         if dismissal in _CREDIT_BOWLER:
             bw2 = _ensure_bowling_entry(g, bowler_id)
             bw2["wickets_taken"] = int(bw2.get("wickets_taken", 0) + 1)
+
+        # A final wicket ends the innings; there is no incoming batter to
+        # select.  The route closes the innings after the delivery is stored.
+        if innings_is_all_out(g, int(getattr(g, "total_wickets", 0)) + 1):
+            g.pending_new_batter = False
 
     # Strike rotation rules
     swap = False

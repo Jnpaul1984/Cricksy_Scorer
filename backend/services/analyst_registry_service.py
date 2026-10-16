@@ -20,8 +20,8 @@ from datetime import date, datetime, timezone
 from typing import Any
 
 from backend.api.schemas.analyst_matches import (
-    AnalystRegistryEntry,
     AnalystMatchRegistryListResponse,
+    AnalystRegistryEntry,
 )
 from backend.services.analyst_access import scoped_games_stmt
 from backend.services.cpl_team_alias_registry import canonicalize_team_name
@@ -693,7 +693,7 @@ async def build_analyst_registry(
     """
     stmt = (
         scoped_games_stmt(current_user)
-        .where(Game.status == GameStatus.completed)
+        .where(Game.status == GameStatus.completed, Game.match_purpose == "official")
         .order_by(Game.id.desc())
     )
     result = await db.execute(stmt)

@@ -625,6 +625,15 @@ class Game(Base):
         String(16), default="official", server_default="official", nullable=False
     )
     match_rules: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    # Private-practice-only start metadata. This is deliberately separate from
+    # B1's versioned match_rules contract and uses side keys rather than names.
+    practice_start_context: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    # Private-practice workflow concurrency token.  It is deliberately kept
+    # outside the immutable rules and start-context contracts.
+    practice_workflow_revision: Mapped[int] = mapped_column(
+        Integer, default=1, server_default="1", nullable=False
+    )
+    practice_innings_history: Mapped[list[dict[str, Any]] | None] = mapped_column(JSON, nullable=True)
     overs_limit: Mapped[int | None] = mapped_column(Integer, nullable=True)  # None for unlimited
     days_limit: Mapped[int | None] = mapped_column(Integer, nullable=True)  # For multi-day matches
     dls_enabled: Mapped[bool] = mapped_column(

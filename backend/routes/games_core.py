@@ -4,7 +4,7 @@ from typing import Annotated, Any, Literal, cast
 
 from backend.routes import games as _games_impl  # contains create_game_impl
 from backend.security import get_current_user_optional
-from backend.services import school_competition_service
+from backend.services import game_access_service
 from backend.sql_app import crud, models, schemas
 from backend.sql_app.database import get_db
 from fastapi import APIRouter, Depends, HTTPException
@@ -57,9 +57,7 @@ async def get_game(
     if not db_game:
         raise HTTPException(status_code=404, detail="Game not found")
     try:
-        await school_competition_service.require_school_game_member(
-            db, game=db_game, user=current_user
-        )
-    except school_competition_service.SchoolCompetitionServiceError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        await game_access_service.require_game_read_access(db, game=db_game, user=current_user)
+    except HTTPException:
+        raise
     return cast(schemas.Game, db_game)

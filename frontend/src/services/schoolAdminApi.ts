@@ -604,6 +604,56 @@ export const createSchoolMatch = (organizationId: string, payload: SchoolMatchCr
     body: JSON.stringify(payload),
   });
 
+export type PracticeWorkflowState = {
+  game_id: string;
+  organization_id: string;
+  match_purpose: 'practice';
+  publication_state: 'private';
+  status: string;
+  revision: number;
+  practice_start_context: { version: 1; first_batting_side: 'team_a' | 'team_b' };
+  frozen_sides: Record<'team_a' | 'team_b', Array<{ id: string; label: string | null }>>;
+  snapshot: Record<string, unknown>;
+};
+export type PracticeSideInput = {
+  source_squad_id: string;
+  participant_membership_ids: string[];
+  captain_membership_id?: string;
+  wicketkeeper_membership_id?: string;
+};
+export const createPracticeMatch = (organizationId: string, payload: {
+  team_a: PracticeSideInput; team_b: PracticeSideInput; overs: number;
+}) => apiRequest<{ game_id: string }>(orgPath(organizationId, '/practice-matches'), {
+  method: 'POST', body: JSON.stringify(payload),
+});
+export const getPracticeMatch = (organizationId: string, gameId: string) =>
+  apiRequest<PracticeWorkflowState>(orgPath(organizationId, `/practice-matches/${encodeURIComponent(gameId)}`));
+export const startPracticeMatch = (organizationId: string, gameId: string, first_batting_side: 'team_a' | 'team_b') =>
+  apiRequest<{ game_id: string }>(orgPath(organizationId, `/practice-matches/${encodeURIComponent(gameId)}/start`), {
+    method: 'POST', body: JSON.stringify({ first_batting_side }),
+  });
+export const startPracticeInnings = (organizationId: string, gameId: string, payload: {
+  expected_revision: number; striker_id: string; non_striker_id: string; opening_bowler_id: string;
+}) => apiRequest<PracticeWorkflowState>(orgPath(organizationId, `/practice-matches/${encodeURIComponent(gameId)}/innings/start`), {
+  method: 'POST', body: JSON.stringify(payload),
+});
+export const startPracticeOver = (organizationId: string, gameId: string, payload: {
+  expected_revision: number; bowler_id: string;
+}) => apiRequest<PracticeWorkflowState>(orgPath(organizationId, `/practice-matches/${encodeURIComponent(gameId)}/overs/start`), {
+  method: 'POST', body: JSON.stringify(payload),
+});
+export const scorePracticeDelivery = (organizationId: string, gameId: string, payload: {
+  expected_revision: number; striker_id: string; non_striker_id: string; bowler_id: string;
+  runs_scored: number; extra?: 'nb' | 'wd' | 'b' | 'lb'; is_wicket?: boolean;
+  dismissal_type?: string; dismissed_player_id?: string;
+}) => apiRequest<PracticeWorkflowState>(orgPath(organizationId, `/practice-matches/${encodeURIComponent(gameId)}/deliveries`), {
+  method: 'POST', body: JSON.stringify(payload),
+});
+export const undoLastPracticeDelivery = (organizationId: string, gameId: string, expected_revision: number) =>
+  apiRequest<PracticeWorkflowState>(orgPath(organizationId, `/practice-matches/${encodeURIComponent(gameId)}/undo-last`), {
+    method: 'POST', body: JSON.stringify({ expected_revision }),
+  });
+
 export const listSchoolPlayerStatistics = (organizationId: string) =>
   apiRequest<SchoolPlayerStatistics[]>(orgPath(organizationId, '/statistics/players'));
 export const getSchoolPlayerStatistics = (organizationId: string, playerProfileId: string) =>

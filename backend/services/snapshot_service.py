@@ -28,10 +28,14 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, cast
 
-from pydantic import BaseModel
-
 from backend import dls as dlsmod
+from backend.services.scoring_rules import (
+    innings_is_all_out,
+    practice_features_enabled,
+    wicket_limit_for_current_innings,
+)
 from backend.sql_app import models, schemas
+from pydantic import BaseModel
 
 UTC = getattr(dt, "UTC", dt.UTC)
 
@@ -306,6 +310,9 @@ def _compute_snapshot_flags(g: GameState) -> dict[str, bool]:
         if isinstance(e2, dict):
             need_new_batter = bool(e2.get("is_out", False))
 
+    if innings_is_all_out(g):
+        need_new_batter = False
+
     have_any_balls = len(_dedup_deliveries(g)) > 0
 
     need_new_over = bool(
@@ -341,7 +348,7 @@ def _is_game_in_progress(status: object | None) -> bool:
 def _safe_int(value: object | None) -> int:
     if value is None:
         return 0
-    if isinstance(value, (int, float, str)):
+    if isinstance(value, int | float | str):
         try:
             return int(value)
         except Exception:
@@ -405,7 +412,8 @@ def _fall_of_wickets(g: GameState) -> list[dict[str, Any]]:
 def _dls_panel_for(g: GameState, base_dir: str | Path | None = None) -> dict[str, Any]:
     """Best-effort DLS panel. Returns {} when not applicable."""
     try:
-        if not getattr(g, "dls_enabled", False):
+        dls_allowed, _predictions_allowed = practice_features_enabled(g)
+        if not dls_allowed or not getattr(g, "dls_enabled", False):
             return {}
         overs_limit_opt = cast(int | None, getattr(g, "overs_limit", None))
         if overs_limit_opt not in (20, 50):
@@ -510,7 +518,8 @@ def build_snapshot(
     balls_bowled_total_raw = _safe_int(getattr(g, "balls_bowled_total", None))
     balls_bowled = balls_bowled_total_raw or (overs_completed * 6 + balls_this_over)
     balls_limit = overs_limit_val * 6
-    all_out = _safe_int(getattr(g, "total_wickets", 0)) >= 10
+    wicket_limit = wicket_limit_for_current_innings(g)
+    all_out = innings_is_all_out(g)
     overs_exhausted = balls_limit > 0 and balls_bowled >= balls_limit
     status_in_progress = _is_game_in_progress(getattr(g, "status", None))
     current_inning_no = getattr(g, "current_inning", None)
@@ -577,6 +586,7 @@ def build_snapshot(
         # Add top-level score fields for compatibility
         "total_runs": total_runs,
         "total_wickets": int(getattr(g, "total_wickets", 0)),
+        "wicket_limit": wicket_limit,
         "overs_completed": int(getattr(g, "overs_completed", 0)),
         "balls_this_over": int(getattr(g, "balls_this_over", 0)),
         "current_run_rate": current_run_rate,
