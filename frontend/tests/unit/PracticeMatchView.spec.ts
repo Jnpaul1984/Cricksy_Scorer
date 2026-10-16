@@ -109,6 +109,17 @@ describe('PracticeMatchView', () => {
     await wrapper.get('[data-testid="start-first-innings"]').trigger('click');
     expect(api.startPracticeInnings).toHaveBeenCalledTimes(2);
   });
+  it('does not let a deferred reload from an old organization lock the new workflow', async () => {
+    const organizationId = ref('org-1'); let resolveOldReload!: (value: any) => void;
+    routeQuery.value = { gameId: 'practice-1' };
+    vi.mocked(api.getPracticeMatch).mockResolvedValueOnce(state(1, 'started', 1, 'team_a', null))
+      .mockImplementationOnce(() => new Promise((resolve) => { resolveOldReload = resolve; }) as any)
+      .mockResolvedValueOnce(state(2, 'started', 1, 'team_a', null));
+    const wrapper = mount(PracticeMatchView, { global: { provide: { [schoolContextKey as symbol]: contextForOrganization(organizationId) } } });
+    await flushPromises(); await wrapper.get('[data-testid="reload-practice"]').trigger('click');
+    organizationId.value = 'org-2'; await flushPromises(); resolveOldReload(state(1, 'started', 1, 'team_a', null)); await flushPromises();
+    expect(wrapper.get('[data-testid="start-first-innings"]').attributes('disabled')).toBeUndefined();
+  });
   it.each(['school', 'club'])('continues %s through next over and a winning second-innings chase', async () => {
     vi.mocked(api.scorePracticeDelivery).mockResolvedValueOnce(state(3, 'innings_break'))
       .mockResolvedValueOnce(state(6, 'completed', 2, 'team_a', 'a-player-0'));

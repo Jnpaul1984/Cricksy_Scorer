@@ -56,15 +56,16 @@ function toggle(side: 'a' | 'b', id: string) {
   const selected = side === 'a' ? selectedA : selectedB;
   selected.value = selected.value.includes(id) ? selected.value.filter((value) => value !== id) : [...selected.value, id];
 }
-async function refetch(conflict = false) {
-  if (!gameId.value) return;
+async function refetch(conflict = false): Promise<boolean> {
+  if (!gameId.value) return false;
   const generation = ++loadGeneration; const requestedGameId = gameId.value; const requestedOrganizationId = organizationId.value;
   const loaded = await getPracticeMatch(requestedOrganizationId, requestedGameId);
-  if (generation !== loadGeneration || requestedGameId !== gameId.value || requestedOrganizationId !== organizationId.value) return;
+  if (generation !== loadGeneration || requestedGameId !== gameId.value || requestedOrganizationId !== organizationId.value) return false;
   state.value = loaded;
   frozenA.value = state.value.frozen_sides.team_a.map((player) => ({ id: player.id, player_profile_id: player.id, player_name: player.label || 'Unavailable participant', operationally_available: true } as SchoolTeamRosterPlayer));
   frozenB.value = state.value.frozen_sides.team_b.map((player) => ({ id: player.id, player_profile_id: player.id, player_name: player.label || 'Unavailable participant', operationally_available: true } as SchoolTeamRosterPlayer));
   if (conflict) notice.value = 'This practice match changed in another tab. The latest private state has been loaded.';
+  return true;
 }
 function clearPrivateWorkflow() { loadGeneration += 1; gameId.value = ''; state.value = null; frozenA.value = []; frozenB.value = []; nextOverBowlerId.value = ''; firstInningsStartAttempted.value = false; notice.value = ''; error.value = ''; }
 function clearOrganizationState() {
@@ -113,15 +114,16 @@ function startFirstInnings() {
 }
 async function reloadPrivateWorkflow() {
   if (!gameId.value) return;
+  const requestedOrganizationId = organizationId.value; const requestedGameId = gameId.value; const session = organizationGeneration;
   loading.value = true; error.value = '';
   try {
-    await refetch();
+    const applied = await refetch();
     // An uncertain mutation is never replayed blindly. A newly read, unchanged
     // `started` workflow is the explicit confirmation needed before trying again.
-    firstInningsStartAttempted.value = state.value?.status !== 'started';
+    if (applied && session === organizationGeneration && requestedOrganizationId === organizationId.value && requestedGameId === gameId.value) firstInningsStartAttempted.value = state.value?.status !== 'started';
   }
-  catch (reason) { error.value = getErrorMessage(reason); }
-  finally { loading.value = false; }
+  catch (reason) { if (session === organizationGeneration && requestedOrganizationId === organizationId.value && requestedGameId === gameId.value) error.value = getErrorMessage(reason); }
+  finally { if (session === organizationGeneration && requestedOrganizationId === organizationId.value && requestedGameId === gameId.value) loading.value = false; }
 }
 async function createAndStart() {
   await perform(async () => {
