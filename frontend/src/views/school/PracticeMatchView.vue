@@ -3,15 +3,17 @@ import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import { useSchoolContext } from '@/composables/useSchoolContext';
+import { usePrivatePracticeScorerAdapter } from '@/composables/usePrivatePracticeScorerAdapter';
+import PracticeScorerShell from '@/components/scoring/PracticeScorerShell.vue';
 import {
   createPracticeMatch, getPracticeMatch, listSchoolTeams, listTeamRoster,
-  scorePracticeDelivery, startPracticeInnings, startPracticeMatch, startPracticeOver, undoLastPracticeDelivery,
+  scorePracticeDelivery, startPracticeInnings, startPracticeMatch, startPracticeOver, undoLastPracticeDelivery, updateSchoolMatchPublication,
   type PracticeWorkflowState,
 } from '@/services/schoolAdminApi';
 import type { SchoolTeam, SchoolTeamRosterPlayer } from '@/types/schoolAdmin';
 import { getErrorMessage } from '@/services/api';
 
-const { organizationId, canCreateSchoolMatch, terminology } = useSchoolContext();
+const { organizationId, canCreateSchoolMatch, canPublishScorecards, terminology } = useSchoolContext();
 const route = useRoute(); const router = useRouter();
 const teams = ref<SchoolTeam[]>([]);
 const teamAId = ref(''); const teamBId = ref('');
@@ -34,11 +36,15 @@ const inning = computed(() => Number(state.value?.snapshot.current_inning ?? 1))
 const firstBattingSide = computed(() => state.value?.practice_start_context.first_batting_side ?? firstSide.value);
 const batting = computed(() => (inning.value === 1 ? firstBattingSide.value : (firstBattingSide.value === 'team_a' ? 'team_b' : 'team_a')) === 'team_a' ? sideA.value : sideB.value);
 const bowling = computed(() => batting.value === sideA.value ? sideB.value : sideA.value);
+const scorer = usePrivatePracticeScorerAdapter(state, sideA, sideB, batting, bowling);
 const canCreate = computed(() => canCreateSchoolMatch.value && teamAId.value && teamBId.value && sideA.value.length >= 2 && sideB.value.length >= 2);
 const revision = computed(() => state.value?.revision ?? 0);
-const currentStriker = computed(() => String((state.value?.snapshot.current_striker_id as string | null) || batting.value[0]?.player_profile_id || ''));
-const currentNonStriker = computed(() => String((state.value?.snapshot.current_non_striker_id as string | null) || batting.value[1]?.player_profile_id || ''));
-const currentBowler = computed(() => String((state.value?.snapshot.current_bowler_id as string | null) || bowling.value[0]?.player_profile_id || ''));
+const publicPracticeHref = computed(() => gameId.value
+  ? router.resolve({ name: 'public-practice-scorecard', params: { gameId: gameId.value } }).href
+  : '');
+const currentStriker = scorer.strikerId;
+const currentNonStriker = scorer.nonStrikerId;
+const currentBowler = scorer.bowlerId;
 const needsNextOver = computed(() => state.value?.status === 'in_progress' && !(state.value?.snapshot.current_bowler_id as string | null));
 const secondInningsBatting = computed(() => firstBattingSide.value === 'team_a' ? sideB.value : sideA.value);
 const secondInningsBowling = computed(() => firstBattingSide.value === 'team_a' ? sideA.value : sideB.value);
@@ -143,16 +149,39 @@ async function createAndStart() {
     });
   });
 }
-function score(runs: number, wicket = false) {
+function score(runs: number) {
   return perform(() => scorePracticeDelivery(organizationId.value, gameId.value, {
     expected_revision: revision.value, striker_id: currentStriker.value, non_striker_id: currentNonStriker.value,
-    bowler_id: currentBowler.value, runs_scored: runs, is_wicket: wicket,
-    ...(wicket ? { dismissal_type: 'bowled', dismissed_player_id: currentStriker.value } : {}),
+    bowler_id: currentBowler.value, runs_scored: runs,
   }));
+}
+function scoreExtra(extra: 'wd' | 'nb' | 'b' | 'lb', runs: number) {
+  return perform(() => scorePracticeDelivery(organizationId.value, gameId.value, {
+    expected_revision: revision.value, striker_id: currentStriker.value, non_striker_id: currentNonStriker.value,
+    bowler_id: currentBowler.value, runs_scored: runs, extra,
+  }));
+}
+function scoreWicket(dismissal: { type: string; dismissed: 'striker' | 'non_striker' }) {
+  const dismissedPlayerId = dismissal.dismissed === 'striker' ? currentStriker.value : currentNonStriker.value;
+  return perform(() => scorePracticeDelivery(organizationId.value, gameId.value, {
+    expected_revision: revision.value, striker_id: currentStriker.value, non_striker_id: currentNonStriker.value,
+    bowler_id: currentBowler.value, runs_scored: 0, is_wicket: true,
+    dismissal_type: dismissal.type, dismissed_player_id: dismissedPlayerId,
+  }));
+}
+async function setPracticePublication(publicationState: 'private' | 'published_live') {
+  if (!gameId.value || !canPublishScorecards.value) return;
+  loading.value = true; error.value = '';
+  try {
+    const result = await updateSchoolMatchPublication(organizationId.value, gameId.value, publicationState);
+    if (state.value && result.game_id === gameId.value) state.value = { ...state.value, publication_state: result.publication_state };
+  } catch (reason) { error.value = getErrorMessage(reason); }
+  finally { loading.value = false; }
 }
 async function undo() { await perform(() => undoLastPracticeDelivery(organizationId.value, gameId.value, revision.value)); }
 function startSecondInnings() { return perform(() => startPracticeInnings(organizationId.value, gameId.value, { expected_revision: revision.value, striker_id: secondInningsBatting.value[0].player_profile_id, non_striker_id: secondInningsBatting.value[1].player_profile_id, opening_bowler_id: secondInningsBowling.value[0].player_profile_id })); }
 function beginNextOver() { return perform(() => startPracticeOver(organizationId.value, gameId.value, { expected_revision: revision.value, bowler_id: nextOverBowlerId.value || bowling.value[0]?.player_profile_id || '' })); }
+function startVisibleInnings() { return state.value?.status === 'started' ? startFirstInnings() : startSecondInnings(); }
 onMounted(loadOrganizationState);
 watch(organizationId, loadOrganizationState);
 watch(() => route.query.gameId, async () => { clearPrivateWorkflow(); const requestedGameId = route.query.gameId; if (!canCreateSchoolMatch.value || typeof requestedGameId !== 'string' || !requestedGameId) return; gameId.value = requestedGameId; try { await refetch(); } catch (reason) { if (gameId.value) error.value = getErrorMessage(reason); } });
@@ -160,7 +189,7 @@ watch(() => route.query.gameId, async () => { clearPrivateWorkflow(); const requ
 
 <template>
   <section class="practice" data-testid="practice-match-view">
-    <h2>Private practice match</h2><p>Only this {{ terminology.kindLabel }} can access this score. It is never published or broadcast.</p>
+    <h2>Practice match</h2><p>Only this {{ terminology.kindLabel }} can access and score this match. It stays private unless an authorized coach explicitly changes its organization publication state.</p>
     <p v-if="!canCreateSchoolMatch" class="error">Your current role cannot create or score private practice matches.</p>
     <p v-if="error" class="error" role="alert">{{ error }}</p><p v-if="notice" role="status">{{ notice }}</p>
     <template v-if="!gameId && canCreateSchoolMatch">
@@ -172,16 +201,8 @@ watch(() => route.query.gameId, async () => { clearPrivateWorkflow(); const requ
       <button :disabled="!canCreate || loading" data-testid="create-practice" @click="createAndStart">Create and start private practice</button>
     </template>
     <section v-else-if="state" class="scoring" data-testid="practice-scoring">
-      <p>Private revision {{ revision }} · {{ state.status }} · {{ String(state.snapshot.total_runs ?? 0) }}/{{ String(state.snapshot.total_wickets ?? 0) }}</p>
-      <p v-if="state.snapshot.target">Target {{ String(state.snapshot.target) }}</p>
-      <template v-if="state.status === 'started'">
-        <button :disabled="loading || firstInningsStartAttempted" data-testid="start-first-innings" @click="startFirstInnings">Start first innings</button>
-        <button :disabled="loading" data-testid="reload-practice" @click="reloadPrivateWorkflow">Reload private practice</button>
-      </template>
-      <button v-for="runs in [0, 1, 4, 6]" :key="runs" :disabled="loading || state.status !== 'in_progress' || needsNextOver" :data-testid="`score-${runs}`" @click="score(runs)">+{{ runs }}</button>
-      <button :disabled="loading || state.status !== 'in_progress' || needsNextOver" @click="score(0, true)">Wicket</button><button :disabled="loading" data-testid="undo-ball" @click="undo">Undo last ball</button>
-      <div v-if="needsNextOver"><label>Next over bowler <select v-model="nextOverBowlerId" data-testid="next-over-bowler"><option v-for="player in bowling" :key="player.player_profile_id" :value="player.player_profile_id">{{ player.player_name }}</option></select></label><button :disabled="loading" data-testid="start-next-over" @click="beginNextOver">Start next over</button></div>
-      <button v-if="state.status === 'innings_break' && inning === 1" :disabled="loading" data-testid="start-second-innings" @click="startSecondInnings">Start second innings</button>
+      <PracticeScorerShell :status="state.status" :revision="revision" :total-runs="scorer.totalRuns.value" :total-wickets="scorer.totalWickets.value" :overs="scorer.overs.value" :inning="scorer.inning.value" :target="scorer.target.value" :striker-name="scorer.strikerName.value" :non-striker-name="scorer.nonStrikerName.value" :bowler-name="scorer.bowlerName.value" :can-score="state.status === 'in_progress' && !needsNextOver" :needs-next-over="needsNextOver" :loading="loading" :start-locked="firstInningsStartAttempted" :publication-state="state.publication_state" :can-publish="canPublishScorecards" :public-href="publicPracticeHref" @score="score" @extra="scoreExtra" @wicket="scoreWicket" @publication="setPracticePublication" @undo="undo" @start-over="beginNextOver" @start-innings="startVisibleInnings" @reload="reloadPrivateWorkflow" />
+      <div v-if="needsNextOver"><label>Next over bowler <select v-model="nextOverBowlerId" data-testid="next-over-bowler"><option v-for="player in bowling" :key="player.player_profile_id" :value="player.player_profile_id">{{ player.player_name }}</option></select></label></div>
     </section>
     <section v-else-if="gameId" class="scoring">
       <p>Private practice setup is still loading.</p>

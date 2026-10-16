@@ -239,7 +239,7 @@ async def _practice_workflow_state(
         game_id=str(practice_game.id),
         organization_id=organization_id,
         match_purpose="practice",
-        publication_state="private",
+        publication_state=str(practice_game.publication_state or "private"),
         status=str(practice_game.status.value),
         revision=practice_game.practice_workflow_revision,
         practice_start_context=practice_game.practice_start_context,

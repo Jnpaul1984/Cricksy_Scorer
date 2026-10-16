@@ -4,11 +4,11 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import cricksyLogo from '@/assets/optimized/logo-w480.webp';
 import PublicShareLinkButton from '@/components/PublicShareLinkButton.vue';
 import { getErrorMessage } from '@/services/api';
-import { getPublicCompetitionScorecard, getPublicSchoolScorecard } from '@/services/schoolAdminApi';
+import { getPublicCompetitionScorecard, getPublicPracticeScorecard, getPublicSchoolScorecard } from '@/services/schoolAdminApi';
 import type { PublicOpaqueSchoolScorecard, PublicSchoolScorecard } from '@/types/schoolAdmin';
 import { youtubeVideoUrls } from '@/utils/youtubeVideo';
 
-const props = defineProps<{ gameId?: string; publicIdentifier?: string; competitionPublicKey?: string; scorecardPublicIdentifier?: string; overlay?: boolean }>();
+const props = defineProps<{ gameId?: string; publicIdentifier?: string; competitionPublicKey?: string; scorecardPublicIdentifier?: string; overlay?: boolean; practice?: boolean }>();
 const scorecard = ref<(PublicSchoolScorecard | PublicOpaqueSchoolScorecard) | null>(null);
 const loading = ref(true);
 const error = ref('');
@@ -47,7 +47,7 @@ const youtubePlayerActive = computed(() => (
   youtubeUrls.value !== null && activeVideoId.value === youtubeVideoId.value
 ));
 
-const routeKey = () => [props.overlay, props.gameId, props.publicIdentifier, props.competitionPublicKey, props.scorecardPublicIdentifier].join('\u001f');
+const routeKey = () => [props.overlay, props.practice, props.gameId, props.publicIdentifier, props.competitionPublicKey, props.scorecardPublicIdentifier].join('\u001f');
 
 function stopPolling() {
   if (refreshTimer !== undefined) window.clearInterval(refreshTimer);
@@ -100,7 +100,7 @@ async function load({ background = false } = {}) {
       ? await getPublicCompetitionScorecard(props.publicIdentifier!, props.competitionPublicKey!, props.scorecardPublicIdentifier!)
       : props.scorecardPublicIdentifier && props.publicIdentifier && props.competitionPublicKey
       ? await getPublicCompetitionScorecard(props.publicIdentifier, props.competitionPublicKey, props.scorecardPublicIdentifier)
-      : await getPublicSchoolScorecard(props.gameId || '');
+      : props.practice ? await getPublicPracticeScorecard(props.gameId || '') : await getPublicSchoolScorecard(props.gameId || '');
     if (version !== requestVersion || requestedRoute !== routeKey()) return;
     if (youtubeVideoIdFor(nextScorecard) !== youtubeVideoId.value) activeVideoId.value = null;
     scorecard.value = nextScorecard;
@@ -249,9 +249,9 @@ onBeforeUnmount(() => {
 
 <template>
   <main class="public-scorecard" :class="{ 'public-scorecard--overlay': overlay }">
-    <p v-if="loading" role="status">{{ overlay ? 'Loading published live score…' : 'Loading published scorecard…' }}</p>
+    <p v-if="loading" role="status">{{ overlay ? 'Loading published live score…' : practice ? 'Loading published practice scorecard…' : 'Loading published scorecard…' }}</p>
     <section v-else-if="error && !scorecard" class="notice error" role="alert">
-      <h1>{{ overlay ? 'Scoreboard unavailable' : 'Scorecard unavailable' }}</h1>
+      <h1>{{ overlay ? 'Scoreboard unavailable' : practice ? 'Practice scorecard unavailable' : 'Scorecard unavailable' }}</h1>
       <p>{{ error }}</p>
     </section>
     <template v-else-if="scorecard && overlay">
@@ -294,7 +294,7 @@ onBeforeUnmount(() => {
     </template>
     <template v-else-if="scorecard">
       <header>
-        <p class="eyebrow">Published scorecard</p>
+        <p class="eyebrow">{{ practice ? 'Published practice scorecard' : 'Published scorecard' }}</p>
         <h1>{{ scorecard.team_a.name }} vs {{ scorecard.team_b.name }}</h1>
         <p>{{ scorecard.status }} · {{ scorecard.publication_state.replace('_', ' ') }}</p>
       </header>

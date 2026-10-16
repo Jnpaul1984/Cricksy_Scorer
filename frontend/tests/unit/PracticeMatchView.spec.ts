@@ -7,10 +7,13 @@ import { schoolContextKey, type SchoolContext } from '@/composables/useSchoolCon
 import * as api from '@/services/schoolAdminApi';
 import PracticeMatchView from '@/views/school/PracticeMatchView.vue';
 
-const { routeQuery, replace } = vi.hoisted(() => ({ routeQuery: { value: {} as Record<string, string> }, replace: vi.fn() }));
+const { routeQuery, replace, resolve } = vi.hoisted(() => ({
+  routeQuery: { value: {} as Record<string, string> }, replace: vi.fn(),
+  resolve: vi.fn(({ params }: { params: { gameId: string } }) => ({ href: `/practice-scorecards/${params.gameId}` })),
+}));
 vi.mock('vue-router', () => ({
   useRoute: () => ({ query: routeQuery.value }),
-  useRouter: () => ({ replace }),
+  useRouter: () => ({ replace, resolve }),
 }));
 vi.mock('@/services/schoolAdminApi');
 
@@ -69,6 +72,57 @@ describe('PracticeMatchView', () => {
     expect(api.getPracticeMatch).toHaveBeenLastCalledWith('org-1', 'practice-1');
     expect(wrapper.text()).toContain('latest private state');
   });
+  it('renders the familiar private scorer from frozen labels and sends supported runs, extras, and wicket only to private endpoints', async () => {
+    routeQuery.value = { gameId: 'practice-1' };
+    vi.mocked(api.getPracticeMatch).mockResolvedValue(state(4, 'in_progress'));
+    vi.mocked(api.scorePracticeDelivery).mockResolvedValue(state(5, 'in_progress'));
+    const wrapper = mount(PracticeMatchView, { global: { provide: { [schoolContextKey as symbol]: context } } });
+    await flushPromises();
+    expect(wrapper.get('[data-testid="practice-familiar-scorer"]').text()).toContain('PRACTICE SCORER');
+    expect(wrapper.text()).toContain('A 0');
+    expect(wrapper.text()).toContain('B 0');
+    for (const runs of [0, 1, 2, 3, 4, 5, 6]) expect(wrapper.get(`[data-testid="score-${runs}"]`).exists()).toBe(true);
+    for (const extra of ['wd', 'nb', 'b', 'lb']) expect(wrapper.get(`[data-testid="extra-${extra}"]`).exists()).toBe(true);
+    await wrapper.get('[data-testid="extra-wd"]').trigger('click');
+    await flushPromises();
+    expect(api.scorePracticeDelivery).toHaveBeenLastCalledWith('org-1', 'practice-1', expect.objectContaining({ expected_revision: 4, extra: 'wd', runs_scored: 1 }));
+    await wrapper.get('[data-testid="wicket"]').trigger('click');
+    await wrapper.get('[data-testid="confirm-wicket"]').trigger('click');
+    await flushPromises();
+    expect(api.scorePracticeDelivery).toHaveBeenLastCalledWith('org-1', 'practice-1', expect.objectContaining({ is_wicket: true, dismissal_type: 'bowled', dismissed_player_id: 'a-player-0' }));
+    expect(api.createPracticeMatch).not.toHaveBeenCalled();
+  });
+  it('keeps practice private by default and gives an authorized coach an explicit publication toggle', async () => {
+    routeQuery.value = { gameId: 'practice-1' };
+    vi.mocked(api.getPracticeMatch).mockResolvedValue(state(4, 'in_progress'));
+    vi.mocked(api.updateSchoolMatchPublication).mockResolvedValue({ game_id: 'practice-1', organization_id: 'org-1', publication_state: 'published_live' });
+    const wrapper = mount(PracticeMatchView, { global: { provide: { [schoolContextKey as symbol]: context } } });
+    await flushPromises();
+    expect(wrapper.text()).toContain('Private by default');
+    await wrapper.get('[data-testid="publish-practice"]').trigger('click');
+    await flushPromises();
+    expect(api.updateSchoolMatchPublication).toHaveBeenCalledWith('org-1', 'practice-1', 'published_live');
+    expect(wrapper.get('[data-testid="unpublish-practice"]').exists()).toBe(true);
+    expect(wrapper.get('[data-testid="public-practice-link"]').attributes('href')).toBe('/practice-scorecards/practice-1');
+  });
+  it('keeps the private scorer usable after publication and undo', async () => {
+    routeQuery.value = { gameId: 'practice-1' };
+    vi.mocked(api.getPracticeMatch).mockResolvedValueOnce(state(4, 'in_progress'));
+    vi.mocked(api.updateSchoolMatchPublication).mockResolvedValue({ game_id: 'practice-1', organization_id: 'org-1', publication_state: 'published_live' });
+    vi.mocked(api.scorePracticeDelivery).mockResolvedValue(state(5, 'in_progress'));
+    vi.mocked(api.undoLastPracticeDelivery).mockResolvedValue(state(6, 'in_progress'));
+    const wrapper = mount(PracticeMatchView, { global: { provide: { [schoolContextKey as symbol]: context } } });
+    await flushPromises();
+    await wrapper.get('[data-testid="publish-practice"]').trigger('click');
+    await flushPromises();
+    await wrapper.get('[data-testid="score-1"]').trigger('click');
+    await flushPromises();
+    await wrapper.get('[data-testid="undo-ball"]').trigger('click');
+    await flushPromises();
+    expect(api.scorePracticeDelivery).toHaveBeenCalledWith('org-1', 'practice-1', expect.objectContaining({ expected_revision: 4 }));
+    expect(api.undoLastPracticeDelivery).toHaveBeenCalledWith('org-1', 'practice-1', 5);
+    expect(wrapper.get('[data-testid="practice-scoring"]').exists()).toBe(true);
+  });
   it('recovers a persisted started practice by starting its first innings once', async () => {
     routeQuery.value = { gameId: 'practice-1' };
     vi.mocked(api.getPracticeMatch).mockResolvedValue(state(1, 'started', 1, 'team_a', null));
@@ -82,7 +136,7 @@ describe('PracticeMatchView', () => {
     expect(api.startPracticeInnings).toHaveBeenCalledWith('org-1', 'practice-1', expect.objectContaining({
       expected_revision: 1, striker_id: 'a-player-0', non_striker_id: 'a-player-1', opening_bowler_id: 'b-player-0',
     }));
-    expect(wrapper.text()).toContain('Private revision 2');
+    expect(wrapper.text()).toContain('Revision 2');
   });
   it('does not repeat an uncertain first-innings mutation before the user reloads', async () => {
     routeQuery.value = { gameId: 'practice-1' };
@@ -188,10 +242,10 @@ describe('PracticeMatchView', () => {
     organizationId.value = 'org-2';
     await flushPromises();
     expect(api.getPracticeMatch).toHaveBeenLastCalledWith('org-2', 'practice-1');
-    await vi.waitFor(() => expect(wrapper.text()).toContain('Private revision 20'));
+    await vi.waitFor(() => expect(wrapper.text()).toContain('Revision 20'));
     resolveOldScore(state(2));
     await flushPromises();
-    await vi.waitFor(() => expect(wrapper.text()).toContain('Private revision 20'));
+    await vi.waitFor(() => expect(wrapper.text()).toContain('Revision 20'));
     expect(wrapper.text()).not.toMatch(/Private revision 2 ·/);
   });
 });
