@@ -5,14 +5,28 @@ import datetime as dt
 import io
 from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import StreamingResponse
-from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import joinedload
-
 from backend import security
+from backend.api.schemas.analyst_matches import (
+    AnalystDeliveriesResponse,
+    AnalystDeliveryRow,
+    AnalystExportDataResponse,
+    AnalystMatchDetailResponse,
+    AnalystMatchInningsSummary,
+    AnalystPlayerAggregate,
+    AnalystPlayersResponse,
+)
+from backend.services.analyst_access import scoped_games_stmt
+from backend.services.historical_import_delivery_service import (
+    coerce_delivery_ledger,
+    cricket_overs_from_legal_balls,
+)
+from backend.services.match_ai_service import MatchAiService
+from backend.services.match_context_service import (
+    MatchContextPackage,
+    generate_match_context_package,
+)
 from backend.sql_app.database import get_db
+from backend.sql_app.match_ai import MatchAiSummaryResponse
 from backend.sql_app.models import (
     CoachingSession,
     Game,
@@ -22,26 +36,11 @@ from backend.sql_app.models import (
     PlayerSummary,
 )
 from backend.sql_app.schemas import AnalyticsQuery, AnalyticsResult
-from backend.api.schemas.analyst_matches import (
-    AnalystDeliveriesResponse,
-    AnalystExportDataResponse,
-    AnalystMatchDetailResponse,
-    AnalystMatchInningsSummary,
-    AnalystPlayerAggregate,
-    AnalystPlayersResponse,
-    AnalystDeliveryRow,
-)
-from backend.sql_app.match_ai import MatchAiSummaryResponse
-from backend.services.analyst_access import scoped_games_stmt
-from backend.services.historical_import_delivery_service import (
-    coerce_delivery_ledger,
-    cricket_overs_from_legal_balls,
-)
-from backend.services.match_ai_service import MatchAiService
-from backend.services.match_context_service import (
-    generate_match_context_package,
-    MatchContextPackage,
-)
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import joinedload
 
 router = APIRouter(prefix="/api/analyst", tags=["analyst_pro"])
 
@@ -501,7 +500,7 @@ async def get_analyst_players(
     match_id: str | None = Query(None),
     db: AsyncSession = Depends(get_db),
 ):
-    stmt = scoped_games_stmt(current_user).where(Game.status == GameStatus.completed)
+    stmt = scoped_games_stmt(current_user).where(Game.status == GameStatus.completed, Game.match_purpose == "official")
     if match_id:
         stmt = stmt.where(Game.id == match_id)
     result = await db.execute(stmt.order_by(Game.id.desc()))

@@ -14,6 +14,14 @@ from backend.services import school_competition_service
 from backend.services import validation as validation_helpers
 from backend.services.historical_import_delivery_service import coerce_delivery_ledger
 from backend.services.live_bus import emit_state_update
+from backend.services.match_rules import OFFICIAL_MATCH_PURPOSE, MatchRulesValidationError
+from backend.services.scoring_rules import (
+    innings_is_all_out,
+    practice_features_enabled,
+    team_for_current_batting_side,
+    team_for_current_bowling_side,
+    validate_incoming_batter,
+)
 from backend.services.scoring_service import score_one as _score_one
 from backend.services.snapshot_service import build_snapshot as _snapshot_from_game
 from backend.sql_app import crud, models, schemas
@@ -86,6 +94,11 @@ def _gh(name: str, *args: Any, **kwargs: Any) -> Any:
 async def _require_school_scorer(
     db: AsyncSession, *, game: models.Game, user: models.User | None
 ) -> None:
+    # Generic gameplay is an official-only surface.  Private practice has a
+    # separate organization-scoped workflow and must remain indistinguishable
+    # from a missing game here, even to an authorized organization scorer.
+    if getattr(game, "match_purpose", None) != OFFICIAL_MATCH_PURPOSE:
+        raise HTTPException(status_code=404, detail="Game not found")
     try:
         await school_competition_service.require_school_game_scorer(db, game=game, user=user)
     except school_competition_service.SchoolCompetitionServiceError as exc:
@@ -111,7 +124,7 @@ async def _maybe_close_innings(g: Any) -> None:
     if g.status == models.GameStatus.innings_break:
         return
 
-    all_out = g.total_wickets >= 10
+    all_out = innings_is_all_out(g)
     overs_exhausted = balls_limit > 0 and balls_bowled >= balls_limit
 
     if all_out or overs_exhausted:
@@ -144,6 +157,22 @@ async def _maybe_close_innings(g: Any) -> None:
         g.current_striker_id = None
         g.current_non_striker_id = None
         g.current_bowler_id = None
+
+
+def _reopen_current_innings_for_ledger_edit(g: Any) -> None:
+    """Make undo/replay authoritative when it removes a terminal delivery."""
+
+    if getattr(g, "status", None) not in {
+        models.GameStatus.innings_break,
+        models.GameStatus.completed,
+    }:
+        return
+    g.status = models.GameStatus.in_progress
+    g.result = None
+    g.completed_at = None
+    current_inning = int(getattr(g, "current_inning", 1) or 1)
+    history = list(getattr(g, "innings_history", []) or [])
+    g.innings_history = [entry for entry in history if entry.get("inning_no") != current_inning]
 
 
 class StartOverBody(BaseModel):
@@ -233,6 +262,8 @@ async def get_deliveries(
     """
     game = await crud.get_game(db, game_id=game_id)
     if not game:
+        raise HTTPException(status_code=404, detail="Game not found")
+    if getattr(game, "match_purpose", None) != OFFICIAL_MATCH_PURPOSE:
         raise HTTPException(status_code=404, detail="Game not found")
 
     g = cast(Any, game)
@@ -584,14 +615,8 @@ async def start_next_innings(
         g.balls_this_over = 0
 
         # (Re)build fresh scorecards for the new batting/bowling teams
-        g.batting_scorecard = _gh(
-            "_mk_batting_scorecard",
-            g.team_a if g.batting_team_name == g.team_a["name"] else g.team_b,
-        )
-        g.bowling_scorecard = _gh(
-            "_mk_bowling_scorecard",
-            g.team_b if g.batting_team_name == g.team_a["name"] else g.team_a,
-        )
+        g.batting_scorecard = _gh("_mk_batting_scorecard", team_for_current_batting_side(g))
+        g.bowling_scorecard = _gh("_mk_bowling_scorecard", team_for_current_bowling_side(g))
 
     # Apply optional openers from body
     g.current_striker_id = body.striker_id or None
@@ -684,6 +709,11 @@ async def replace_batter(
 
     g: Any = db_game
 
+    try:
+        validate_incoming_batter(g, body.new_batter_id)
+    except MatchRulesValidationError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
     # Ensure latest state
     _gh("_rebuild_scorecards_from_deliveries", g)
     _gh("_recompute_totals_and_runtime", g)
@@ -748,6 +778,11 @@ async def set_next_batter(
     await _require_school_scorer(db, game=db_game, user=current_user)
 
     g: Any = db_game
+
+    try:
+        validate_incoming_batter(g, body.batter_id)
+    except MatchRulesValidationError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
     if getattr(g, "pending_new_batter", None) is None:
         g.pending_new_batter = False
@@ -818,6 +853,8 @@ async def get_snapshot(
     game = await crud.get_game(db, game_id=game_id)
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
+    if getattr(game, "match_purpose", None) != OFFICIAL_MATCH_PURPOSE:
+        raise HTTPException(status_code=404, detail="Game not found")
     try:
         (
             school_organization_id,
@@ -866,12 +903,16 @@ async def get_snapshot(
     snap["mini_batting_card"] = _gh("_mini_batting_card", g)
     snap["mini_bowling_card"] = _gh("_mini_bowling_card", g)
 
+    # Practice snapshots explicitly disable DLS until a supported method exists.
+    dls_allowed, predictions_allowed = practice_features_enabled(g)
+
     # DLS panel best-effort (matches main.py logic)
     try:
         overs_limit_opt = cast(int | None, getattr(g, "overs_limit", None))
         current_innings = int(getattr(g, "current_inning", 1) or 1)
         if (
-            isinstance(overs_limit_opt, int)
+            dls_allowed
+            and isinstance(overs_limit_opt, int)
             and current_innings >= 2
             and overs_limit_opt in (20, 50)
         ):
@@ -941,11 +982,9 @@ async def get_snapshot(
         "batting": {"name": g.batting_team_name},
         "bowling": {"name": g.bowling_team_name},
     }
-    # Narrow team objects to concrete mappings before iterating players
-    team_a_map: dict[str, Any] = dict(getattr(g, "team_a", {}) or {})
-    team_b_map: dict[str, Any] = dict(getattr(g, "team_b", {}) or {})
-    batting_team_map = team_a_map if g.batting_team_name == team_a_map.get("name") else team_b_map
-    bowling_team_map = team_b_map if g.batting_team_name == team_a_map.get("name") else team_a_map
+    # Practice teams are resolved from frozen side identity, never display name.
+    batting_team_map = dict(team_for_current_batting_side(g))
+    bowling_team_map = dict(team_for_current_bowling_side(g))
 
     snap["players"] = {
         "batting": [
@@ -958,8 +997,11 @@ async def get_snapshot(
         ],
     }
 
-    # Add win probability prediction to snapshot (so frontend has it on page load)
+    # Add win probability prediction to snapshot (so frontend has it on page load).
+    # Practice snapshots deny this until prediction models support short sides.
     try:
+        if not predictions_allowed:
+            return snap
         from backend.services.prediction_service import get_win_probability
 
         game_state_for_prediction = {
@@ -995,6 +1037,8 @@ async def get_recent_deliveries(
     """
     game = await crud.get_game(db, game_id=game_id)
     if not game:
+        raise HTTPException(status_code=404, detail="Game not found")
+    if getattr(game, "match_purpose", None) != OFFICIAL_MATCH_PURPOSE:
         raise HTTPException(status_code=404, detail="Game not found")
 
     g = cast(Any, game)
@@ -1072,6 +1116,11 @@ async def add_delivery(
     # Rebuild from authoritative ledger
     _gh("_rebuild_scorecards_from_deliveries", g)
     _gh("_recompute_totals_and_runtime", g)
+    try:
+        if innings_is_all_out(g):
+            raise HTTPException(status_code=409, detail="The innings is already all out")
+    except MatchRulesValidationError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
     # Mid-over bowler change (fallback)
     if int(getattr(g, "balls_this_over", 0)) > 0:
@@ -1320,6 +1369,9 @@ async def add_delivery(
 
     # Calculate and emit win probability prediction
     try:
+        _dls_allowed, predictions_allowed = practice_features_enabled(u)
+        if not predictions_allowed:
+            return snap
         game_state_for_prediction = {
             "current_inning": u.current_inning,
             "total_runs": u.total_runs,
@@ -1439,6 +1491,7 @@ async def undo_last_delivery(
         raise HTTPException(status_code=409, detail="Nothing to undo")
 
     g.deliveries = g.deliveries[:-1]  # type: ignore[assignment]
+    _reopen_current_innings_for_ledger_edit(g)
 
     # Reset and replay ledger
     def _reset_runtime_and_scorecards(game: Any) -> None:
@@ -1448,8 +1501,8 @@ async def undo_last_delivery(
         game.balls_this_over = 0
         game.current_striker_id = None
         game.current_non_striker_id = None
-        batting_team = game.team_a if game.batting_team_name == game.team_a["name"] else game.team_b
-        bowling_team = game.team_b if batting_team is game.team_a else game.team_a
+        batting_team = team_for_current_batting_side(game)
+        bowling_team = team_for_current_bowling_side(game)
         game.batting_scorecard = _gh("_mk_batting_scorecard", batting_team)
         game.bowling_scorecard = _gh("_mk_bowling_scorecard", bowling_team)
 
@@ -1480,6 +1533,10 @@ async def undo_last_delivery(
     updated = await crud.update_game(db, game_model=db_game)
     u = updated
     _gh("_rebuild_scorecards_from_deliveries", u)
+    _gh("_recompute_totals_and_runtime", u)
+    await _maybe_close_innings(u)
+    _gh("_ensure_target_if_chasing", u)
+    _gh("_maybe_finalize_match", u)
     last = u.deliveries[-1] if u.deliveries else None
     snapshot = _snapshot_from_game(u, last, BASE_DIR)
 
@@ -1607,8 +1664,8 @@ async def correct_delivery(
         game.mid_over_change_used = False
         game.pending_new_batter = False
         game.pending_new_over = False
-        batting_team = game.team_a if game.batting_team_name == game.team_a["name"] else game.team_b
-        bowling_team = game.team_b if batting_team is game.team_a else game.team_a
+        batting_team = team_for_current_batting_side(game)
+        bowling_team = team_for_current_bowling_side(game)
         game.batting_scorecard = _gh("_mk_batting_scorecard", batting_team)
         game.bowling_scorecard = _gh("_mk_bowling_scorecard", bowling_team)
 

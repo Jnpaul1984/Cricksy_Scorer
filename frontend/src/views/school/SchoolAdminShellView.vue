@@ -240,6 +240,9 @@ watch(
           :to="`${organizationBasePath}/${organizationId}/matches/new`"
           >Create match</RouterLink
         >
+        <RouterLink v-if="canCreateSchoolMatch" :to="`${organizationBasePath}/${organizationId}/practice`"
+          >Practice match</RouterLink
+        >
         <RouterLink
           v-if="canViewStatistics"
           :to="`${organizationBasePath}/${organizationId}/statistics`"

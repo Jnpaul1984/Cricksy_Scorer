@@ -41,10 +41,10 @@ from backend.api.schemas.historical_stats import (
     TrophySummaryAggregate,
     VenueAggregate,
 )
+from backend.services.analyst_access import scoped_games_stmt
 from backend.services.analyst_registry_service import classify_competition, classify_gender
 from backend.services.cpl_team_alias_registry import canonicalize_team_name, normalize_team_name
 from backend.services.cpl_venue_alias_registry import canonicalize_venue_name, normalize_venue_name
-from backend.services.analyst_access import scoped_games_stmt
 from backend.sql_app.models import Game, GameStatus, HistoricalImportBatch
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -1147,7 +1147,7 @@ async def get_historical_stats_summary(
     """
     stmt = (
         scoped_games_stmt(current_user)
-        .where(Game.status == GameStatus.completed)
+        .where(Game.status == GameStatus.completed, Game.match_purpose == "official")
         .order_by(Game.id.desc())
     )
     result = await db.execute(stmt)

@@ -262,9 +262,9 @@ async def build_model_training_dataset(
     Reads only validated historical import records and never mutates official match truth.
     """
     if current_user is None:
-        stmt = select(Game).where(Game.status == GameStatus.completed)
+        stmt = select(Game).where(Game.status == GameStatus.completed, Game.match_purpose == "official")
     else:
-        stmt = scoped_games_stmt(current_user).where(Game.status == GameStatus.completed)
+        stmt = scoped_games_stmt(current_user).where(Game.status == GameStatus.completed, Game.match_purpose == "official")
 
     games_result = await db.execute(stmt)
     games = list(games_result.scalars().all())

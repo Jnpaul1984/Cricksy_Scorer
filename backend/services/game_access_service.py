@@ -26,12 +26,12 @@ from __future__ import annotations
 from collections.abc import Iterable
 
 import structlog
+from backend.services import school_competition_service
+from backend.services.match_rules import OFFICIAL_MATCH_PURPOSE
+from backend.sql_app import models
 from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from backend.services import school_competition_service
-from backend.sql_app import models
 
 logger = structlog.get_logger(__name__)
 
@@ -40,6 +40,8 @@ async def require_game_read_access(
     db: AsyncSession, *, game: models.Game, user: models.User | None
 ) -> None:
     """Apply the established Game privacy policy for read-only routes."""
+    if game.match_purpose != OFFICIAL_MATCH_PURPOSE:
+        raise HTTPException(status_code=404, detail="Game not found")
     try:
         await school_competition_service.require_school_game_member(db, game=game, user=user)
     except school_competition_service.SchoolCompetitionServiceError as exc:
@@ -52,6 +54,8 @@ async def publicly_listable_games(
     """Drop School/Club Games that are not deliberately published."""
     listable: list[models.Game] = []
     for game in games:
+        if game.match_purpose != OFFICIAL_MATCH_PURPOSE:
+            continue
         if not school_competition_service.is_organization_game(game) or (
             await school_competition_service.public_school_game_organization(db, game) is not None
         ):
@@ -63,6 +67,8 @@ async def require_game_mutation_access(
     db: AsyncSession, *, game: models.Game, user: models.User
 ) -> None:
     """Allow a Game mutation only for an actor authorized to score this Game."""
+    if game.match_purpose != OFFICIAL_MATCH_PURPOSE:
+        raise HTTPException(status_code=404, detail="Game not found")
     try:
         (
             organization_id,

@@ -63,6 +63,7 @@ async def _insert_game(
     organization_id: str | None,
     created_by_user_id: str | None = None,
     publication_state: str | None = None,
+    match_purpose: str = "official",
     names: tuple[str, str] = ("Synthetic A", "Synthetic B"),
     with_result: bool = False,
     other_organization_id: str | None = None,
@@ -95,8 +96,11 @@ async def _insert_game(
         team_a=team_a,
         team_b=team_b,
         match_type="limited",
+        match_purpose=match_purpose,
         overs_limit=20,
         interruptions=[dict(OPEN_INTERRUPTION)],
+        toss_winner_team=team_a["name"],
+        decision="bat",
         batting_team_name=team_a["name"],
         bowling_team_name=team_b["name"],
         status=GameStatus.completed if with_result else GameStatus.in_progress,
@@ -737,3 +741,81 @@ async def test_resolved_ownership_shapes_keep_legitimate_access(
     listed = school_client.get("/games/search").text
     assert published.id in listed and legacy.id in listed
     assert external_opponent.id not in listed and both_sides.id not in listed
+
+
+async def test_generic_game_read_hides_practice_draft_from_every_actor(
+    school_client: TestClient,
+) -> None:
+    """Practice IDs are never available through the generic Game API."""
+    owner = register_user(school_client, "practice-read-owner@example.test")
+    organization = create_school(school_client, owner, "Practice Read School")
+    outsider = register_user(school_client, "practice-read-outsider@example.test")
+    create_club(school_client, outsider, "Practice Read Other Club")
+    practice = await _insert_game(
+        school_client,
+        organization_id=organization["id"],
+        created_by_user_id=owner.id,
+        match_purpose="practice",
+    )
+    official = await _insert_game(
+        school_client,
+        organization_id=organization["id"],
+        created_by_user_id=owner.id,
+    )
+
+    for actor in (None, outsider, owner):
+        response = _call(
+            school_client,
+            Route("game (GET)", "get", "/games/{game_id}", lambda _game: None),
+            practice,
+            actor,
+        )
+        assert response.status_code == 404, response.text
+
+    assert school_client.get(f"/games/{official.id}", headers=owner.headers).status_code == 200
+
+
+async def test_generic_gameplay_surface_hides_practice_from_authorized_owner(
+    school_client: TestClient,
+) -> None:
+    """Every generic gameplay read/write must fail closed before mutation."""
+    owner = register_user(school_client, "practice-gameplay-owner@example.test")
+    organization = create_school(school_client, owner, "Practice Gameplay School")
+    practice = await _insert_game(
+        school_client,
+        organization_id=organization["id"],
+        created_by_user_id=owner.id,
+        match_purpose="practice",
+    )
+    player_a = practice.team_a["players"][0]["id"]
+    player_b = practice.team_b["players"][0]["id"]
+    requests = (
+        ("post", f"/games/{practice.id}/overs/start", {"bowler_id": player_b}),
+        ("get", f"/games/{practice.id}/deliveries", None),
+        ("post", f"/games/{practice.id}/overs/change_bowler", {"new_bowler_id": player_b}),
+        ("post", f"/games/{practice.id}/innings/end", None),
+        ("post", f"/games/{practice.id}/innings/start", {}),
+        ("post", f"/games/{practice.id}/openers", {"striker_id": player_a, "non_striker_id": player_a}),
+        ("post", f"/games/{practice.id}/batters/replace", {"new_batter_id": player_a}),
+        ("post", f"/games/{practice.id}/next-batter", {"batter_id": player_a}),
+        ("post", f"/games/{practice.id}/finalize", None),
+        ("get", f"/games/{practice.id}/snapshot", None),
+        ("get", f"/games/{practice.id}/recent_deliveries", None),
+        (
+            "post",
+            f"/games/{practice.id}/deliveries",
+            {
+                "striker_id": player_a,
+                "non_striker_id": practice.team_a["players"][1]["id"],
+                "bowler_id": player_b,
+                "runs_scored": 0,
+            },
+        ),
+        ("post", f"/games/{practice.id}/undo-last", None),
+        ("patch", f"/games/{practice.id}/deliveries/1", {}),
+    )
+    before = await _db_state(school_client, practice.id)
+    for method, path, body in requests:
+        response = school_client.request(method.upper(), path, headers=owner.headers, json=body)
+        assert response.status_code == 404, f"{method} {path}: {response.text}"
+    assert await _db_state(school_client, practice.id) == before

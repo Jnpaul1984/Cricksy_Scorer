@@ -15,6 +15,7 @@ from backend.api.schemas.school_statistics import (
 )
 from backend.domain.constants import CREDIT_BOWLER, norm_extra
 from backend.services import organization_service
+from backend.services.match_rules import OFFICIAL_MATCH_PURPOSE
 from backend.services.organization_entitlement_service import (
     FREE_CRICKET_ORGANIZATION_TYPES,
     require_organization_capability,
@@ -66,6 +67,7 @@ def _school_games_stmt(organization_id: str) -> Select[tuple[models.Game]]:
     org_a = models.Game.team_a["school_source"]["organization_id"].as_string()
     org_b = models.Game.team_b["school_source"]["organization_id"].as_string()
     return select(models.Game).where(
+        models.Game.match_purpose == OFFICIAL_MATCH_PURPOSE,
         or_(
             and_(org_a == organization_id, or_(org_b == organization_id, org_b.is_(None))),
             and_(org_b == organization_id, org_a.is_(None)),

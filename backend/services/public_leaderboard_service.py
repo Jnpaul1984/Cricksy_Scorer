@@ -7,6 +7,7 @@ from backend.api.schemas.organization_publication import (
     PublicAnonymousLeaderboardsResponse,
 )
 from backend.services import school_statistics_service
+from backend.services.match_rules import OFFICIAL_MATCH_PURPOSE
 from backend.services.organization_entitlement_service import organization_has_capability
 from backend.services.organization_service import ACTIVE_ORGANIZATION_STATUS
 from backend.sql_app import models
@@ -45,6 +46,7 @@ async def get_public_leaderboards(
                     models.OrganizationCompetitionPublication.publication_state == "published",
                     models.Organization.status == ACTIVE_ORGANIZATION_STATUS,
                     models.Game.status == models.GameStatus.completed,
+                    models.Game.match_purpose == OFFICIAL_MATCH_PURPOSE,
                     models.Game.publication_state == "published_final",
                 )
                 .order_by(models.Game.id)

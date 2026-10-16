@@ -18,6 +18,7 @@ from backend.api.schemas.school_competitions import (
     SchoolStandingsResponse,
 )
 from backend.services import organization_service
+from backend.services.match_rules import OFFICIAL_MATCH_PURPOSE
 from backend.services.organization_entitlement_service import (
     FREE_CRICKET_ORGANIZATION_TYPES,
     organization_has_capability,
@@ -709,7 +710,7 @@ async def link_fixture_game(
         lock=True,
     )
     game = await db.get(models.Game, game_id)
-    if game is None:
+    if game is None or game.match_purpose != OFFICIAL_MATCH_PURPOSE:
         raise _not_found("Game")
     if not school_game_matches_fixture(game, fixture, organization_id=organization_id):
         raise _not_found("Game")
@@ -864,6 +865,7 @@ async def standings(
                     models.Fixture.team_a_id.is_not(None),
                     models.Fixture.team_b_id.is_not(None),
                     models.Game.status == models.GameStatus.completed,
+                    models.Game.match_purpose == OFFICIAL_MATCH_PURPOSE,
                 )
             )
         ).all()
@@ -1022,6 +1024,8 @@ async def public_school_game_organization(
     db: AsyncSession, game: models.Game
 ) -> models.Organization | None:
     """Return the owning organization only when a School/Club Game is deliberately public."""
+    if game.match_purpose != OFFICIAL_MATCH_PURPOSE:
+        return None
     organization_id = school_game_organization_id(game)
     if organization_id is None or not await organization_has_capability(
         db, organization_id=organization_id, capability="school_live_scorecards"

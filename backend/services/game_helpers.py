@@ -19,8 +19,6 @@ from collections import defaultdict
 from collections.abc import Mapping, Sequence
 from typing import Any, Literal, cast
 
-from pydantic import BaseModel
-
 from backend import helpers as _local_helpers  # contains overs_str_from_balls
 from backend.domain.constants import (
     CREDIT_BOWLER,
@@ -28,7 +26,14 @@ from backend.domain.constants import (
 from backend.domain.constants import (
     norm_extra as _norm_extra,  # keep public name the same
 )
+from backend.services.scoring_rules import (
+    innings_is_all_out,
+    team_for_current_batting_side,
+    team_for_current_bowling_side,
+    wicket_limit_for_current_innings,
+)
 from backend.sql_app import models, schemas
+from pydantic import BaseModel
 
 UTC = getattr(dt, "UTC", dt.UTC)
 
@@ -134,7 +139,7 @@ def _complete_game_by_result(g: Any) -> bool:
 
     # 1) Chasing side has reached or surpassed the target â†' win by wickets
     if current_runs >= target:
-        margin = max(1, 10 - wkts)
+        margin = max(1, wicket_limit_for_current_innings(g) - wkts)
         method_typed: schemas.MatchMethod | None = cast(schemas.MatchMethod, "by wickets")
         result_text = f"{getattr(g, 'batting_team_name', '')} won by {margin} wickets"
         g.result = schemas.MatchResult(
@@ -150,7 +155,7 @@ def _complete_game_by_result(g: Any) -> bool:
         return True
 
     # 2) If second-innings is over (all out or allocated overs exhausted), decide by runs or tie.
-    all_out = wkts >= 10
+    all_out = innings_is_all_out(g, wkts)
     second_innings_balls_exhausted = bool(
         overs_limit and overs_done >= overs_limit and balls_this_over == 0
     )
@@ -428,8 +433,8 @@ def _rebuild_scorecards_from_deliveries(g: Any) -> None:
         elif inferred_team_name == g.team_b["name"]:
             g.bowling_team_name = g.team_a["name"]
 
-    batting_team = g.team_a if g.batting_team_name == g.team_a["name"] else g.team_b
-    bowling_team = g.team_b if batting_team is g.team_a else g.team_a
+    batting_team = team_for_current_batting_side(g)
+    bowling_team = team_for_current_bowling_side(g)
 
     bat = _mk_batting_scorecard(batting_team)
     bowl = _mk_bowling_scorecard(bowling_team)
@@ -695,6 +700,11 @@ def _compute_snapshot_flags(g: Any) -> dict[str, bool]:
             e2 = e2.model_dump()
         need_new_batter = bool(e2.get("is_out", False))
 
+    # A final wicket is an innings boundary, not a request to choose a batter.
+    # This also makes rebuilt/undone ledgers agree with the live scoring path.
+    if innings_is_all_out(g):
+        need_new_batter = False
+
     have_any_balls = len(_dedup_deliveries(g)) > 0
 
     need_new_over = bool(
@@ -837,11 +847,11 @@ def _maybe_finalize_match(g: Any) -> None:
         if r2 >= target:
             chasing_done = True
             method = schemas.MatchMethod.by_wickets
-            margin = max(1, 10 - w2)
+            margin = max(1, wicket_limit_for_current_innings(g) - w2)
             winner_name = batting_name  # batting in 2nd = chaser
         else:
             balls_exhausted = balls_limit is not None and b2 >= balls_limit
-            all_out = w2 >= 10
+            all_out = innings_is_all_out(g, w2)
             if balls_exhausted or all_out:
                 chasing_done = True
                 if r1 > r2:
@@ -854,7 +864,7 @@ def _maybe_finalize_match(g: Any) -> None:
                     winner_name = None
                 else:
                     method = schemas.MatchMethod.by_wickets
-                    margin = max(1, 10 - w2)
+                    margin = max(1, wicket_limit_for_current_innings(g) - w2)
                     winner_name = batting_name
 
     if chasing_done:
