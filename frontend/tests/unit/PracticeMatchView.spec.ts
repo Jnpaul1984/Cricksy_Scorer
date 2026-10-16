@@ -75,7 +75,7 @@ describe('PracticeMatchView', () => {
     vi.mocked(api.scorePracticeDelivery).mockResolvedValue(state(5, 'in_progress'));
     const wrapper = mount(PracticeMatchView, { global: { provide: { [schoolContextKey as symbol]: context } } });
     await flushPromises();
-    expect(wrapper.get('[data-testid="practice-familiar-scorer"]').text()).toContain('PRIVATE PRACTICE');
+    expect(wrapper.get('[data-testid="practice-familiar-scorer"]').text()).toContain('PRACTICE SCORER');
     expect(wrapper.text()).toContain('A 0');
     expect(wrapper.text()).toContain('B 0');
     for (const runs of [0, 1, 2, 3, 4, 5, 6]) expect(wrapper.get(`[data-testid="score-${runs}"]`).exists()).toBe(true);
@@ -84,9 +84,22 @@ describe('PracticeMatchView', () => {
     await flushPromises();
     expect(api.scorePracticeDelivery).toHaveBeenLastCalledWith('org-1', 'practice-1', expect.objectContaining({ expected_revision: 4, extra: 'wd', runs_scored: 1 }));
     await wrapper.get('[data-testid="wicket"]').trigger('click');
+    await wrapper.get('[data-testid="confirm-wicket"]').trigger('click');
     await flushPromises();
     expect(api.scorePracticeDelivery).toHaveBeenLastCalledWith('org-1', 'practice-1', expect.objectContaining({ is_wicket: true, dismissal_type: 'bowled', dismissed_player_id: 'a-player-0' }));
     expect(api.createPracticeMatch).not.toHaveBeenCalled();
+  });
+  it('keeps practice private by default and gives an authorized coach an explicit publication toggle', async () => {
+    routeQuery.value = { gameId: 'practice-1' };
+    vi.mocked(api.getPracticeMatch).mockResolvedValue(state(4, 'in_progress'));
+    vi.mocked(api.updateSchoolMatchPublication).mockResolvedValue({ game_id: 'practice-1', organization_id: 'org-1', publication_state: 'published_live' });
+    const wrapper = mount(PracticeMatchView, { global: { provide: { [schoolContextKey as symbol]: context } } });
+    await flushPromises();
+    expect(wrapper.text()).toContain('Private by default');
+    await wrapper.get('[data-testid="publish-practice"]').trigger('click');
+    await flushPromises();
+    expect(api.updateSchoolMatchPublication).toHaveBeenCalledWith('org-1', 'practice-1', 'published_live');
+    expect(wrapper.get('[data-testid="unpublish-practice"]').exists()).toBe(true);
   });
   it('recovers a persisted started practice by starting its first innings once', async () => {
     routeQuery.value = { gameId: 'practice-1' };
@@ -101,7 +114,7 @@ describe('PracticeMatchView', () => {
     expect(api.startPracticeInnings).toHaveBeenCalledWith('org-1', 'practice-1', expect.objectContaining({
       expected_revision: 1, striker_id: 'a-player-0', non_striker_id: 'a-player-1', opening_bowler_id: 'b-player-0',
     }));
-    expect(wrapper.text()).toContain('Private revision 2');
+    expect(wrapper.text()).toContain('Revision 2');
   });
   it('does not repeat an uncertain first-innings mutation before the user reloads', async () => {
     routeQuery.value = { gameId: 'practice-1' };
@@ -207,10 +220,10 @@ describe('PracticeMatchView', () => {
     organizationId.value = 'org-2';
     await flushPromises();
     expect(api.getPracticeMatch).toHaveBeenLastCalledWith('org-2', 'practice-1');
-    await vi.waitFor(() => expect(wrapper.text()).toContain('Private revision 20'));
+    await vi.waitFor(() => expect(wrapper.text()).toContain('Revision 20'));
     resolveOldScore(state(2));
     await flushPromises();
-    await vi.waitFor(() => expect(wrapper.text()).toContain('Private revision 20'));
+    await vi.waitFor(() => expect(wrapper.text()).toContain('Revision 20'));
     expect(wrapper.text()).not.toMatch(/Private revision 2 ·/);
   });
 });

@@ -194,7 +194,9 @@ class PracticeWorkflowState(BaseModel):
     game_id: str
     organization_id: str
     match_purpose: Literal["practice"]
-    publication_state: Literal["private"]
+    # A coach can opt in to the organization's publication state.  Practice
+    # rows remain excluded from every public projection by the service layer.
+    publication_state: Literal["private", "published_live", "published_final"]
     status: str
     revision: int = Field(ge=1)
     practice_start_context: dict[str, object]

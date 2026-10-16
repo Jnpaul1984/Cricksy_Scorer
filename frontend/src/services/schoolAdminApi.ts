@@ -608,7 +608,7 @@ export type PracticeWorkflowState = {
   game_id: string;
   organization_id: string;
   match_purpose: 'practice';
-  publication_state: 'private';
+  publication_state: 'private' | 'published_live' | 'published_final';
   status: string;
   revision: number;
   practice_start_context: { version: 1; first_batting_side: 'team_a' | 'team_b' };
