@@ -1113,13 +1113,54 @@ async def public_practice_scorecard(db: AsyncSession, *, game_id: str) -> Public
         or organization.organization_type not in FREE_CRICKET_ORGANIZATION_TYPES
     ):
         raise _not_found("Practice scorecard")
+    participant_ids = {
+        str(player.get("id"))
+        for team in (game.team_a, game.team_b)
+        if isinstance(team, dict)
+        for player in team.get("players", [])
+        if isinstance(player, dict) and player.get("id") is not None
+    }
+    labels = {
+        player_id: name
+        for player_id, name in (
+            await db.execute(
+                select(models.PlayerProfile.player_id, models.PlayerProfile.player_name).where(
+                    models.PlayerProfile.player_id.in_(participant_ids)
+                )
+            )
+        ).all()
+        if isinstance(name, str) and name.strip()
+    }
+
+    def labelled_team(team: dict[str, Any]) -> dict[str, Any]:
+        return {
+            **team,
+            "players": [
+                {"name": labels.get(str(player.get("id")), "Unavailable participant")}
+                for player in team.get("players", [])
+                if isinstance(player, dict)
+            ],
+        }
+
+    def labelled_card(card: dict[str, Any]) -> dict[str, Any]:
+        return {
+            key: {
+                **row,
+                "player_name": labels.get(
+                    str(row.get("player_id", key)), "Unavailable participant"
+                ),
+            }
+            for key, row in card.items()
+            if isinstance(row, dict)
+        }
+
     return PublicSchoolScorecard(
         game_id=game.id,
         organization_type=organization.organization_type,
         publication_state=game.publication_state,
         status=game.status.value,
-        team_a=_public_team(game.team_a),
-        team_b=_public_team(game.team_b),
+        team_a=_public_team(labelled_team(game.team_a)),
+        team_b=_public_team(labelled_team(game.team_b)),
         match_type=game.match_type,
         overs_limit=game.overs_limit,
         days_limit=game.days_limit,
@@ -1134,6 +1175,6 @@ async def public_practice_scorecard(db: AsyncSession, *, game_id: str) -> Public
         balls_this_over=game.balls_this_over,
         current_inning=game.current_inning,
         result=authoritative_result_text(game.result),
-        batting_scorecard=_public_card(game.batting_scorecard),
-        bowling_scorecard=_public_card(game.bowling_scorecard),
+        batting_scorecard=_public_card(labelled_card(game.batting_scorecard)),
+        bowling_scorecard=_public_card(labelled_card(game.bowling_scorecard)),
     )

@@ -56,7 +56,7 @@ async def _load_private_game(
     if (
         game is None
         or game.match_purpose != PRACTICE_MATCH_PURPOSE
-        or game.publication_state != "private"
+        or game.publication_state not in {"private", "published_live", "published_final"}
         or not _practice_game_belongs_to_organization(game, organization_id)
     ):
         raise _error(404, "Practice match not found")
@@ -112,7 +112,9 @@ def _side_ids(team: Mapping[str, Any]) -> set[str]:
     return ids
 
 
-def _assert_roles(game: models.Game, *, striker_id: str, non_striker_id: str, bowler_id: str) -> None:
+def _assert_roles(
+    game: models.Game, *, striker_id: str, non_striker_id: str, bowler_id: str
+) -> None:
     try:
         validate_delivery_participants(
             game,
@@ -176,8 +178,10 @@ def _close_if_terminal(game: models.Game) -> None:
         and game.target is not None
         and int(game.total_runs) >= int(game.target)
     )
-    if not chase_reached and not innings_is_all_out(game) and not (
-        balls_limit > 0 and balls_bowled >= balls_limit
+    if (
+        not chase_reached
+        and not innings_is_all_out(game)
+        and not (balls_limit > 0 and balls_bowled >= balls_limit)
     ):
         return
     history = list(game.practice_innings_history or [])
@@ -211,9 +215,7 @@ def _snapshot(game: models.Game) -> dict[str, Any]:
     return snapshot
 
 
-async def _persist(
-    db: AsyncSession, game: models.Game, *, expected_revision: int
-) -> models.Game:
+async def _persist(db: AsyncSession, game: models.Game, *, expected_revision: int) -> models.Game:
     for field in (
         "deliveries",
         "batting_scorecard",
@@ -253,7 +255,11 @@ async def read_practice_workflow(
     db: AsyncSession, *, organization_id: str, actor_user_id: str, game_id: str
 ) -> tuple[models.Game, dict[str, Any]]:
     game = await _load_private_game(
-        db, organization_id=organization_id, actor_user_id=actor_user_id, game_id=game_id, lock=False
+        db,
+        organization_id=organization_id,
+        actor_user_id=actor_user_id,
+        game_id=game_id,
+        lock=False,
     )
     return game, _snapshot(game)
 
@@ -285,7 +291,11 @@ async def start_practice_innings(
         raise _error(409, "Practice innings is not ready to start")
 
     first_side = validate_practice_start_context(game.practice_start_context)
-    batting_side = first_side if game.current_inning == 1 else ("team_b" if first_side == "team_a" else "team_a")
+    batting_side = (
+        first_side
+        if game.current_inning == 1
+        else ("team_b" if first_side == "team_a" else "team_a")
+    )
     bowling_side = "team_b" if batting_side == "team_a" else "team_a"
     game.batting_team_name = _side_name(game, batting_side)
     game.bowling_team_name = _side_name(game, bowling_side)
@@ -413,7 +423,9 @@ async def undo_last_practice_delivery(
     game.deliveries = ledger[:-1]
     _reset_current_innings(game)
     current_ledger = [
-        row for row in game.deliveries if isinstance(row, dict) and row.get("inning") == game.current_inning
+        row
+        for row in game.deliveries
+        if isinstance(row, dict) and row.get("inning") == game.current_inning
     ]
     for row in current_ledger:
         try:
