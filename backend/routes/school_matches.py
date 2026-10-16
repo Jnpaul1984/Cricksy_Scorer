@@ -356,6 +356,7 @@ async def score_private_practice_delivery(
             is_wicket=payload.is_wicket,
             dismissal_type=payload.dismissal_type,
             dismissed_player_id=payload.dismissed_player_id,
+            field_zone=payload.field_zone,
         )
     except (
         organization_service.OrganizationServiceError,

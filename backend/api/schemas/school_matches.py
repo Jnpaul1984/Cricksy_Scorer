@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 
@@ -188,6 +188,9 @@ class PracticeDelivery(PracticeWorkflowRevision):
     is_wicket: bool = False
     dismissal_type: str | None = Field(default=None, max_length=64)
     dismissed_player_id: str | None = Field(default=None, min_length=1)
+    # Mirrors the regular scorer's canonical eight field sections. It remains
+    # in the private practice delivery ledger and is never public/official.
+    field_zone: StrictInt | None = Field(default=None, ge=1, le=8)
 
 
 class PracticeWorkflowState(BaseModel):

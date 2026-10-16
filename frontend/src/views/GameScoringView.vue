@@ -26,7 +26,6 @@ import DeliveryCorrectionModal from '@/components/DeliveryCorrectionModal.vue'
 import EventLogTab from '@/components/EventLogTab.vue'
 import PresenceBar from '@/components/PresenceBar.vue'
 import ScoreboardWidget from '@/components/ScoreboardWidget.vue'
-import ShotMapCanvas from '@/components/scoring/ShotMapCanvas.vue'
 import WinProbabilityWidget from '@/components/WinProbabilityWidget.vue'
 import WinProbabilityChart from '@/components/WinProbabilityChart.vue'
 import InningsGradeWidget from '@/components/InningsGradeWidget.vue'
@@ -78,7 +77,7 @@ const dismissedName = ref<string | null>(null)
 const shotMap = ref<string | null>(null)
 const recordedZone = ref<number | null>(null)
 
-const recordZone = (zone: number) => {
+const recordZone = (zone: number | null) => {
   recordedZone.value = zone
 }
 
@@ -2069,11 +2068,9 @@ async function confirmChangeBowler(): Promise<void> {
         </div>
 
         <div class="map-container">
-           <!-- Placeholder for Shot Map - In real app this would be canvas/SVG -->
            <div class="wagon-wheel-placeholder">
               <div class="field-oval">
                  <div class="pitch-rect"></div>
-                 <!-- Simple 8-zone click overlay -->
                  <div class="zone-overlay">
                     <div class="zone z1" @click.stop="recordZone(1)"></div>
                     <div class="zone z2" @click.stop="recordZone(2)"></div>

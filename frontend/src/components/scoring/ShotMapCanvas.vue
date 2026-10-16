@@ -17,6 +17,7 @@ const props = defineProps<{
   width?: number
   height?: number
   backgroundImage?: string | null
+  disabled?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -76,7 +77,14 @@ function pointFromEvent(event: PointerEvent): Point {
 }
 
 function drawStroke(ctx: CanvasRenderingContext2D, stroke: Point[]): void {
-  if (stroke.length < 2) return
+  if (!stroke.length) return
+  if (stroke.length === 1) {
+    ctx.beginPath()
+    ctx.arc(stroke[0].x, stroke[0].y, 4, 0, Math.PI * 2)
+    ctx.fillStyle = '#2563eb'
+    ctx.fill()
+    return
+  }
   ctx.beginPath()
   ctx.moveTo(stroke[0].x, stroke[0].y)
   for (let i = 1; i < stroke.length; i += 1) {
@@ -111,15 +119,24 @@ function encodeSvg(): string | null {
   const segments: string[] = []
   for (const stroke of strokes.value) {
     if (!stroke.length) continue
+    if (stroke.length === 1) {
+      const point = stroke[0]
+      segments.push(`<circle cx="${point.x.toFixed(1)}" cy="${point.y.toFixed(1)}" r="4" fill="#2563eb"/>`)
+      continue
+    }
     const path = stroke
       .map((point, idx) => `${idx === 0 ? 'M' : 'L'}${point.x.toFixed(1)} ${point.y.toFixed(1)}`)
       .join(' ')
     if (path) segments.push(path)
   }
   if (!segments.length) return null
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${canvasWidth.value} ${canvasHeight.value}" fill="none"><path d="${segments.join(
-    ' '
-  )}" stroke="#2563eb" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${canvasWidth.value} ${canvasHeight.value}" fill="none">${segments
+    .map((segment) =>
+      segment.startsWith('<circle')
+        ? segment
+        : `<path d="${segment}" stroke="#2563eb" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>`
+    )
+    .join('')}</svg>`
   return `data:image/svg+xml,${encodeURIComponent(svg)}`
 }
 
@@ -130,6 +147,7 @@ function emitValue(): void {
 }
 
 function onPointerDown(event: PointerEvent): void {
+  if (props.disabled) return
   if (event.button !== 0 && event.pointerType === 'mouse') return
   event.preventDefault()
   isDrawing.value = true
@@ -139,7 +157,7 @@ function onPointerDown(event: PointerEvent): void {
 }
 
 function onPointerMove(event: PointerEvent): void {
-  if (!isDrawing.value) return
+  if (props.disabled || !isDrawing.value) return
   event.preventDefault()
   const next = pointFromEvent(event)
   const last = currentStroke.value[currentStroke.value.length - 1]
@@ -151,7 +169,7 @@ function onPointerMove(event: PointerEvent): void {
 function finishStroke(): void {
   if (!isDrawing.value) return
   isDrawing.value = false
-  if (currentStroke.value.length > 1) {
+  if (currentStroke.value.length) {
     strokes.value = [...strokes.value, [...currentStroke.value]]
     emitValue()
   }
@@ -227,6 +245,7 @@ watch(
         class="shot-map-canvas__surface"
         :width="canvasWidth"
         :height="canvasHeight"
+        :aria-disabled="props.disabled"
         @pointerdown="onPointerDown"
         @pointermove="onPointerMove"
         @pointerup="finishStroke"
@@ -281,6 +300,10 @@ watch(
   width: 100%;
   height: 100%;
   touch-action: none;
+}
+
+.shot-map-canvas__surface[aria-disabled='true'] {
+  cursor: not-allowed;
 }
 
 .shot-map-canvas__actions {

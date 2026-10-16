@@ -5,9 +5,11 @@ from __future__ import annotations
 import json
 
 import pytest
+from pydantic import ValidationError
 from sqlalchemy import select
 
 from backend.api.schemas.school_competitions import SchoolPublicationUpdate
+from backend.api.schemas.school_matches import PracticeDelivery
 from backend.routes.school_matches import _practice_workflow_state
 from backend.services import school_competition_service
 from backend.services.practice_match_persistence_service import start_private_practice_match
@@ -32,6 +34,19 @@ from backend.tests.test_practice_start_context import _draft
 def _ids(game: Game, side: str) -> list[str]:
     team = game.team_a if side == "team_a" else game.team_b
     return [str(player["id"]) for player in team["players"]]
+
+
+@pytest.mark.parametrize("invalid_zone", [0, 9, -1, "6", 6.0, True, False])
+def test_private_field_zone_contract_requires_a_strict_integer_in_range(invalid_zone: object) -> None:
+    with pytest.raises(ValidationError):
+        PracticeDelivery(
+            expected_revision=1,
+            striker_id="striker",
+            non_striker_id="non-striker",
+            bowler_id="bowler",
+            runs_scored=0,
+            field_zone=invalid_zone,
+        )
 
 
 async def test_private_workflow_response_resolves_frozen_profile_labels_after_reload() -> None:
@@ -84,6 +99,70 @@ async def test_private_workflow_response_resolves_frozen_profile_labels_after_re
             "id": missing_id,
             "label": "Unavailable participant",
         }
+
+
+@pytest.mark.parametrize("organization_type", ["school", "club"])
+async def test_private_field_zone_persists_through_reload_and_undo_without_official_projection(
+    organization_type: str,
+) -> None:
+    organization_id, owner_id, game_id = await _draft(organization_type=organization_type)
+    field_zone = 6
+    async with SessionLocal() as session:
+        game = await start_private_practice_match(
+            session,
+            organization_id=organization_id,
+            actor_user_id=owner_id,
+            game_id=game_id,
+            first_batting_side="team_a",
+        )
+        batting, bowling = _ids(game, "team_a"), _ids(game, "team_b")
+        game, _ = await start_practice_innings(
+            session,
+            organization_id=organization_id,
+            actor_user_id=owner_id,
+            game_id=game_id,
+            expected_revision=game.practice_workflow_revision,
+            striker_id=batting[0],
+            non_striker_id=batting[1],
+            opening_bowler_id=bowling[0],
+        )
+        game, snapshot = await score_practice_delivery(
+            session,
+            organization_id=organization_id,
+            actor_user_id=owner_id,
+            game_id=game_id,
+            expected_revision=game.practice_workflow_revision,
+            striker_id=batting[0],
+            non_striker_id=batting[1],
+            bowler_id=bowling[0],
+            runs_scored=4,
+            extra=None,
+            is_wicket=False,
+            dismissal_type=None,
+            dismissed_player_id=None,
+            field_zone=field_zone,
+        )
+        assert game.deliveries[-1]["field_zone"] == field_zone
+        assert snapshot["last_delivery"]["field_zone"] == field_zone
+        reloaded, reloaded_snapshot = await read_practice_workflow(
+            session,
+            organization_id=organization_id,
+            actor_user_id=owner_id,
+            game_id=game_id,
+        )
+        assert reloaded.deliveries[-1]["field_zone"] == field_zone
+        assert reloaded_snapshot["last_delivery"]["field_zone"] == field_zone
+        with pytest.raises(Exception) as official_error:
+            await school_competition_service.public_scorecard(session, game_id=game_id)
+        assert getattr(official_error.value, "status_code", None) == 404
+        game, _ = await undo_last_practice_delivery(
+            session,
+            organization_id=organization_id,
+            actor_user_id=owner_id,
+            game_id=game_id,
+            expected_revision=game.practice_workflow_revision,
+        )
+        assert game.deliveries == []
 
 
 @pytest.mark.parametrize(
@@ -305,6 +384,7 @@ async def test_published_practice_preserves_snapshot_labels_and_private_scoring(
             session, game_id=game_id
         )
         assert projection.team_a.players[0].name == snapshot_names[batting[0]]
+        private_field_zone = 3
         game, _ = await score_practice_delivery(
             session,
             organization_id=organization_id,
@@ -319,7 +399,12 @@ async def test_published_practice_preserves_snapshot_labels_and_private_scoring(
             is_wicket=False,
             dismissal_type=None,
             dismissed_player_id=None,
+            field_zone=private_field_zone,
         )
+        public_projection = await school_competition_service.public_practice_scorecard(
+            session, game_id=game_id
+        )
+        assert "field_zone" not in json.dumps(public_projection.model_dump(mode="json"))
         game, _ = await undo_last_practice_delivery(
             session,
             organization_id=organization_id,
