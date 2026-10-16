@@ -667,6 +667,21 @@ def school_game_organization_id(game: models.Game) -> str | None:
     return organization_id if ownership == "organization" else None
 
 
+def is_generic_official_game(game: models.Game) -> bool:
+    """Allow generic routes for official games and pre-purpose legacy records.
+
+    The match-purpose migration introduced a non-null ``official`` default, but
+    old persisted rows and test fixtures can still present ``None``.  That
+    compatibility case is safe only when neither frozen side carries a School
+    source.  Practice, unknown-purpose, and School/Club-owned records remain
+    outside the generic Game surface.
+    """
+    purpose = getattr(game, "match_purpose", None)
+    if purpose == OFFICIAL_MATCH_PURPOSE:
+        return True
+    return purpose is None and school_game_ownership(game)[0] == "legacy"
+
+
 def school_game_matches_fixture(
     game: models.Game, fixture: models.Fixture, *, organization_id: str
 ) -> bool:

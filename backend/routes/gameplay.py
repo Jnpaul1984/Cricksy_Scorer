@@ -14,7 +14,7 @@ from backend.services import school_competition_service
 from backend.services import validation as validation_helpers
 from backend.services.historical_import_delivery_service import coerce_delivery_ledger
 from backend.services.live_bus import emit_state_update
-from backend.services.match_rules import OFFICIAL_MATCH_PURPOSE, MatchRulesValidationError
+from backend.services.match_rules import MatchRulesValidationError
 from backend.services.scoring_rules import (
     innings_is_all_out,
     practice_features_enabled,
@@ -97,7 +97,7 @@ async def _require_school_scorer(
     # Generic gameplay is an official-only surface.  Private practice has a
     # separate organization-scoped workflow and must remain indistinguishable
     # from a missing game here, even to an authorized organization scorer.
-    if getattr(game, "match_purpose", None) != OFFICIAL_MATCH_PURPOSE:
+    if not school_competition_service.is_generic_official_game(game):
         raise HTTPException(status_code=404, detail="Game not found")
     try:
         await school_competition_service.require_school_game_scorer(db, game=game, user=user)
@@ -263,7 +263,7 @@ async def get_deliveries(
     game = await crud.get_game(db, game_id=game_id)
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
-    if getattr(game, "match_purpose", None) != OFFICIAL_MATCH_PURPOSE:
+    if not school_competition_service.is_generic_official_game(game):
         raise HTTPException(status_code=404, detail="Game not found")
 
     g = cast(Any, game)
@@ -853,7 +853,7 @@ async def get_snapshot(
     game = await crud.get_game(db, game_id=game_id)
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
-    if getattr(game, "match_purpose", None) != OFFICIAL_MATCH_PURPOSE:
+    if not school_competition_service.is_generic_official_game(game):
         raise HTTPException(status_code=404, detail="Game not found")
     try:
         (
@@ -1038,7 +1038,7 @@ async def get_recent_deliveries(
     game = await crud.get_game(db, game_id=game_id)
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
-    if getattr(game, "match_purpose", None) != OFFICIAL_MATCH_PURPOSE:
+    if not school_competition_service.is_generic_official_game(game):
         raise HTTPException(status_code=404, detail="Game not found")
 
     g = cast(Any, game)

@@ -827,12 +827,12 @@ async def test_publication_projections_exclude_practice_games_from_counts_result
         headers=owner.headers,
     )
     assert published_competition.status_code == 200
-    competition_key = published_competition.json()["public_key"]
-    base = f"/api/public/organizations/{public_identifier}/competitions/{competition_key}"
 
     community = school_client.get(f"/api/public/organizations/{public_identifier}/community")
     assert community.status_code == 200, community.text
     competition = community.json()["competitions"][0]
+    competition_key = competition["public_key"]
+    base = f"/api/public/organizations/{public_identifier}/competitions/{competition_key}"
     fixtures_by_id = {fixture["public_identifier"]: fixture for fixture in competition["fixtures"]}
     official_projection = fixtures_by_id[official_fixture.public_identifier]
     practice_projection = fixtures_by_id[practice_fixtures[0].public_identifier]

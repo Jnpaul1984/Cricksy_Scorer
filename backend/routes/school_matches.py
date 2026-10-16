@@ -28,7 +28,7 @@ from backend.services import (
     school_match_service,
 )
 from backend.sql_app.database import get_db
-from backend.sql_app.models import PlayerProfile, User
+from backend.sql_app.models import Game, PlayerProfile, User
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -184,16 +184,18 @@ async def start_private_practice_match(
         school_match_service.SchoolMatchServiceError,
     ) as exc:
         _service_error(exc)
-    assert game.practice_start_context is not None
+    practice_start_context = game.practice_start_context
+    if practice_start_context is None:
+        raise HTTPException(status_code=409, detail="Practice match start context was not persisted")
     return PracticeMatchStartResponse(
         game_id=game.id,
         status="started",
-        practice_start_context=game.practice_start_context,
+        practice_start_context=practice_start_context,
     )
 
 
 async def _practice_workflow_state(
-    db: AsyncSession, game: object, organization_id: str, snapshot: dict[str, object]
+    db: AsyncSession, game: Game, organization_id: str, snapshot: dict[str, object]
 ) -> PracticeWorkflowState:
     """Build a private state response with labels resolved from frozen profile IDs.
 

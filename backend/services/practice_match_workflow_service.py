@@ -79,6 +79,21 @@ def _require_revision(game: models.Game, expected_revision: int) -> None:
         raise _error(409, "Practice workflow revision conflict")
 
 
+def _delivery_runs(row: Mapping[str, Any]) -> int:
+    """Read a replayed delivery's scoring value without trusting JSON types."""
+    if row.get("extra_type") == "nb":
+        value = row.get("runs_off_bat")
+    elif row.get("extra_type") in {"wd", "b", "lb"}:
+        value = row.get("extra_runs")
+    else:
+        value = row.get("runs_off_bat")
+    if value is None:
+        return 0
+    if isinstance(value, (int, float, str)):
+        return int(value)
+    raise ValueError("Persisted practice delivery has an invalid runs value")
+
+
 def _side_name(game: models.Game, side_key: str) -> str:
     side = game.team_a if side_key == "team_a" else game.team_b
     name = side.get("name") if isinstance(side, dict) else None
@@ -407,7 +422,7 @@ async def undo_last_practice_delivery(
                 striker_id=str(row.get("striker_id") or ""),
                 non_striker_id=str(row.get("non_striker_id") or ""),
                 bowler_id=str(row.get("bowler_id") or ""),
-                runs_scored=int(row.get("runs_off_bat") if row.get("extra_type") == "nb" else row.get("extra_runs") if row.get("extra_type") in {"wd", "b", "lb"} else row.get("runs_off_bat") or 0),
+                runs_scored=_delivery_runs(row),
                 extra=row.get("extra_type"),
                 is_wicket=bool(row.get("is_wicket")),
                 dismissal_type=row.get("dismissal_type"),

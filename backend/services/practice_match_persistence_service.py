@@ -69,11 +69,21 @@ def _assert_practice_start_ready(game: models.Game) -> None:
         playing_xi = side.get("playing_xi")
         if not isinstance(players, list) or not isinstance(playing_xi, list):
             raise school_match_service.SchoolMatchServiceError(422, f"Practice {side_key} is not ready")
-        player_ids = {player.get("id") for player in players if isinstance(player, dict)}
+        player_ids = {
+            player_id
+            for player in players
+            if isinstance(player, dict)
+            for player_id in (player.get("id"),)
+            if isinstance(player_id, str) and player_id
+        }
         xi_ids = set(playing_xi)
         if (
             len(player_ids) < 2
-            or not all(isinstance(player_id, str) and player_id for player_id in player_ids)
+            or any(
+                isinstance(player, dict)
+                and (not isinstance(player.get("id"), str) or not player["id"])
+                for player in players
+            )
             or not all(isinstance(player_id, str) and player_id for player_id in xi_ids)
             or len(xi_ids) != len(playing_xi)
             or xi_ids != player_ids
