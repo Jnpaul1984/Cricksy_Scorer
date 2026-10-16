@@ -1113,23 +1113,46 @@ async def public_practice_scorecard(db: AsyncSession, *, game_id: str) -> Public
         or organization.organization_type not in FREE_CRICKET_ORGANIZATION_TYPES
     ):
         raise _not_found("Practice scorecard")
-    participant_ids = {
-        str(player.get("id"))
+    participant_labels = {
+        str(player.get("id")): str(player.get("name"))
         for team in (game.team_a, game.team_b)
         if isinstance(team, dict)
         for player in team.get("players", [])
-        if isinstance(player, dict) and player.get("id") is not None
+        if isinstance(player, dict)
+        and player.get("id") is not None
+        and isinstance(player.get("name"), str)
+        and player["name"].strip()
     }
-    labels = {
-        player_id: name
-        for player_id, name in (
+    participant_ids = set(participant_labels)
+    participant_membership_ids = {
+        str(player.get("school_player_membership_id"))
+        for team in (game.team_a, game.team_b)
+        if isinstance(team, dict)
+        for player in team.get("players", [])
+        if isinstance(player, dict) and player.get("school_player_membership_id") is not None
+    }
+    active_participant_ids = {
+        player_id
+        for (player_id,) in (
             await db.execute(
-                select(models.PlayerProfile.player_id, models.PlayerProfile.player_name).where(
-                    models.PlayerProfile.player_id.in_(participant_ids)
+                select(models.PlayerProfile.player_id)
+                .join(
+                    models.SchoolPlayerMembership,
+                    models.SchoolPlayerMembership.player_profile_id
+                    == models.PlayerProfile.player_id,
+                )
+                .where(
+                    models.PlayerProfile.player_id.in_(participant_ids),
+                    models.SchoolPlayerMembership.id.in_(participant_membership_ids),
+                    models.SchoolPlayerMembership.status == "active",
                 )
             )
         ).all()
-        if isinstance(name, str) and name.strip()
+    }
+    labels = {
+        player_id: name
+        for player_id, name in participant_labels.items()
+        if player_id in active_participant_ids
     }
 
     def labelled_team(team: dict[str, Any]) -> dict[str, Any]:

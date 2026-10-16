@@ -30,7 +30,9 @@ def validate_practice_start_context(context: object) -> str:
         )
     version = context.get("version")
     if type(version) is not int or version != PRACTICE_START_CONTEXT_VERSION:
-        raise school_match_service.SchoolMatchServiceError(422, "Unsupported practice start context version")
+        raise school_match_service.SchoolMatchServiceError(
+            422, "Unsupported practice start context version"
+        )
     first_batting_side = context.get("first_batting_side")
     if not isinstance(first_batting_side, str) or first_batting_side not in _PRACTICE_SIDE_KEYS:
         raise school_match_service.SchoolMatchServiceError(
@@ -53,22 +55,30 @@ def _assert_practice_start_ready(game: models.Game) -> None:
     if game.match_purpose != PRACTICE_MATCH_PURPOSE or game.publication_state != "private":
         raise school_match_service.SchoolMatchServiceError(404, "Practice match not found")
     if game.status != models.GameStatus.not_started:
-        raise school_match_service.SchoolMatchServiceError(409, "Practice match has already started")
+        raise school_match_service.SchoolMatchServiceError(
+            409, "Practice match has already started"
+        )
     if game.deliveries:
         raise school_match_service.SchoolMatchServiceError(
             409, "Practice start context cannot change after deliveries exist"
         )
     if game.practice_start_context is not None:
-        raise school_match_service.SchoolMatchServiceError(409, "Practice start context is already set")
+        raise school_match_service.SchoolMatchServiceError(
+            409, "Practice start context is already set"
+        )
 
     selected_player_ids: list[set[str]] = []
     for side_key, side in (("team_a", game.team_a), ("team_b", game.team_b)):
         if not isinstance(side, dict):
-            raise school_match_service.SchoolMatchServiceError(422, f"Practice {side_key} is malformed")
+            raise school_match_service.SchoolMatchServiceError(
+                422, f"Practice {side_key} is malformed"
+            )
         players = side.get("players")
         playing_xi = side.get("playing_xi")
         if not isinstance(players, list) or not isinstance(playing_xi, list):
-            raise school_match_service.SchoolMatchServiceError(422, f"Practice {side_key} is not ready")
+            raise school_match_service.SchoolMatchServiceError(
+                422, f"Practice {side_key} is not ready"
+            )
         player_ids = {
             player_id
             for player in players
@@ -88,7 +98,9 @@ def _assert_practice_start_ready(game: models.Game) -> None:
             or len(xi_ids) != len(playing_xi)
             or xi_ids != player_ids
         ):
-            raise school_match_service.SchoolMatchServiceError(422, f"Practice {side_key} is not ready")
+            raise school_match_service.SchoolMatchServiceError(
+                422, f"Practice {side_key} is not ready"
+            )
         selected_player_ids.append(player_ids)
     if selected_player_ids[0] & selected_player_ids[1]:
         raise school_match_service.SchoolMatchServiceError(
@@ -129,12 +141,26 @@ async def _snapshot_side(
     )
     if team is None:
         raise school_match_service.SchoolMatchServiceError(404, "Source squad not found")
-    # Names are display-only.  Every relationship is carried by the frozen IDs.
+    profile_labels = {
+        player_id: player_name
+        for player_id, player_name in (
+            await db.execute(
+                select(models.PlayerProfile.player_id, models.PlayerProfile.player_name).where(
+                    models.PlayerProfile.player_id.in_(side.canonical_player_ids)
+                )
+            )
+        ).all()
+        if isinstance(player_name, str) and player_name.strip()
+    }
+    # Names are immutable display snapshots. Every relationship is carried by
+    # the frozen IDs; a later public projection will still require the
+    # participant to remain active before revealing this label.
     return {
         "name": team.name,
         "players": [
             {
                 "id": canonical_id,
+                "name": profile_labels.get(canonical_id, "Unavailable participant"),
                 "player_profile_id": canonical_id,
                 "school_player_membership_id": school_membership_id,
                 "school_team_player_membership_id": team_membership_id,
@@ -164,8 +190,12 @@ async def persist_practice_match_setup(
         db, organization_id=organization_id, actor_user_id=actor_user_id
     )
     handoff = practice_match_setup_service.serialize_practice_match_setup(setup)
-    team_a = await _snapshot_side(db, organization_id=organization_id, side_key="team_a", side=setup.team_a)
-    team_b = await _snapshot_side(db, organization_id=organization_id, side_key="team_b", side=setup.team_b)
+    team_a = await _snapshot_side(
+        db, organization_id=organization_id, side_key="team_a", side=setup.team_a
+    )
+    team_b = await _snapshot_side(
+        db, organization_id=organization_id, side_key="team_b", side=setup.team_b
+    )
     rules = handoff["match_rules"]
     assert isinstance(rules, dict)
     game = models.Game(
@@ -220,7 +250,9 @@ async def start_private_practice_match(
         persisted_side = validate_practice_start_context(game.practice_start_context)
         if game.status == models.GameStatus.started and persisted_side == first_batting_side:
             return game
-        raise school_match_service.SchoolMatchServiceError(409, "Practice start context is already set")
+        raise school_match_service.SchoolMatchServiceError(
+            409, "Practice start context is already set"
+        )
     _assert_practice_start_ready(game)
     context = {
         "version": PRACTICE_START_CONTEXT_VERSION,
@@ -249,7 +281,9 @@ async def start_private_practice_match(
                 and validate_practice_start_context(persisted_context) == first_batting_side
             ):
                 return current
-        raise school_match_service.SchoolMatchServiceError(409, "Practice match has already started")
+        raise school_match_service.SchoolMatchServiceError(
+            409, "Practice match has already started"
+        )
     try:
         await db.commit()
     except Exception:

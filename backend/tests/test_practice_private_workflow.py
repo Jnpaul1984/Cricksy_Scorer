@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import json
+
 import pytest
 from sqlalchemy import select
 
+from backend.api.schemas.school_competitions import SchoolPublicationUpdate
 from backend.routes.school_matches import _practice_workflow_state
 from backend.services import school_competition_service
 from backend.services.practice_match_persistence_service import start_private_practice_match
@@ -16,7 +19,13 @@ from backend.services.practice_match_workflow_service import (
     undo_last_practice_delivery,
 )
 from backend.sql_app.database import SessionLocal
-from backend.sql_app.models import Game, OrganizationMembership, PlayerProfile, User
+from backend.sql_app.models import (
+    Game,
+    OrganizationMembership,
+    PlayerProfile,
+    SchoolPlayerMembership,
+    User,
+)
 from backend.tests.test_practice_start_context import _draft
 
 
@@ -227,8 +236,11 @@ async def test_private_workflow_rejects_stale_revision_and_foreign_runtime_befor
         assert getattr(exc_info.value, "status_code", None) == 409
 
 
-async def test_explicit_public_practice_scorecard_is_purpose_isolated_and_revocable() -> None:
-    organization_id, owner_id, game_id = await _draft(organization_type="club")
+@pytest.mark.parametrize("organization_type", ["school", "club"])
+async def test_published_practice_preserves_snapshot_labels_and_private_scoring(
+    organization_type: str,
+) -> None:
+    organization_id, owner_id, game_id = await _draft(organization_type=organization_type)
     async with SessionLocal() as session:
         game = await start_private_practice_match(
             session,
@@ -237,23 +249,127 @@ async def test_explicit_public_practice_scorecard_is_purpose_isolated_and_revoca
             game_id=game_id,
             first_batting_side="team_a",
         )
-        game.publication_state = "published_live"
-        await session.commit()
+        batting, bowling = _ids(game, "team_a"), _ids(game, "team_b")
+        snapshot_names = {
+            player["id"]: player["name"]
+            for team in (game.team_a, game.team_b)
+            for player in team["players"]
+        }
+        membership_ids = {
+            player["id"]: player["school_player_membership_id"]
+            for team in (game.team_a, game.team_b)
+            for player in team["players"]
+        }
+        game, _ = await start_practice_innings(
+            session,
+            organization_id=organization_id,
+            actor_user_id=owner_id,
+            game_id=game_id,
+            expected_revision=game.practice_workflow_revision,
+            striker_id=batting[0],
+            non_striker_id=batting[1],
+            opening_bowler_id=bowling[0],
+        )
+        game, publication_state = await school_competition_service.publication(
+            session,
+            organization_id=organization_id,
+            actor_user_id=owner_id,
+            game_id=game_id,
+            payload=SchoolPublicationUpdate(publication_state="published_live"),
+        )
+        assert publication_state == "published_live"
 
         projection = await school_competition_service.public_practice_scorecard(
             session, game_id=game_id
         )
         assert projection.game_id == game_id
-        assert projection.organization_type == "club"
+        assert projection.organization_type == organization_type
         assert projection.publication_state == "published_live"
+        assert [player.name for player in projection.team_a.players] == [
+            snapshot_names[player_id] for player_id in batting
+        ]
+        assert projection.batting_scorecard
+        assert projection.bowling_scorecard
+        public_payload = json.dumps(projection.model_dump(mode="json"))
+        for player_id, membership_id in membership_ids.items():
+            assert player_id not in public_payload
+            assert membership_id not in public_payload
+
+        # A renamed live profile must not rewrite the published roster-era
+        # label. The scorer remains available while publication is live.
+        profile = await session.get(PlayerProfile, batting[0])
+        assert profile is not None
+        profile.player_name = "Renamed after practice setup"
+        await session.commit()
+        projection = await school_competition_service.public_practice_scorecard(
+            session, game_id=game_id
+        )
+        assert projection.team_a.players[0].name == snapshot_names[batting[0]]
+        game, _ = await score_practice_delivery(
+            session,
+            organization_id=organization_id,
+            actor_user_id=owner_id,
+            game_id=game_id,
+            expected_revision=game.practice_workflow_revision,
+            striker_id=batting[0],
+            non_striker_id=batting[1],
+            bowler_id=bowling[0],
+            runs_scored=1,
+            extra=None,
+            is_wicket=False,
+            dismissal_type=None,
+            dismissed_player_id=None,
+        )
+        game, _ = await undo_last_practice_delivery(
+            session,
+            organization_id=organization_id,
+            actor_user_id=owner_id,
+            game_id=game_id,
+            expected_revision=game.practice_workflow_revision,
+        )
+        reloaded, _ = await read_practice_workflow(
+            session,
+            organization_id=organization_id,
+            actor_user_id=owner_id,
+            game_id=game_id,
+        )
+        assert reloaded.id == game.id
+
+        # Inactive or deleted profiles become a neutral label. Current names
+        # are never a public fallback for the frozen practice roster.
+        inactive_membership = await session.get(SchoolPlayerMembership, membership_ids[batting[0]])
+        assert inactive_membership is not None
+        inactive_membership.status = "inactive"
+        deleted_profile = await session.get(PlayerProfile, batting[1])
+        assert deleted_profile is not None
+        await session.delete(deleted_profile)
+        await session.commit()
+        projection = await school_competition_service.public_practice_scorecard(
+            session, game_id=game_id
+        )
+        assert [player.name for player in projection.team_a.players[:2]] == [
+            "Unavailable participant",
+            "Unavailable participant",
+        ]
+        assert {row.player_name for row in projection.batting_scorecard} <= {
+            "Unavailable participant",
+            snapshot_names[batting[0]],
+            snapshot_names[batting[1]],
+        }
 
         # Practice must never leak through the official scorecard endpoint.
         with pytest.raises(Exception) as official_error:
             await school_competition_service.public_scorecard(session, game_id=game_id)
         assert getattr(official_error.value, "status_code", None) == 404
 
-        game.publication_state = "private"
-        await session.commit()
+        _, private_state = await school_competition_service.publication(
+            session,
+            organization_id=organization_id,
+            actor_user_id=owner_id,
+            game_id=game_id,
+            payload=SchoolPublicationUpdate(publication_state="private"),
+        )
+        assert private_state == "private"
         with pytest.raises(Exception) as revoked_error:
             await school_competition_service.public_practice_scorecard(session, game_id=game_id)
         assert getattr(revoked_error.value, "status_code", None) == 404
@@ -262,6 +378,20 @@ async def test_explicit_public_practice_scorecard_is_purpose_isolated_and_revoca
 async def test_private_workflow_denies_viewer_and_disabled_membership() -> None:
     organization_id, owner_id, game_id = await _draft()
     async with SessionLocal() as session:
+        await start_private_practice_match(
+            session,
+            organization_id=organization_id,
+            actor_user_id=owner_id,
+            game_id=game_id,
+            first_batting_side="team_a",
+        )
+        await school_competition_service.publication(
+            session,
+            organization_id=organization_id,
+            actor_user_id=owner_id,
+            game_id=game_id,
+            payload=SchoolPublicationUpdate(publication_state="published_live"),
+        )
         viewer = User(email="practice-workflow-viewer@example.test", hashed_password="test-only")
         session.add(viewer)
         await session.flush()
@@ -304,6 +434,13 @@ async def test_private_workflow_rejects_foreign_organization_get_and_mutation() 
             actor_user_id=owner_id,
             game_id=game_id,
             first_batting_side="team_a",
+        )
+        await school_competition_service.publication(
+            session,
+            organization_id=organization_id,
+            actor_user_id=owner_id,
+            game_id=game_id,
+            payload=SchoolPublicationUpdate(publication_state="published_live"),
         )
         batting, bowling = _ids(game, "team_a"), _ids(game, "team_b")
         game, _ = await start_practice_innings(

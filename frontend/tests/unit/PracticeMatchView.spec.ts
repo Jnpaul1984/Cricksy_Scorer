@@ -105,6 +105,24 @@ describe('PracticeMatchView', () => {
     expect(wrapper.get('[data-testid="unpublish-practice"]').exists()).toBe(true);
     expect(wrapper.get('[data-testid="public-practice-link"]').attributes('href')).toBe('/practice-scorecards/practice-1');
   });
+  it('keeps the private scorer usable after publication and undo', async () => {
+    routeQuery.value = { gameId: 'practice-1' };
+    vi.mocked(api.getPracticeMatch).mockResolvedValueOnce(state(4, 'in_progress'));
+    vi.mocked(api.updateSchoolMatchPublication).mockResolvedValue({ game_id: 'practice-1', organization_id: 'org-1', publication_state: 'published_live' });
+    vi.mocked(api.scorePracticeDelivery).mockResolvedValue(state(5, 'in_progress'));
+    vi.mocked(api.undoLastPracticeDelivery).mockResolvedValue(state(6, 'in_progress'));
+    const wrapper = mount(PracticeMatchView, { global: { provide: { [schoolContextKey as symbol]: context } } });
+    await flushPromises();
+    await wrapper.get('[data-testid="publish-practice"]').trigger('click');
+    await flushPromises();
+    await wrapper.get('[data-testid="score-1"]').trigger('click');
+    await flushPromises();
+    await wrapper.get('[data-testid="undo-ball"]').trigger('click');
+    await flushPromises();
+    expect(api.scorePracticeDelivery).toHaveBeenCalledWith('org-1', 'practice-1', expect.objectContaining({ expected_revision: 4 }));
+    expect(api.undoLastPracticeDelivery).toHaveBeenCalledWith('org-1', 'practice-1', 5);
+    expect(wrapper.get('[data-testid="practice-scoring"]').exists()).toBe(true);
+  });
   it('recovers a persisted started practice by starting its first innings once', async () => {
     routeQuery.value = { gameId: 'practice-1' };
     vi.mocked(api.getPracticeMatch).mockResolvedValue(state(1, 'started', 1, 'team_a', null));

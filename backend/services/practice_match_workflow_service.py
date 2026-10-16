@@ -89,7 +89,7 @@ def _delivery_runs(row: Mapping[str, Any]) -> int:
         value = row.get("runs_off_bat")
     if value is None:
         return 0
-    if isinstance(value, (int, float, str)):
+    if isinstance(value, int | float | str):
         return int(value)
     raise ValueError("Persisted practice delivery has an invalid runs value")
 
