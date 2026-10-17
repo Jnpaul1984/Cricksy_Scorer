@@ -31,6 +31,8 @@ import WinProbabilityChart from '@/components/WinProbabilityChart.vue'
 import InningsGradeWidget from '@/components/InningsGradeWidget.vue'
 import PressureMapWidget from '@/components/PressureMapWidget.vue'
 import PhaseTimelineWidget from '@/components/PhaseTimelineWidget.vue'
+import BroadcastScorerFrame from '@/components/scoring/BroadcastScorerFrame.vue'
+import SharedFieldMap from '@/components/scoring/SharedFieldMap.vue'
 import { useRoleBadge } from '@/composables/useRoleBadge'
 import { useInningsGrade } from '@/composables/useInningsGrade'
 import { usePressureAnalytics } from '@/composables/usePressureAnalytics'
@@ -1839,7 +1841,7 @@ async function confirmChangeBowler(): Promise<void> {
 </script>
 
 <template>
-  <div class="broadcast-layout">
+  <BroadcastScorerFrame>
     <!-- Top toolbar -->
     <header class="broadcast-header">
       <div class="header-left">
@@ -2067,24 +2069,7 @@ async function confirmChangeBowler(): Promise<void> {
           </div>
         </div>
 
-        <div class="map-container">
-           <div class="wagon-wheel-placeholder">
-              <div class="field-oval">
-                 <div class="pitch-rect"></div>
-                 <div class="zone-overlay">
-                    <div class="zone z1" @click.stop="recordZone(1)"></div>
-                    <div class="zone z2" @click.stop="recordZone(2)"></div>
-                    <div class="zone z3" @click.stop="recordZone(3)"></div>
-                    <div class="zone z4" @click.stop="recordZone(4)"></div>
-                    <div class="zone z5" @click.stop="recordZone(5)"></div>
-                    <div class="zone z6" @click.stop="recordZone(6)"></div>
-                    <div class="zone z7" @click.stop="recordZone(7)"></div>
-                    <div class="zone z8" @click.stop="recordZone(8)"></div>
-                 </div>
-              </div>
-              <div class="map-label">TAP ZONE TO RECORD SHOT</div>
-           </div>
-        </div>
+        <SharedFieldMap :model-value="recordedZone" :disabled="!canScore" @update:model-value="recordZone" />
       </div>
 
 
@@ -2330,7 +2315,7 @@ async function confirmChangeBowler(): Promise<void> {
         </div>
       </BaseCard>
     </div>
-  </div>
+  </BroadcastScorerFrame>
 
   <!-- Delivery Correction Modal -->
   <DeliveryCorrectionModal
