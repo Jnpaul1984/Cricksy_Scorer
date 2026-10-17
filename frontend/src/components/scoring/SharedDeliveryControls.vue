@@ -1,7 +1,9 @@
 <script setup lang="ts">
+import { computed } from 'vue';
+
 type Extra = 'none' | 'wd' | 'nb' | 'b' | 'lb';
 
-defineProps<{
+const props = defineProps<{
   canScore: boolean;
   loading?: boolean;
   extra: Extra;
@@ -24,14 +26,32 @@ const emit = defineEmits<{
   (event: 'submit'): void;
   (event: 'undo'): void;
 }>();
+
+const requiresRunOut = computed(() => props.wicket && (props.extra === 'wd' || props.extra === 'nb'));
+const nonStrikerAllowed = computed(() => props.dismissal === 'run_out');
+
+function updateExtra(value: Extra) {
+  emit('update:extra', value);
+  if (props.wicket && (value === 'wd' || value === 'nb')) emit('update:dismissal', 'run_out');
+}
+
+function updateWicket(value: boolean) {
+  emit('update:wicket', value);
+  if (value && (props.extra === 'wd' || props.extra === 'nb')) emit('update:dismissal', 'run_out');
+}
+
+function updateDismissal(value: string) {
+  emit('update:dismissal', value);
+  if (value !== 'run_out' && props.dismissed === 'non_striker') emit('update:dismissed', 'striker');
+}
 </script>
 
 <template>
   <div class="scoring-grid-inputs scorer-controls" :class="{ 'scorer-controls--disabled': !canScore }" :aria-disabled="!canScore" data-testid="scorer-controls">
-    <div class="input-row extras-row"><button v-for="kind in ['none', 'wd', 'nb', 'b', 'lb'] as Extra[]" :key="kind" type="button" class="btn-input" :data-testid="`delivery-extra-${kind === 'none' ? 'legal' : kind}`" :class="[{ active: extra === kind }, `btn-extra-${kind}`]" :disabled="!canScore || loading" @click="emit('update:extra', kind)">{{ kind === 'none' ? 'LEGAL' : kind.toUpperCase() }}</button></div>
+    <div class="input-row extras-row"><button v-for="kind in ['none', 'wd', 'nb', 'b', 'lb'] as Extra[]" :key="kind" type="button" class="btn-input" :data-testid="`delivery-extra-${kind === 'none' ? 'legal' : kind}`" :class="[{ active: extra === kind }, `btn-extra-${kind}`]" :disabled="!canScore || loading" @click="updateExtra(kind)">{{ kind === 'none' ? 'LEGAL' : kind.toUpperCase() }}</button></div>
     <div class="input-matrix"><button v-for="value in [0, 1, 2, 3, 4, 6, 5]" :key="value" type="button" class="btn-score" :data-testid="`delivery-run-${value}`" :class="[`btn-score-${value}`, { active: runs === value }]" :disabled="!canScore || loading" @click="emit('update:runs', value)">{{ value }}</button></div>
-    <div class="input-row action-row"><label class="wicket-toggle" :class="{ checked: wicket, disabled: !canScore }"><input data-testid="delivery-wicket" type="checkbox" :checked="wicket" :disabled="!canScore || loading" @change="emit('update:wicket', ($event.target as HTMLInputElement).checked)"> WICKET</label><button data-testid="submit-delivery" type="button" class="btn-submit" :disabled="!canSubmit || loading" @click="emit('submit')">{{ loading ? '...' : 'SUBMIT' }}</button></div>
-    <div v-if="wicket" class="wicket-details"><select :value="dismissal" @change="emit('update:dismissal', ($event.target as HTMLSelectElement).value)"><option v-for="option in ['bowled', 'caught', 'lbw', 'run_out', 'stumped', 'hit_wicket', 'retired_out']" :key="option" :value="option">{{ option.replace('_', ' ') }}</option></select><select data-testid="dismissed-batter" :value="dismissed" @change="emit('update:dismissed', ($event.target as HTMLSelectElement).value as 'striker' | 'non_striker')"><option value="striker">{{ strikerName }}</option><option value="non_striker">{{ nonStrikerName }}</option></select><slot name="wicket-details-extra" /></div>
+    <div class="input-row action-row"><label class="wicket-toggle" :class="{ checked: wicket, disabled: !canScore }"><input data-testid="delivery-wicket" type="checkbox" :checked="wicket" :disabled="!canScore || loading" @change="updateWicket(($event.target as HTMLInputElement).checked)"> WICKET</label><button data-testid="submit-delivery" type="button" class="btn-submit" :disabled="!canSubmit || loading" @click="emit('submit')">{{ loading ? '...' : 'SUBMIT' }}</button></div>
+    <div v-if="wicket" class="wicket-details"><select :value="dismissal" @change="updateDismissal(($event.target as HTMLSelectElement).value)"><option v-for="option in ['bowled', 'caught', 'lbw', 'run_out', 'stumped', 'hit_wicket', 'retired_out']" :key="option" :value="option" :disabled="requiresRunOut && option !== 'run_out'">{{ option.replace('_', ' ') }}</option></select><select data-testid="dismissed-batter" :value="dismissed" @change="emit('update:dismissed', ($event.target as HTMLSelectElement).value as 'striker' | 'non_striker')"><option value="striker">{{ strikerName }} (striker)</option><option value="non_striker" :disabled="!nonStrikerAllowed">{{ nonStrikerName }} (non-striker)</option></select><slot name="wicket-details-extra" /></div>
     <div class="undo-row"><button data-testid="undo-ball" type="button" class="btn-undo" :disabled="undoDisabled || loading" @click="emit('undo')">UNDO LAST</button></div>
   </div>
 </template>

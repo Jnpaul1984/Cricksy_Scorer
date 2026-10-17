@@ -1,9 +1,9 @@
 <script setup lang="ts">
 const props = defineProps<{ modelValue: number | null; disabled?: boolean }>();
-const emit = defineEmits<{ (event: 'update:modelValue', value: number): void }>();
+const emit = defineEmits<{ (event: 'update:modelValue', value: number | null): void }>();
 
 const select = (zone: number) => {
-  if (!props.disabled) emit('update:modelValue', zone);
+  if (!props.disabled) emit('update:modelValue', props.modelValue === zone ? null : zone);
 };
 </script>
 
@@ -18,7 +18,7 @@ const select = (zone: number) => {
           @click="select(zone)" />
       </div>
     </div>
-    <div class="map-label">TAP ZONE TO RECORD SHOT</div>
+    <div class="map-label">TAP ZONE TO RECORD SHOT · TAP AGAIN TO CLEAR</div>
   </div>
 </template>
 

@@ -4,7 +4,7 @@ defineProps<{ overs: string }>();
 
 <template>
   <section class="panel map-panel">
-    <div class="recent-strip"><div class="recent-label">LAST 6 <span class="active-ball-text">(Over {{ overs }})</span></div><div class="recent-balls"><slot name="recent-balls" /></div></div>
+    <div v-if="$slots['recent-balls']" class="recent-strip"><div class="recent-label">LAST 6 <span class="active-ball-text">(Over {{ overs }})</span></div><div class="recent-balls"><slot name="recent-balls" /></div></div>
     <slot />
   </section>
 </template>
