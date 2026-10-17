@@ -203,7 +203,9 @@ watch(() => route.query.gameId, async () => { clearPrivateWorkflow(); const requ
 
 <template>
   <section :class="['practice', { 'practice--active': Boolean(gameId) }]" data-testid="practice-match-view">
-    <h2>Practice match</h2><p>Only this {{ terminology.kindLabel }} can access and score this match. It stays private unless an authorized coach explicitly changes its organization publication state.</p>
+    <template v-if="!gameId">
+      <h2>Practice match</h2><p>Only this {{ terminology.kindLabel }} can access and score this match. It stays private unless an authorized coach explicitly changes its organization publication state.</p>
+    </template>
     <p v-if="!canCreateSchoolMatch" class="error">Your current role cannot create or score private practice matches.</p>
     <p v-if="error" class="error" role="alert">{{ error }}</p><p v-if="notice" role="status">{{ notice }}</p>
     <template v-if="!gameId && canCreateSchoolMatch">
@@ -226,5 +228,5 @@ watch(() => route.query.gameId, async () => { clearPrivateWorkflow(); const requ
 </template>
 
 <style scoped>
-.practice{max-width:54rem;padding:1rem}.practice--active{max-width:none;padding:0}.practice label{display:block;margin:.7rem 0}.practice select,.practice input{margin-left:.5rem}.practice button{margin:.4rem;padding:.5rem .8rem}.error{color:#b42318}.scoring{margin-top:1rem;padding:1rem;border:1px solid #789;border-radius:.5rem}.practice--active .scoring{margin-top:0;padding:0;border:0;border-radius:0}
+.practice{max-width:54rem;padding:1rem}.practice--active{max-width:none;padding:0}.practice label{display:block;margin:.7rem 0}.practice select,.practice input{margin-left:.5rem}.practice button{margin:.4rem;padding:.5rem .8rem}.error{color:#b42318}.scoring{margin-top:1rem;padding:1rem;border:1px solid #789;border-radius:.5rem}.practice--active .scoring{margin-top:0;padding:0;border:0;border-radius:0}.practice--active :deep(.broadcast-layout){min-height:0}
 </style>

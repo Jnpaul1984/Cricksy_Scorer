@@ -87,6 +87,7 @@ describe('PracticeMatchView', () => {
     const wrapper = mount(PracticeMatchView, { global: { provide: { [schoolContextKey as symbol]: context } } });
     await flushPromises();
     expect(wrapper.get('[data-testid="practice-match-view"]').classes()).toContain('practice--active');
+    expect(wrapper.find('h2').exists()).toBe(false);
     expect(wrapper.get('[data-testid="practice-shared-scorer"]').text()).toContain('SUBMIT');
     expect(wrapper.text()).toContain('A 0');
     expect(wrapper.text()).toContain('B 0');
