@@ -1916,7 +1916,7 @@ async function confirmChangeBowler(): Promise<void> {
         <SharedDeliveryControls
           :can-score="canScore" :loading="isSubmitting" :extra="extra"
           :runs="extra === 'none' || extra === 'nb' ? offBat : extraRuns"
-          :wicket="isWicket" :dismissal="dismissal || 'bowled'"
+          :wicket="isWicket" :dismissal="dismissal || 'bowled'" dismissed="striker"
           :striker-name="selectedStrikerName" :non-striker-name="selectedNonStrikerName"
           :can-submit="canSubmitSimple" :undo-disabled="!canDeleteLast"
           @update:extra="extra = $event"
