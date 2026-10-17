@@ -83,6 +83,18 @@ describe('PracticeSharedScorer', () => {
     expect(wrapper.emitted('delivery')?.[0]?.[0]).toMatchObject({ dismissal: 'bowled', dismissed: 'striker' });
   });
 
+  it('resets the dismissed end when a run-out wicket is cleared', async () => {
+    const wrapper = mount(PracticeSharedScorer, { props });
+    const wicket = wrapper.get('[data-testid="delivery-wicket"]');
+    await wicket.setValue(true);
+    await wrapper.get('.wicket-details select').setValue('run_out');
+    await wrapper.get('[data-testid="dismissed-batter"]').setValue('non_striker');
+    await wicket.setValue(false);
+    await wicket.setValue(true);
+    await wrapper.get('[data-testid="submit-delivery"]').trigger('click');
+    expect(wrapper.emitted('delivery')?.[0]?.[0]).toMatchObject({ dismissed: 'striker' });
+  });
+
   it('does not render inert practice footer tabs', () => {
     const wrapper = mount(PracticeSharedScorer, { props });
     expect(wrapper.findAll('.tabs-nav button')).toHaveLength(1);
