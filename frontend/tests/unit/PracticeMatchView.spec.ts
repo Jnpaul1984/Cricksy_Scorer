@@ -43,6 +43,14 @@ const roster = (team: string) => [0, 1].map((index) => ({
 }));
 const state = (revision = 2, status = 'in_progress', inning = 1, first = 'team_a' as const, bowler: string | null = 'b-player-0') => ({ game_id: 'practice-1', organization_id: 'org-1', match_purpose: 'practice' as const, publication_state: 'private' as const, status, revision, practice_start_context: { version: 1 as const, first_batting_side: first }, frozen_sides: { team_a: [{ id: 'a-player-0', label: 'A 0' }, { id: 'a-player-1', label: 'A 1' }], team_b: [{ id: 'b-player-0', label: 'B 0' }, { id: 'b-player-1', label: 'B 1' }] }, snapshot: { current_inning: inning, total_runs: 0, total_wickets: 0, target: inning === 2 ? 1 : undefined, current_striker_id: inning === 1 ? 'a-player-0' : 'b-player-0', current_non_striker_id: inning === 1 ? 'a-player-1' : 'b-player-1', current_bowler_id: bowler } });
 
+async function selectAndSubmit(wrapper: ReturnType<typeof mount>, options: { runs?: number; extra?: 'wd' | 'nb' | 'b' | 'lb'; wicket?: boolean } = {}) {
+  if (options.extra) await wrapper.get(`[data-testid="delivery-extra-${options.extra}"]`).trigger('click');
+  if (options.runs !== undefined) await wrapper.get(`[data-testid="delivery-run-${options.runs}"]`).trigger('click');
+  if (options.wicket) await wrapper.get('[data-testid="delivery-wicket"]').setValue(true);
+  await wrapper.get('[data-testid="submit-delivery"]').trigger('click');
+}
+const fieldZone = (wrapper: ReturnType<typeof mount>, zone: number) => wrapper.get(`button[aria-label="Field zone ${zone}"]`);
+
 describe('PracticeMatchView', () => {
   beforeEach(() => {
     vi.resetAllMocks();
@@ -67,7 +75,7 @@ describe('PracticeMatchView', () => {
     expect(api.startPracticeInnings).toHaveBeenCalledWith('org-1', 'practice-1', expect.objectContaining({ expected_revision: 1 }));
     vi.mocked(api.scorePracticeDelivery).mockRejectedValue(Object.assign(new Error('conflict'), { status: 409 }));
     vi.mocked(api.getPracticeMatch).mockResolvedValue(state(3));
-    await wrapper.get('button').trigger('click');
+    await selectAndSubmit(wrapper, { runs: 0 });
     await flushPromises();
     expect(api.getPracticeMatch).toHaveBeenLastCalledWith('org-1', 'practice-1');
     expect(wrapper.text()).toContain('latest private state');
@@ -78,16 +86,15 @@ describe('PracticeMatchView', () => {
     vi.mocked(api.scorePracticeDelivery).mockResolvedValue(state(5, 'in_progress'));
     const wrapper = mount(PracticeMatchView, { global: { provide: { [schoolContextKey as symbol]: context } } });
     await flushPromises();
-    expect(wrapper.get('[data-testid="practice-familiar-scorer"]').text()).toContain('PRACTICE SCORER');
+    expect(wrapper.get('[data-testid="practice-shared-scorer"]').text()).toContain('SUBMIT');
     expect(wrapper.text()).toContain('A 0');
     expect(wrapper.text()).toContain('B 0');
-    for (const runs of [0, 1, 2, 3, 4, 5, 6]) expect(wrapper.get(`[data-testid="score-${runs}"]`).exists()).toBe(true);
-    for (const extra of ['wd', 'nb', 'b', 'lb']) expect(wrapper.get(`[data-testid="extra-${extra}"]`).exists()).toBe(true);
-    await wrapper.get('[data-testid="extra-wd"]').trigger('click');
+    for (const runs of [0, 1, 2, 3, 4, 5, 6]) expect(wrapper.get(`[data-testid="delivery-run-${runs}"]`).exists()).toBe(true);
+    for (const extra of ['wd', 'nb', 'b', 'lb']) expect(wrapper.get(`[data-testid="delivery-extra-${extra}"]`).exists()).toBe(true);
+    await selectAndSubmit(wrapper, { extra: 'wd', runs: 1 });
     await flushPromises();
     expect(api.scorePracticeDelivery).toHaveBeenLastCalledWith('org-1', 'practice-1', expect.objectContaining({ expected_revision: 4, extra: 'wd', runs_scored: 1 }));
-    await wrapper.get('[data-testid="wicket"]').trigger('click');
-    await wrapper.get('[data-testid="confirm-wicket"]').trigger('click');
+    await selectAndSubmit(wrapper, { runs: 0, wicket: true });
     await flushPromises();
     expect(api.scorePracticeDelivery).toHaveBeenLastCalledWith('org-1', 'practice-1', expect.objectContaining({ is_wicket: true, dismissal_type: 'bowled', dismissed_player_id: 'a-player-0' }));
     expect(api.createPracticeMatch).not.toHaveBeenCalled();
@@ -98,15 +105,15 @@ describe('PracticeMatchView', () => {
     vi.mocked(api.scorePracticeDelivery).mockResolvedValue(state(5, 'in_progress'));
     const wrapper = mount(PracticeMatchView, { global: { provide: { [schoolContextKey as symbol]: context } } });
     await flushPromises();
-    await wrapper.get('[data-testid="field-section-6"]').trigger('click');
-    await wrapper.get('[data-testid="score-4"]').trigger('click');
+    await fieldZone(wrapper, 6).trigger('click');
+    await selectAndSubmit(wrapper, { runs: 4 });
     await flushPromises();
     expect(api.scorePracticeDelivery).toHaveBeenLastCalledWith('org-1', 'practice-1', expect.objectContaining({ runs_scored: 4, field_zone: 6 }));
-    await wrapper.get('[data-testid="score-0"]').trigger('click');
+    await selectAndSubmit(wrapper, { runs: 0 });
     await flushPromises();
     expect(api.scorePracticeDelivery).toHaveBeenLastCalledWith('org-1', 'practice-1', expect.objectContaining({ runs_scored: 0, field_zone: null }));
-    await wrapper.get('[data-testid="field-section-2"]').trigger('click');
-    await wrapper.get('[data-testid="extra-wd"]').trigger('click');
+    await fieldZone(wrapper, 2).trigger('click');
+    await selectAndSubmit(wrapper, { extra: 'wd', runs: 1 });
     await flushPromises();
     expect(api.scorePracticeDelivery).toHaveBeenLastCalledWith('org-1', 'practice-1', expect.objectContaining({ extra: 'wd', field_zone: null }));
   });
@@ -117,17 +124,16 @@ describe('PracticeMatchView', () => {
     const wrapper = mount(PracticeMatchView, { global: { provide: { [schoolContextKey as symbol]: context } } });
     await flushPromises();
     for (const [zone, extra, expected] of [[1, 'nb', 1], [2, 'wd', null], [3, 'b', null], [4, 'lb', null]] as const) {
-      await wrapper.get(`[data-testid="field-section-${zone}"]`).trigger('click');
-      await wrapper.get(`[data-testid="extra-${extra}"]`).trigger('click');
+      await fieldZone(wrapper, zone).trigger('click');
+      await selectAndSubmit(wrapper, { extra, runs: extra === 'wd' ? 1 : 0 });
       await flushPromises();
       expect(api.scorePracticeDelivery).toHaveBeenLastCalledWith('org-1', 'practice-1', expect.objectContaining({ extra, field_zone: expected }));
     }
-    await wrapper.get('[data-testid="field-section-5"]').trigger('click');
-    await wrapper.get('[data-testid="wicket"]').trigger('click');
-    await wrapper.get('[data-testid="confirm-wicket"]').trigger('click');
+    await fieldZone(wrapper, 5).trigger('click');
+    await selectAndSubmit(wrapper, { runs: 0, wicket: true });
     await flushPromises();
     expect(api.scorePracticeDelivery).toHaveBeenLastCalledWith('org-1', 'practice-1', expect.objectContaining({ is_wicket: true, field_zone: 5 }));
-    await wrapper.get('[data-testid="score-0"]').trigger('click');
+    await selectAndSubmit(wrapper, { runs: 0 });
     await flushPromises();
     expect(api.scorePracticeDelivery).toHaveBeenLastCalledWith('org-1', 'practice-1', expect.objectContaining({ runs_scored: 0, field_zone: null }));
   });
@@ -154,7 +160,7 @@ describe('PracticeMatchView', () => {
     await flushPromises();
     await wrapper.get('[data-testid="publish-practice"]').trigger('click');
     await flushPromises();
-    await wrapper.get('[data-testid="score-1"]').trigger('click');
+    await selectAndSubmit(wrapper, { runs: 1 });
     await flushPromises();
     await wrapper.get('[data-testid="undo-ball"]').trigger('click');
     await flushPromises();
@@ -168,14 +174,14 @@ describe('PracticeMatchView', () => {
     vi.mocked(api.startPracticeInnings).mockResolvedValue(state(2, 'in_progress'));
     const wrapper = mount(PracticeMatchView, { global: { provide: { [schoolContextKey as symbol]: context } } });
     await flushPromises();
-    await wrapper.get('[data-testid="start-first-innings"]').trigger('click');
+    await wrapper.get('.btn-gate').trigger('click');
     await flushPromises();
     expect(api.createPracticeMatch).not.toHaveBeenCalled();
     expect(api.startPracticeInnings).toHaveBeenCalledTimes(1);
     expect(api.startPracticeInnings).toHaveBeenCalledWith('org-1', 'practice-1', expect.objectContaining({
       expected_revision: 1, striker_id: 'a-player-0', non_striker_id: 'a-player-1', opening_bowler_id: 'b-player-0',
     }));
-    expect(wrapper.text()).toContain('Revision 2');
+    expect(wrapper.get('[data-testid="submit-delivery"]').attributes('disabled')).toBeUndefined();
   });
   it('does not repeat an uncertain first-innings mutation before the user reloads', async () => {
     routeQuery.value = { gameId: 'practice-1' };
@@ -183,11 +189,11 @@ describe('PracticeMatchView', () => {
     vi.mocked(api.startPracticeInnings).mockRejectedValue(new Error('network unavailable'));
     const wrapper = mount(PracticeMatchView, { global: { provide: { [schoolContextKey as symbol]: context } } });
     await flushPromises();
-    await wrapper.get('[data-testid="start-first-innings"]').trigger('click');
+    await wrapper.get('.btn-gate').trigger('click');
     await flushPromises();
-    await wrapper.get('[data-testid="start-first-innings"]').trigger('click');
+    await wrapper.get('.btn-gate').trigger('click');
     expect(api.startPracticeInnings).toHaveBeenCalledTimes(1);
-    expect(wrapper.get('[data-testid="start-first-innings"]').attributes('disabled')).toBeDefined();
+    expect(wrapper.get('.btn-gate').attributes('disabled')).toBeDefined();
   });
   it('permits another first-innings attempt only after a reload confirms it is still started', async () => {
     routeQuery.value = { gameId: 'practice-1' };
@@ -195,11 +201,11 @@ describe('PracticeMatchView', () => {
     vi.mocked(api.startPracticeInnings).mockRejectedValue(new Error('network unavailable'));
     const wrapper = mount(PracticeMatchView, { global: { provide: { [schoolContextKey as symbol]: context } } });
     await flushPromises();
-    await wrapper.get('[data-testid="start-first-innings"]').trigger('click');
+    await wrapper.get('.btn-gate').trigger('click');
     await flushPromises();
     await wrapper.get('[data-testid="reload-practice"]').trigger('click');
     await flushPromises();
-    await wrapper.get('[data-testid="start-first-innings"]').trigger('click');
+    await wrapper.get('.btn-gate').trigger('click');
     expect(api.startPracticeInnings).toHaveBeenCalledTimes(2);
   });
   it('does not let a deferred reload from an old organization lock the new workflow', async () => {
@@ -211,7 +217,7 @@ describe('PracticeMatchView', () => {
     const wrapper = mount(PracticeMatchView, { global: { provide: { [schoolContextKey as symbol]: contextForOrganization(organizationId) } } });
     await flushPromises(); await wrapper.get('[data-testid="reload-practice"]').trigger('click');
     organizationId.value = 'org-2'; await flushPromises(); resolveOldReload(state(1, 'started', 1, 'team_a', null)); await flushPromises();
-    expect(wrapper.get('[data-testid="start-first-innings"]').attributes('disabled')).toBeUndefined();
+    expect(wrapper.get('.btn-gate').attributes('disabled')).toBeUndefined();
   });
   it.each(['school', 'club'])('continues %s through next over and a winning second-innings chase', async () => {
     vi.mocked(api.scorePracticeDelivery).mockResolvedValueOnce(state(3, 'innings_break'))
@@ -222,10 +228,10 @@ describe('PracticeMatchView', () => {
     vi.mocked(api.undoLastPracticeDelivery).mockResolvedValue(state(7, 'in_progress', 2, 'team_a', 'a-player-0'));
     const wrapper = mount(PracticeMatchView, { global: { provide: { [schoolContextKey as symbol]: context } } });
     await flushPromises(); await wrapper.get('[data-testid="practice-team-a"]').setValue('a'); await wrapper.get('[data-testid="practice-team-b"]').setValue('b'); await flushPromises(); await wrapper.get('[data-testid="create-practice"]').trigger('click'); await flushPromises();
-    await wrapper.get('[data-testid="score-0"]').trigger('click'); await flushPromises();
-    await wrapper.get('[data-testid="start-second-innings"]').trigger('click'); await flushPromises();
+    await selectAndSubmit(wrapper, { runs: 0 }); await flushPromises();
+    await wrapper.get('.btn-gate').trigger('click'); await flushPromises();
     expect(api.startPracticeInnings).toHaveBeenLastCalledWith('org-1', 'practice-1', expect.objectContaining({ striker_id: 'b-player-0', opening_bowler_id: 'a-player-0' }));
-    await wrapper.get('[data-testid="score-1"]').trigger('click'); await flushPromises();
+    await selectAndSubmit(wrapper, { runs: 1 }); await flushPromises();
     await wrapper.get('[data-testid="undo-ball"]').trigger('click'); await flushPromises();
     expect(api.undoLastPracticeDelivery).toHaveBeenCalled();
   });
@@ -237,13 +243,13 @@ describe('PracticeMatchView', () => {
     vi.mocked(api.startPracticeOver).mockResolvedValue(state(5, 'in_progress', 2, first, 'a-player-0'));
     const wrapper = mount(PracticeMatchView, { global: { provide: { [schoolContextKey as symbol]: context } } });
     await flushPromises();
-    await wrapper.get('[data-testid="start-second-innings"]').trigger('click');
+    await wrapper.get('.btn-gate').trigger('click');
     await flushPromises();
     const secondBattingId = first === 'team_a' ? 'b-player-0' : 'a-player-0';
     const secondBowlingId = first === 'team_a' ? 'a-player-0' : 'b-player-0';
     expect(api.startPracticeInnings).toHaveBeenCalledWith('org-1', 'practice-1', expect.objectContaining({ striker_id: secondBattingId, opening_bowler_id: secondBowlingId }));
     expect(wrapper.get('[data-testid="next-over-bowler"]').text()).toContain(secondBowlingId.slice(0, 1).toUpperCase());
-    await wrapper.get('[data-testid="start-next-over"]').trigger('click');
+    await wrapper.get('.btn-gate').trigger('click');
     expect(api.startPracticeOver).toHaveBeenCalledWith('org-1', 'practice-1', expect.objectContaining({ bowler_id: secondBowlingId }));
   });
   it('clears organization-scoped teams and ignores a delayed old roster after switching organizations', async () => {
@@ -277,14 +283,14 @@ describe('PracticeMatchView', () => {
     vi.mocked(api.scorePracticeDelivery).mockImplementation(() => new Promise((resolve) => { resolveOldScore = resolve; }) as any);
     const wrapper = mount(PracticeMatchView, { global: { provide: { [schoolContextKey as symbol]: contextForOrganization(organizationId) } } });
     await flushPromises();
-    await wrapper.get('[data-testid="score-0"]').trigger('click');
+    await selectAndSubmit(wrapper, { runs: 0 });
     organizationId.value = 'org-2';
     await flushPromises();
     expect(api.getPracticeMatch).toHaveBeenLastCalledWith('org-2', 'practice-1');
-    await vi.waitFor(() => expect(wrapper.text()).toContain('Revision 20'));
+    await vi.waitFor(() => expect(wrapper.get('[data-testid="submit-delivery"]').attributes('disabled')).toBeUndefined());
     resolveOldScore(state(2));
     await flushPromises();
-    await vi.waitFor(() => expect(wrapper.text()).toContain('Revision 20'));
+    await vi.waitFor(() => expect(wrapper.get('[data-testid="submit-delivery"]').attributes('disabled')).toBeUndefined());
     expect(wrapper.text()).not.toMatch(/Private revision 2 ·/);
   });
 });

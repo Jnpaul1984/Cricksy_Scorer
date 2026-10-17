@@ -6,7 +6,7 @@ import SharedFieldMap from './SharedFieldMap.vue';
 type Extra = 'none' | 'wd' | 'nb' | 'b' | 'lb';
 const props = defineProps<{
   status: string; totalRuns: number; totalWickets: number; overs: string; inning: number; target: number | null;
-  strikerName: string; nonStrikerName: string; bowlerName: string; canScore: boolean; needsNextOver: boolean; loading: boolean;
+  strikerName: string; nonStrikerName: string; bowlerName: string; canScore: boolean; needsNextOver: boolean; loading: boolean; startDisabled?: boolean;
   publicationState: 'private' | 'published_live' | 'published_final'; canPublish: boolean; publicHref: string; fieldZone: number | null;
 }>();
 const emit = defineEmits<{
@@ -21,6 +21,7 @@ const canSubmit = computed(() => props.canScore && !props.loading && (extra.valu
 function submit() {
   if (!canSubmit.value) return;
   emit('delivery', { runs: runs.value, extra: extra.value === 'none' ? null : extra.value, isWicket: wicket.value, dismissal: dismissal.value, dismissed: dismissed.value, fieldZone: (extra.value === 'none' || extra.value === 'nb') ? props.fieldZone : null });
+  extra.value = 'none'; runs.value = 0; wicket.value = false; dismissal.value = 'bowled'; dismissed.value = 'striker';
 }
 </script>
 
@@ -38,7 +39,7 @@ function submit() {
     </section>
     <main class="broadcast-main">
       <div class="panel scoring-panel">
-        <div v-if="props.status !== 'in_progress' || props.needsNextOver" class="gate-overlay"><div class="gate-card"><span class="gate-eyebrow">Practice action</span><h3>{{ props.status === 'started' ? 'Ready to Start' : props.needsNextOver ? 'End of Over' : 'Innings Break' }}</h3><button class="btn-gate" type="button" :disabled="props.loading" @click="props.needsNextOver ? emit('start-over') : emit('start-innings')">{{ props.needsNextOver ? 'Start Next Over' : 'Start Innings' }}</button></div></div>
+        <div v-if="props.status !== 'in_progress' || props.needsNextOver" class="gate-overlay"><div class="gate-card"><span class="gate-eyebrow">Practice action</span><h3>{{ props.status === 'started' ? 'Ready to Start' : props.needsNextOver ? 'End of Over' : 'Innings Break' }}</h3><button class="btn-gate" :data-testid="props.needsNextOver ? 'btn-open-start-over' : 'btn-open-start-innings'" type="button" :disabled="props.loading || props.startDisabled" @click="props.needsNextOver ? emit('start-over') : emit('start-innings')">{{ props.needsNextOver ? 'Start Next Over' : 'Start Innings' }}</button></div></div>
         <div class="scoring-grid-inputs scorer-controls" :class="{ 'scorer-controls--disabled': !props.canScore }" data-testid="practice-shared-scorer">
           <div class="input-row extras-row"><button v-for="kind in ['none', 'wd', 'nb', 'b', 'lb'] as Extra[]" :key="kind" type="button" class="btn-input" :data-testid="`delivery-extra-${kind === 'none' ? 'legal' : kind}`" :class="[{ active: extra === kind }, `btn-extra-${kind}`]" :disabled="!props.canScore || props.loading" @click="extra = kind">{{ kind === 'none' ? 'LEGAL' : kind.toUpperCase() }}</button></div>
           <div class="input-matrix"><button v-for="run in [0, 1, 2, 3, 4, 6, 5]" :key="run" type="button" class="btn-score" :data-testid="`delivery-run-${run}`" :class="[`btn-score-${run}`, { active: runs === run }]" :disabled="!props.canScore || props.loading" @click="runs = run">{{ run }}</button></div>
@@ -49,7 +50,7 @@ function submit() {
       </div>
       <div class="panel map-panel"><div class="recent-strip"><div class="recent-label">LAST 6 <span class="active-ball-text">(Over {{ props.overs }})</span></div><div class="recent-balls"><span v-for="slot in 6" :key="slot" class="ball-badge empty">–</span></div></div><SharedFieldMap :model-value="props.fieldZone" :disabled="!props.canScore || props.loading" @update:model-value="emit('update:fieldZone', $event)" /></div>
     </main>
-    <footer class="broadcast-footer"><div class="tabs-nav"><button class="active">RECENT</button><button> BATTING</button><button>BOWLING</button><button>EVENT LOG</button></div><div class="tab-content"><div class="tab-pane"><p>Practice deliveries are private to this organization. Field zones stay in the private practice ledger.</p></div><div class="practice-publication"><strong>{{ isPublished ? 'Practice scorecard published' : 'Private by default' }}</strong><a v-if="isPublished" :href="props.publicHref" data-testid="public-practice-link">View published practice scorecard</a><button v-if="props.canPublish && !isPublished" data-testid="publish-practice" type="button" @click="emit('publication', 'published_live')">Publish practice scorecard</button><button v-else-if="props.canPublish" data-testid="unpublish-practice" type="button" @click="emit('publication', 'private')">Keep private</button><button type="button" @click="emit('reload')">Reload private state</button></div></div></footer>
+    <footer class="broadcast-footer"><div class="tabs-nav"><button class="active">RECENT</button><button> BATTING</button><button>BOWLING</button><button>EVENT LOG</button></div><div class="tab-content"><div class="tab-pane"><p>Practice deliveries are private to this organization. Field zones stay in the private practice ledger.</p></div><div class="practice-publication"><strong>{{ isPublished ? 'Practice scorecard published' : 'Private by default' }}</strong><a v-if="isPublished" :href="props.publicHref" data-testid="public-practice-link">View published practice scorecard</a><button v-if="props.canPublish && !isPublished" data-testid="publish-practice" type="button" @click="emit('publication', 'published_live')">Publish practice scorecard</button><button v-else-if="props.canPublish" data-testid="unpublish-practice" type="button" @click="emit('publication', 'private')">Keep private</button><button data-testid="reload-practice" type="button" @click="emit('reload')">Reload private state</button></div></div></footer>
   </BroadcastScorerFrame>
 </template>
 
