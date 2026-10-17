@@ -34,6 +34,8 @@ import PhaseTimelineWidget from '@/components/PhaseTimelineWidget.vue'
 import BroadcastScorerFrame from '@/components/scoring/BroadcastScorerFrame.vue'
 import SharedScorerChrome from '@/components/scoring/SharedScorerChrome.vue'
 import SharedDeliveryControls from '@/components/scoring/SharedDeliveryControls.vue'
+import SharedScorerFooter from '@/components/scoring/SharedScorerFooter.vue'
+import SharedScorerMapPanel from '@/components/scoring/SharedScorerMapPanel.vue'
 import SharedFieldMap from '@/components/scoring/SharedFieldMap.vue'
 import { useRoleBadge } from '@/composables/useRoleBadge'
 import { useInningsGrade } from '@/composables/useInningsGrade'
@@ -1992,16 +1994,9 @@ async function confirmChangeBowler(): Promise<void> {
       </div>
 
       <!-- RIGHT: SHOT MAP -->
-      <div class="panel map-panel">
+      <SharedScorerMapPanel :overs="oversDisplay">
         <!-- Recent Balls Strip (Compact) -->
-        <div class="recent-strip">
-          <div class="recent-label">
-             LAST 6
-             <span class="active-ball-text" v-if="overInProgress">
-               (Over {{ oversDisplay }})
-             </span>
-          </div>
-          <div class="recent-balls">
+        <template #recent-balls>
             <div
               v-for="(b, i) in recentBallSlots"
               :key="i"
@@ -2013,27 +2008,16 @@ async function confirmChangeBowler(): Promise<void> {
             >
               {{ b ? getBallLabel(b) : '•' }}
             </div>
-          </div>
-        </div>
+        </template>
 
         <SharedFieldMap :model-value="recordedZone" :disabled="!canScore" @update:model-value="recordZone" />
-      </div>
+      </SharedScorerMapPanel>
 
 
     </main>
 
     <!-- FOOTER TABS -->
-    <footer class="broadcast-footer">
-      <div class="tabs-nav">
-        <button :class="{active: activeTab==='recent'}" @click="activeTab='recent'">RECENT</button>
-        <button :class="{active: activeTab==='batting'}" @click="activeTab='batting'">BATTING</button>
-        <button :class="{active: activeTab==='bowling'}" @click="activeTab='bowling'">BOWLING</button>
-        <button :class="{active: activeTab==='events'}" @click="activeTab='events'">EVENT LOG</button>
-        <button :class="{active: activeTab==='analytics'}" @click="activeTab='analytics'">ANALYTICS</button>
-        <button :class="{active: activeTab==='extras'}" @click="activeTab='extras'">EXTRAS</button>
-      </div>
-
-      <div class="tab-content">
+    <SharedScorerFooter :tabs="['recent', 'batting', 'bowling', 'events', 'analytics', 'extras']" :active-tab="activeTab" @update:active-tab="activeTab = $event">
         <!-- RECENT: Delivery Table -->
         <div v-show="activeTab==='recent'" class="tab-pane">
            <DeliveryTable :deliveries="deliveriesThisInnings" :player-name-by-id="playerNameById" />
@@ -2104,8 +2088,7 @@ async function confirmChangeBowler(): Promise<void> {
                <button class="btn-sm" @click="refreshDls">Update</button>
             </div>
         </div>
-      </div>
-    </footer>
+    </SharedScorerFooter>
 
     <!-- Share & Monetize Modal -->
     <div v-if="shareOpen" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="share-title" @click.self="closeShare" @keydown.esc="closeShare" tabindex="0">
