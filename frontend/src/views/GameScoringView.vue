@@ -81,6 +81,9 @@ const isWicket = ref<boolean>(false)
 const dismissal = ref<string | null>(null)
 const dismissedName = ref<string | null>(null)
 const dismissedBatter = ref<'striker' | 'non_striker'>('striker')
+const dismissedPlayerId = computed<UUID | null>(() =>
+  (dismissedBatter.value === 'striker' ? selectedStriker.value : selectedNonStriker.value) || null,
+)
 const shotMap = ref<string | null>(null)
 const recordedZone = ref<number | null>(null)
 
@@ -384,6 +387,7 @@ async function submitSimple() {
         payload.is_wicket = true
         payload.dismissal_type = (dismissal.value || 'bowled')
         payload.dismissed_player_name = (dismissedName.value || null)
+        payload.dismissed_player_id = dismissedPlayerId.value
         payload.fielder_id = needsFielder.value ? (selectedFielderId.value || null) : null
       }
 
@@ -421,6 +425,7 @@ async function submitSimple() {
           is_wicket: true,
           dismissal_type: (dismissal.value || 'bowled'),
           dismissed_player_name: (dismissedName.value || null),
+          dismissed_player_id: dismissedPlayerId.value,
           shot_map: (extra.value === 'none' || extra.value === 'nb') ? (shotMap.value ?? null) : null,
           fielder_id: needsFielder.value ? (selectedFielderId.value || null) : null,
         }

@@ -242,6 +242,21 @@ describe('Phase 7H School administration views', () => {
     expect(wrapper.get('.school-nav').exists()).toBe(true);
   });
 
+  it('uses the same full-width scorer shell for an active club practice game', async () => {
+    routeState.value = {
+      ...routeState.value,
+      fullPath: '/clubs/school-a/practice?gameId=practice-1',
+      name: 'club-practice',
+      query: { gameId: 'practice-1' },
+      meta: { organizationType: 'club' },
+    };
+    const wrapper = mount(SchoolAdminShellView, { global: { stubs: { RouterView: true } } });
+    await flushPromises();
+    expect(wrapper.get('[data-testid="active-practice-scorer-shell"]').exists()).toBe(true);
+    expect(wrapper.find('.school-nav').exists()).toBe(false);
+    expect(schoolApi.getSchool).toHaveBeenCalledWith('school-a');
+  });
+
   it('denies a nonmember or cross-tenant School route without metadata leakage', async () => {
     vi.mocked(schoolApi.getSchool).mockRejectedValue(
       Object.assign(new Error('hidden school metadata'), { status: 404 }),
