@@ -36,8 +36,8 @@ const emit = defineEmits<{
     <div class="header-center dense-stats">
       <div class="stat-group main-score">
         <span class="team-name">{{ teamName }}</span>
-        <span class="score-display">{{ runs }}/{{ wickets }}</span>
-        <span class="overs-display">({{ overs }})</span>
+        <span class="score-display"><span data-testid="scoreboard-runs">{{ runs }}</span>/{{ wickets }}</span>
+        <span class="overs-display">(<span data-testid="scoreboard-overs">{{ overs }}</span>)</span>
       </div>
       <div class="stat-divider" />
       <div class="stat-group rates">
@@ -51,21 +51,21 @@ const emit = defineEmits<{
   <section class="player-bar">
     <div class="player-box striker-box">
       <div class="pb-label">STRIKER</div>
-      <select v-if="editable" :value="striker" class="pb-select-full" data-testid="scorer-striker-select" @change="emit('update:striker', ($event.target as HTMLSelectElement).value)">
+      <select v-if="battingPlayers" :value="striker" class="pb-select-full" data-testid="scorer-striker-select" :disabled="!editable" @change="emit('update:striker', ($event.target as HTMLSelectElement).value)">
         <option disabled value="">Select...</option><option v-for="player in battingPlayers" :key="player.id" :value="player.id" :disabled="player.disabled">{{ player.name }}</option>
       </select>
       <div v-else class="pb-select-full">{{ striker }}</div>
     </div>
     <div class="player-box non-striker-box">
       <div class="pb-label">NON-STRIKER</div>
-      <select v-if="editable" :value="nonStriker" class="pb-select-full" data-testid="scorer-nonstriker-select" @change="emit('update:nonStriker', ($event.target as HTMLSelectElement).value)">
+      <select v-if="battingPlayers" :value="nonStriker" class="pb-select-full" data-testid="scorer-nonstriker-select" :disabled="!editable" @change="emit('update:nonStriker', ($event.target as HTMLSelectElement).value)">
         <option disabled value="">Select...</option><option v-for="player in battingPlayers" :key="player.id" :value="player.id" :disabled="player.disabled">{{ player.name }}</option>
       </select>
       <div v-else class="pb-select-full">{{ nonStriker }}</div>
     </div>
     <div class="player-box bowler-box">
       <div class="pb-label"><span>BOWLER</span><div v-if="showBowlerActions" class="bowler-actions"><slot name="bowler-actions" /></div></div>
-      <select v-if="editable" :value="bowler" class="pb-select-full" data-testid="scorer-bowler-select" @change="emit('update:bowler', ($event.target as HTMLSelectElement).value)">
+      <select v-if="bowlingPlayers" :value="bowler" class="pb-select-full" data-testid="scorer-bowler-select" :disabled="!editable" @change="emit('update:bowler', ($event.target as HTMLSelectElement).value)">
         <option disabled value="">Select...</option><option v-for="player in bowlingPlayers" :key="player.id" :value="player.id">{{ player.name }}</option>
       </select>
       <div v-else class="pb-select-full">{{ bowler }}</div>

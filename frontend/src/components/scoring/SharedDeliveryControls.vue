@@ -25,7 +25,7 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <div class="scoring-grid-inputs scorer-controls" :class="{ 'scorer-controls--disabled': !canScore }" data-testid="scorer-controls">
+  <div class="scoring-grid-inputs scorer-controls" :class="{ 'scorer-controls--disabled': !canScore }" :aria-disabled="!canScore" data-testid="scorer-controls">
     <div class="input-row extras-row"><button v-for="kind in ['none', 'wd', 'nb', 'b', 'lb'] as Extra[]" :key="kind" type="button" class="btn-input" :data-testid="`delivery-extra-${kind === 'none' ? 'legal' : kind}`" :class="[{ active: extra === kind }, `btn-extra-${kind}`]" :disabled="!canScore || loading" @click="emit('update:extra', kind)">{{ kind === 'none' ? 'LEGAL' : kind.toUpperCase() }}</button></div>
     <div class="input-matrix"><button v-for="value in [0, 1, 2, 3, 4, 6, 5]" :key="value" type="button" class="btn-score" :data-testid="`delivery-run-${value}`" :class="[`btn-score-${value}`, { active: runs === value }]" :disabled="!canScore || loading" @click="emit('update:runs', value)">{{ value }}</button></div>
     <div class="input-row action-row"><label class="wicket-toggle" :class="{ checked: wicket, disabled: !canScore }"><input data-testid="delivery-wicket" type="checkbox" :checked="wicket" :disabled="!canScore || loading" @change="emit('update:wicket', ($event.target as HTMLInputElement).checked)"> WICKET</label><button data-testid="submit-delivery" type="button" class="btn-submit" :disabled="!canSubmit || loading" @click="emit('submit')">{{ loading ? '...' : 'SUBMIT' }}</button></div>
