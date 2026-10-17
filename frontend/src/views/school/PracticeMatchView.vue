@@ -166,18 +166,18 @@ async function scoreExtra(extra: 'wd' | 'nb' | 'b' | 'lb', runs: number, selecte
   }));
   if (scored) fieldZone.value = null;
 }
-async function scoreWicket(dismissal: { type: string; dismissed: 'striker' | 'non_striker' }, selectedFieldZone = fieldZone.value) {
+async function scoreWicket(dismissal: { type: string; dismissed: 'striker' | 'non_striker' }, runs = 0, extra: 'wd' | 'nb' | 'b' | 'lb' | null = null, selectedFieldZone = fieldZone.value) {
   const dismissedPlayerId = dismissal.dismissed === 'striker' ? currentStriker.value : currentNonStriker.value;
   const scored = await perform(() => scorePracticeDelivery(organizationId.value, gameId.value, {
     expected_revision: revision.value, striker_id: currentStriker.value, non_striker_id: currentNonStriker.value,
-    bowler_id: currentBowler.value, runs_scored: 0, is_wicket: true,
-    dismissal_type: dismissal.type, dismissed_player_id: dismissedPlayerId, field_zone: selectedFieldZone,
+    bowler_id: currentBowler.value, runs_scored: runs, ...(extra ? { extra } : {}), is_wicket: true,
+    dismissal_type: dismissal.type, dismissed_player_id: dismissedPlayerId, field_zone: (extra === null || extra === 'nb') ? selectedFieldZone : null,
   }));
   if (scored) fieldZone.value = null;
 }
 async function scoreSharedDelivery(delivery: { runs: number; extra: 'wd' | 'nb' | 'b' | 'lb' | null; isWicket: boolean; dismissal: string; dismissed: 'striker' | 'non_striker'; fieldZone: number | null }) {
   if (delivery.isWicket) {
-    await scoreWicket({ type: delivery.dismissal, dismissed: delivery.dismissed }, delivery.fieldZone);
+    await scoreWicket({ type: delivery.dismissal, dismissed: delivery.dismissed }, delivery.runs, delivery.extra, delivery.fieldZone);
     return;
   }
   if (delivery.extra) await scoreExtra(delivery.extra, delivery.runs, delivery.fieldZone);

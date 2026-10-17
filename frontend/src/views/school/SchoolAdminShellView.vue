@@ -35,7 +35,7 @@ const routeViewKey = computed(() => String(route.fullPath || organizationId.valu
 // same verified organization context is provided, but do not trap the scorer
 // inside the administration card or navigation width.
 const isActivePracticeScorer = computed(() =>
-  route.name === 'school-practice' && typeof route.query.gameId === 'string' && route.query.gameId.length > 0,
+  ['school-practice', 'club-practice'].includes(String(route.name)) && typeof route.query.gameId === 'string' && route.query.gameId.length > 0,
 );
 const organization = ref<SchoolOrganization | null>(null);
 const membership = ref<SchoolMembership | null>(null);

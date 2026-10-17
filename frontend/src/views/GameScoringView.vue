@@ -80,6 +80,7 @@ const extraRuns = ref<number>(1)
 const isWicket = ref<boolean>(false)
 const dismissal = ref<string | null>(null)
 const dismissedName = ref<string | null>(null)
+const dismissedBatter = ref<'striker' | 'non_striker'>('striker')
 const shotMap = ref<string | null>(null)
 const recordedZone = ref<number | null>(null)
 
@@ -717,6 +718,7 @@ const dismissedOptions = computed<Player[]>(() => {
 watch([isWicket, selectedStriker, selectedNonStriker], () => {
   if (isWicket.value && !dismissedName.value && dismissedOptions.value.length > 0) {
     dismissedName.value = dismissedOptions.value[0].name
+    dismissedBatter.value = 'striker'
   }
 })
 const {
@@ -1916,12 +1918,13 @@ async function confirmChangeBowler(): Promise<void> {
         <SharedDeliveryControls
           :can-score="canScore" :loading="isSubmitting" :extra="extra"
           :runs="extra === 'none' || extra === 'nb' ? offBat : extraRuns"
-          :wicket="isWicket" :dismissal="dismissal || 'bowled'" dismissed="striker"
+          :wicket="isWicket" :dismissal="dismissal || 'bowled'" :dismissed="dismissedBatter"
           :striker-name="selectedStrikerName" :non-striker-name="selectedNonStrikerName"
           :can-submit="canSubmitSimple" :undo-disabled="!canDeleteLast"
           @update:extra="extra = $event"
           @update:runs="extra === 'none' || extra === 'nb' ? offBat = $event : extraRuns = $event"
           @update:wicket="isWicket = $event" @update:dismissal="dismissal = $event"
+          @update:dismissed="dismissedBatter = $event; dismissedName = $event === 'striker' ? selectedStrikerName : selectedNonStrikerName"
           @submit="submitSimple" @undo="deleteLastDelivery"
         >
           <template #wicket-details-extra>
