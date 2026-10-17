@@ -41,8 +41,25 @@ describe('PracticeSharedScorer', () => {
     await wrapper.get('.btn-extra-nb').trigger('click');
     await wrapper.get('.btn-score-4').trigger('click');
     await wrapper.get('[data-testid="delivery-wicket"]').setValue(true);
+    expect(wrapper.get('[data-testid="submit-delivery"]').attributes('disabled')).toBeDefined();
+    expect(wrapper.get('.wicket-details').text()).toContain('Choose a compatible dismissal.');
+    expect(wrapper.get('.wicket-details').text()).not.toContain('bowled');
+    await wrapper.get('.wicket-details select').setValue('run_out');
     await wrapper.get('.btn-submit').trigger('click');
     expect(wrapper.emitted('delivery')?.[0]).toEqual([{ runs: 4, extra: 'nb', isWicket: true, dismissal: 'run_out', dismissed: 'striker', fieldZone: 3 }]);
+  });
+
+  it('keeps stumping available for a wide wicket', async () => {
+    const wrapper = mount(PracticeSharedScorer, { props });
+    await wrapper.get('.btn-extra-wd').trigger('click');
+    await wrapper.get('.btn-score-1').trigger('click');
+    await wrapper.get('[data-testid="delivery-wicket"]').setValue(true);
+    const dismissal = wrapper.get('.wicket-details select');
+    expect(dismissal.text()).toContain('stumped');
+    expect(dismissal.text()).not.toContain('bowled');
+    await dismissal.setValue('stumped');
+    await wrapper.get('.btn-submit').trigger('click');
+    expect(wrapper.emitted('delivery')?.[0]?.[0]).toMatchObject({ extra: 'wd', isWicket: true, dismissal: 'stumped' });
   });
 
   it('clears a selected field zone when it is tapped again', async () => {
