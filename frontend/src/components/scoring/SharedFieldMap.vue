@@ -23,8 +23,8 @@ const select = (zone: number) => {
 </template>
 
 <style scoped>
-.shared-field-map { flex: 1; position: relative; width: 100%; overflow: hidden; display: flex; align-items: center; justify-content: center; }
-.field-oval { width: 80%; height: 80%; border: 2px solid #4caf50; border-radius: 50%; position: relative; background: rgba(76, 175, 80, .1); }
+.shared-field-map { flex: 1; position: relative; width: 100%; overflow: hidden; display: flex; align-items: center; justify-content: center; padding-bottom: 34px; box-sizing: border-box; }
+.field-oval { width: 80%; height: calc(80% - 18px); border: 2px solid #4caf50; border-radius: 50%; position: relative; background: rgba(76, 175, 80, .1); }
 .pitch-rect { width: 40px; height: 120px; background: #d7ccc8; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); }
 .zone-overlay { position: absolute; inset: 0; border-radius: 50%; overflow: hidden; }
 .zone { position: absolute; cursor: pointer; appearance: none; border: 0; background: transparent; }
@@ -32,5 +32,5 @@ const select = (zone: number) => {
 .zone:focus-visible { outline: 3px solid #fff; outline-offset: -4px; }
 .zone:disabled { cursor: not-allowed; }
 .z1,.z2,.z3,.z4,.z5,.z6,.z7,.z8{width:25%;height:50%;border:1px dashed #ccc}.z1{top:0;left:0}.z2{top:0;left:25%}.z3{top:0;left:50%}.z4{top:0;left:75%}.z5{bottom:0;left:0}.z6{bottom:0;left:25%}.z7{bottom:0;left:50%}.z8{bottom:0;left:75%}
-.map-label { position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%); font-weight: 700; color: #2e7d32; pointer-events: none; font-size: 11px; letter-spacing: .04em; }
+.map-label { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); font-weight: 700; color: #166534; pointer-events: none; font-size: 11px; letter-spacing: .04em; white-space: nowrap; }
 </style>
