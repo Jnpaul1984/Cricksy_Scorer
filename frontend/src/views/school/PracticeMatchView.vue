@@ -4,7 +4,7 @@ import { useRoute, useRouter } from 'vue-router';
 
 import { useSchoolContext } from '@/composables/useSchoolContext';
 import { usePrivatePracticeScorerAdapter } from '@/composables/usePrivatePracticeScorerAdapter';
-import PracticeScorerShell from '@/components/scoring/PracticeScorerShell.vue';
+import PracticeSharedScorer from '@/components/scoring/PracticeSharedScorer.vue';
 import {
   createPracticeMatch, getPracticeMatch, listSchoolTeams, listTeamRoster,
   scorePracticeDelivery, startPracticeInnings, startPracticeMatch, startPracticeOver, undoLastPracticeDelivery, updateSchoolMatchPublication,
@@ -152,28 +152,36 @@ async function createAndStart() {
     });
   });
 }
-async function score(runs: number) {
+async function score(runs: number, selectedFieldZone = fieldZone.value) {
   const scored = await perform(() => scorePracticeDelivery(organizationId.value, gameId.value, {
     expected_revision: revision.value, striker_id: currentStriker.value, non_striker_id: currentNonStriker.value,
-    bowler_id: currentBowler.value, runs_scored: runs, field_zone: fieldZone.value,
+    bowler_id: currentBowler.value, runs_scored: runs, field_zone: selectedFieldZone,
   }));
   if (scored) fieldZone.value = null;
 }
-async function scoreExtra(extra: 'wd' | 'nb' | 'b' | 'lb', runs: number) {
+async function scoreExtra(extra: 'wd' | 'nb' | 'b' | 'lb', runs: number, selectedFieldZone = fieldZone.value) {
   const scored = await perform(() => scorePracticeDelivery(organizationId.value, gameId.value, {
     expected_revision: revision.value, striker_id: currentStriker.value, non_striker_id: currentNonStriker.value,
-    bowler_id: currentBowler.value, runs_scored: runs, extra, field_zone: extra === 'nb' ? fieldZone.value : null,
+    bowler_id: currentBowler.value, runs_scored: runs, extra, field_zone: extra === 'nb' ? selectedFieldZone : null,
   }));
   if (scored) fieldZone.value = null;
 }
-async function scoreWicket(dismissal: { type: string; dismissed: 'striker' | 'non_striker' }) {
+async function scoreWicket(dismissal: { type: string; dismissed: 'striker' | 'non_striker' }, runs = 0, extra: 'wd' | 'nb' | 'b' | 'lb' | null = null, selectedFieldZone = fieldZone.value) {
   const dismissedPlayerId = dismissal.dismissed === 'striker' ? currentStriker.value : currentNonStriker.value;
   const scored = await perform(() => scorePracticeDelivery(organizationId.value, gameId.value, {
     expected_revision: revision.value, striker_id: currentStriker.value, non_striker_id: currentNonStriker.value,
-    bowler_id: currentBowler.value, runs_scored: 0, is_wicket: true,
-    dismissal_type: dismissal.type, dismissed_player_id: dismissedPlayerId, field_zone: fieldZone.value,
+    bowler_id: currentBowler.value, runs_scored: runs, ...(extra ? { extra } : {}), is_wicket: true,
+    dismissal_type: dismissal.type, dismissed_player_id: dismissedPlayerId, field_zone: (extra === null || extra === 'nb') ? selectedFieldZone : null,
   }));
   if (scored) fieldZone.value = null;
+}
+async function scoreSharedDelivery(delivery: { runs: number; extra: 'wd' | 'nb' | 'b' | 'lb' | null; isWicket: boolean; dismissal: string; dismissed: 'striker' | 'non_striker'; fieldZone: number | null }) {
+  if (delivery.isWicket) {
+    await scoreWicket({ type: delivery.dismissal, dismissed: delivery.dismissed }, delivery.runs, delivery.extra, delivery.fieldZone);
+    return;
+  }
+  if (delivery.extra) await scoreExtra(delivery.extra, delivery.runs, delivery.fieldZone);
+  else await score(delivery.runs, delivery.fieldZone);
 }
 async function setPracticePublication(publicationState: 'private' | 'published_live') {
   if (!gameId.value || !canPublishScorecards.value) return;
@@ -194,8 +202,10 @@ watch(() => route.query.gameId, async () => { clearPrivateWorkflow(); const requ
 </script>
 
 <template>
-  <section class="practice" data-testid="practice-match-view">
-    <h2>Practice match</h2><p>Only this {{ terminology.kindLabel }} can access and score this match. It stays private unless an authorized coach explicitly changes its organization publication state.</p>
+  <section :class="['practice', { 'practice--active': Boolean(gameId) }]" data-testid="practice-match-view">
+    <template v-if="!gameId">
+      <h2>Practice match</h2><p>Only this {{ terminology.kindLabel }} can access and score this match. It stays private unless an authorized coach explicitly changes its organization publication state.</p>
+    </template>
     <p v-if="!canCreateSchoolMatch" class="error">Your current role cannot create or score private practice matches.</p>
     <p v-if="error" class="error" role="alert">{{ error }}</p><p v-if="notice" role="status">{{ notice }}</p>
     <template v-if="!gameId && canCreateSchoolMatch">
@@ -207,7 +217,7 @@ watch(() => route.query.gameId, async () => { clearPrivateWorkflow(); const requ
       <button :disabled="!canCreate || loading" data-testid="create-practice" @click="createAndStart">Create and start private practice</button>
     </template>
     <section v-else-if="state" class="scoring" data-testid="practice-scoring">
-      <PracticeScorerShell :status="state.status" :revision="revision" :total-runs="scorer.totalRuns.value" :total-wickets="scorer.totalWickets.value" :overs="scorer.overs.value" :inning="scorer.inning.value" :target="scorer.target.value" :striker-name="scorer.strikerName.value" :non-striker-name="scorer.nonStrikerName.value" :bowler-name="scorer.bowlerName.value" :can-score="state.status === 'in_progress' && !needsNextOver" :needs-next-over="needsNextOver" :loading="loading" :start-locked="firstInningsStartAttempted" :publication-state="state.publication_state" :can-publish="canPublishScorecards" :public-href="publicPracticeHref" :field-zone="fieldZone" @update:field-zone="fieldZone = $event" @score="score" @extra="scoreExtra" @wicket="scoreWicket" @publication="setPracticePublication" @undo="undo" @start-over="beginNextOver" @start-innings="startVisibleInnings" @reload="reloadPrivateWorkflow" />
+      <PracticeSharedScorer :status="state.status" :total-runs="scorer.totalRuns.value" :total-wickets="scorer.totalWickets.value" :overs="scorer.overs.value" :inning="scorer.inning.value" :target="scorer.target.value" :striker-name="scorer.strikerName.value" :non-striker-name="scorer.nonStrikerName.value" :bowler-name="scorer.bowlerName.value" :can-score="state.status === 'in_progress' && !needsNextOver" :needs-next-over="needsNextOver" :loading="loading" :start-disabled="state.status === 'started' && firstInningsStartAttempted" :publication-state="state.publication_state" :can-publish="canPublishScorecards" :public-href="publicPracticeHref" :field-zone="fieldZone" @update:field-zone="fieldZone = $event" @delivery="scoreSharedDelivery" @publication="setPracticePublication" @undo="undo" @start-over="beginNextOver" @start-innings="startVisibleInnings" @reload="reloadPrivateWorkflow" />
       <div v-if="needsNextOver"><label>Next over bowler <select v-model="nextOverBowlerId" data-testid="next-over-bowler"><option v-for="player in bowling" :key="player.player_profile_id" :value="player.player_profile_id">{{ player.player_name }}</option></select></label></div>
     </section>
     <section v-else-if="gameId" class="scoring">
@@ -218,5 +228,5 @@ watch(() => route.query.gameId, async () => { clearPrivateWorkflow(); const requ
 </template>
 
 <style scoped>
-.practice{max-width:54rem;padding:1rem}.practice label{display:block;margin:.7rem 0}.practice select,.practice input{margin-left:.5rem}.practice button{margin:.4rem;padding:.5rem .8rem}.error{color:#b42318}.scoring{margin-top:1rem;padding:1rem;border:1px solid #789;border-radius:.5rem}
+.practice{max-width:54rem;padding:1rem}.practice--active{max-width:none;padding:0}.practice label{display:block;margin:.7rem 0}.practice select,.practice input{margin-left:.5rem}.practice button{margin:.4rem;padding:.5rem .8rem}.error{color:#b42318}.scoring{margin-top:1rem;padding:1rem;border:1px solid #789;border-radius:.5rem}.practice--active .scoring{margin-top:0;padding:0;border:0;border-radius:0}.practice--active :deep(.broadcast-layout){min-height:0}
 </style>

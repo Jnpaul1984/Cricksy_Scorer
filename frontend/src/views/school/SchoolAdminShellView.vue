@@ -30,6 +30,13 @@ const organizationType = computed(
 const terminology = computed(() => organizationTerminology(organizationType.value));
 const organizationBasePath = computed(() => organizationBasePathForType(organizationType.value));
 const routeViewKey = computed(() => String(route.fullPath || organizationId.value));
+// An in-progress practice game uses the broadcast scorer rather than the
+// administration workspace. Keep it beneath this route-scoped shell so the
+// same verified organization context is provided, but do not trap the scorer
+// inside the administration card or navigation width.
+const isActivePracticeScorer = computed(() =>
+  ['school-practice', 'club-practice'].includes(String(route.name)) && typeof route.query.gameId === 'string' && route.query.gameId.length > 0,
+);
 const organization = ref<SchoolOrganization | null>(null);
 const membership = ref<SchoolMembership | null>(null);
 const entitlement = ref<SchoolEntitlement | null>(null);
@@ -202,7 +209,28 @@ watch(
 </script>
 
 <template>
-  <main class="school-shell">
+  <main v-if="isActivePracticeScorer" class="school-scorer-shell" data-testid="active-practice-scorer-shell">
+    <p v-if="loading" class="shell-state" role="status">
+      Loading {{ terminology.kindLabel }} workspace.
+    </p>
+    <section v-else-if="error" class="shell-state error" role="alert">
+      <h1>{{ terminology.kindLabel }} workspace unavailable</h1>
+      <p>{{ error }}</p>
+      <RouterLink :to="organizationBasePath"
+        >Back to your {{ terminology.kindLabelPluralLower }}</RouterLink
+      >
+    </section>
+    <template v-else-if="organization && membership && entitlement">
+      <header class="scorer-return-bar">
+        <RouterLink :to="`${organizationBasePath}/${organizationId}/practice`" data-testid="practice-scorer-return">
+          ← Back to practice setup
+        </RouterLink>
+        <span class="scorer-private-badge">Private practice</span>
+      </header>
+      <RouterView :key="routeViewKey" />
+    </template>
+  </main>
+  <main v-else class="school-shell" data-testid="school-admin-shell">
     <p v-if="loading" class="shell-state" role="status">
       Loading {{ terminology.kindLabel }} workspace…
     </p>
@@ -297,6 +325,32 @@ watch(
   padding: 1.5rem 1rem 4rem;
   color: #eef2ff;
 }
+.school-scorer-shell {
+  width: 100%;
+  min-height: 100vh;
+  color: #eef2ff;
+}
+.scorer-return-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 0.6rem 1rem;
+  color: #cbd5ee;
+}
+.scorer-return-bar a { color: #b9c8ed; }
+.scorer-private-badge {
+  border: 1px solid #93c5fd;
+  border-radius: 999px;
+  padding: 0.2rem 0.55rem;
+  color: #dbeafe;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
 .school-header {
   padding: 1.35rem;
   border: 1px solid #3b4768;
@@ -377,5 +431,6 @@ watch(
     flex: 1;
     text-align: center;
   }
+  .scorer-return-bar { padding-inline: 0.6rem; }
 }
 </style>

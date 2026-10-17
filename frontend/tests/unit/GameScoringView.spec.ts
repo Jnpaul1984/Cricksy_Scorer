@@ -353,6 +353,40 @@ describe('GameScoringView', () => {
     expect(wrapper.get('[data-testid="scoreboard-runs"]').text()).toBe(String(runAmount))
   })
 
+  it('submits the selected non-striker canonical ID even when display names are duplicated', async () => {
+    gameStoreMock.battingRosterXI.value = [
+      { id: 'striker-1', name: 'Alex Lee' },
+      { id: 'non-striker-1', name: 'Alex Lee' },
+    ]
+    gameStoreMock.scoreDelivery = vi.fn(async () => undefined)
+    const wrapper = await mountView()
+    await wrapper.get('[data-testid="delivery-wicket"]').setValue(true)
+    await wrapper.get('[data-testid="dismissed-batter"]').setValue('non_striker')
+    await wrapper.get('[data-testid="submit-delivery"]').trigger('click')
+    await flushPromises()
+    expect(gameStoreMock.scoreDelivery).toHaveBeenCalledWith('test-game', expect.objectContaining({
+      dismissed_player_id: 'non-striker-1', dismissed_player_name: 'Alex Lee', is_wicket: true,
+    }))
+  })
+
+  it('submits a wide stumping through the shared dismissal controls', async () => {
+    gameStoreMock.scoreDelivery = vi.fn(async () => undefined)
+    const wrapper = await mountView()
+    await wrapper.get('[data-testid="delivery-extra-wd"]').trigger('click')
+    await wrapper.get('[data-testid="delivery-run-1"]').trigger('click')
+    await wrapper.get('[data-testid="delivery-wicket"]').setValue(true)
+    const dismissal = wrapper.get('.wicket-details select')
+    expect(dismissal.text()).toContain('stumped')
+    expect(dismissal.text()).not.toContain('bowled')
+    await dismissal.setValue('stumped')
+    await wrapper.get('[aria-label="Fielder attribution"]').setValue('bowler-1')
+    await wrapper.get('[data-testid="submit-delivery"]').trigger('click')
+    await flushPromises()
+    expect(gameStoreMock.scoreDelivery).toHaveBeenCalledWith('test-game', expect.objectContaining({
+      extra_type: 'wd', is_wicket: true, dismissal_type: 'stumped',
+    }))
+  })
+
   it('does not score when delivery scoring is disabled', async () => {
     gameStoreMock.canScore = false
     gameStoreMock.canScoreDelivery = false

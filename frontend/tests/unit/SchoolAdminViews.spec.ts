@@ -17,13 +17,20 @@ import SchoolTeamRosterView from '@/views/school/SchoolTeamRosterView.vue';
 import SchoolTeamsView from '@/views/school/SchoolTeamsView.vue';
 
 vi.mock('@/services/schoolAdminApi');
+const { routeState } = vi.hoisted(() => ({
+  routeState: {
+    value: {
+      params: { organizationId: 'school-a', teamId: 'team-a' },
+      meta: { organizationType: 'school' },
+      fullPath: '/schools/school-a',
+      name: 'school-overview',
+      query: {} as Record<string, string>,
+    },
+  },
+}));
 vi.mock('vue-router', async (importOriginal) => ({
   ...(await importOriginal<typeof import('vue-router')>()),
-  useRoute: () => ({
-    params: { organizationId: 'school-a', teamId: 'team-a' },
-    meta: { organizationType: 'school' },
-    fullPath: '/schools/school-a',
-  }),
+  useRoute: () => routeState.value,
   RouterLink: { props: ['to'], template: '<a :href="String(to)"><slot /></a>' },
   RouterView: { template: '<div data-test="router-view" />' },
 }));
@@ -152,6 +159,13 @@ const preview: PlayerImportPreview = {
 describe('Phase 7H School administration views', () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    routeState.value = {
+      params: { organizationId: 'school-a', teamId: 'team-a' },
+      meta: { organizationType: 'school' },
+      fullPath: '/schools/school-a',
+      name: 'school-overview',
+      query: {},
+    };
     vi.mocked(schoolApi.listSchoolTeams).mockResolvedValue([]);
     vi.mocked(schoolApi.listSchoolPlayers).mockResolvedValue([]);
     vi.mocked(schoolApi.listTeamRoster).mockResolvedValue([]);
@@ -193,6 +207,54 @@ describe('Phase 7H School administration views', () => {
     expect(wrapper.text()).toContain('Fixtures / Results');
     expect(wrapper.text()).toContain('Competitions');
     expect(wrapper.text()).toContain('Calendar');
+  });
+
+  it('uses a full-width scorer shell only for an active practice game while retaining the verified route context', async () => {
+    routeState.value = {
+      ...routeState.value,
+      fullPath: '/schools/school-a/practice?gameId=practice-1',
+      name: 'school-practice',
+      query: { gameId: 'practice-1' },
+    };
+    const wrapper = mount(SchoolAdminShellView, { global: { stubs: { RouterView: true } } });
+    await flushPromises();
+    expect(wrapper.get('[data-testid="active-practice-scorer-shell"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="school-admin-shell"]').exists()).toBe(false);
+    expect(wrapper.find('.school-nav').exists()).toBe(false);
+    expect(wrapper.get('[data-testid="practice-scorer-return"]').attributes('href')).toContain('/schools/school-a/practice');
+    expect(wrapper.text()).toContain('Private practice');
+    expect(schoolApi.getSchool).toHaveBeenCalledWith('school-a');
+    expect(schoolApi.getMySchoolMembership).toHaveBeenCalledWith('school-a');
+    expect(schoolApi.getSchoolEntitlement).toHaveBeenCalledWith('school-a');
+  });
+
+  it('keeps practice setup in the normal administration shell when no game is active', async () => {
+    routeState.value = {
+      ...routeState.value,
+      fullPath: '/schools/school-a/practice',
+      name: 'school-practice',
+      query: {},
+    };
+    const wrapper = mount(SchoolAdminShellView, { global: { stubs: { RouterView: true } } });
+    await flushPromises();
+    expect(wrapper.get('[data-testid="school-admin-shell"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="active-practice-scorer-shell"]').exists()).toBe(false);
+    expect(wrapper.get('.school-nav').exists()).toBe(true);
+  });
+
+  it('uses the same full-width scorer shell for an active club practice game', async () => {
+    routeState.value = {
+      ...routeState.value,
+      fullPath: '/clubs/school-a/practice?gameId=practice-1',
+      name: 'club-practice',
+      query: { gameId: 'practice-1' },
+      meta: { organizationType: 'club' },
+    };
+    const wrapper = mount(SchoolAdminShellView, { global: { stubs: { RouterView: true } } });
+    await flushPromises();
+    expect(wrapper.get('[data-testid="active-practice-scorer-shell"]').exists()).toBe(true);
+    expect(wrapper.find('.school-nav').exists()).toBe(false);
+    expect(schoolApi.getSchool).toHaveBeenCalledWith('school-a');
   });
 
   it('denies a nonmember or cross-tenant School route without metadata leakage', async () => {
