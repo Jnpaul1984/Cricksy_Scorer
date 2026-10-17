@@ -24,6 +24,7 @@ const firstSide = ref<'team_a' | 'team_b'>('team_a'); const overs = ref(2);
 const state = ref<PracticeWorkflowState | null>(null); const gameId = ref('');
 const loading = ref(false); const error = ref(''); const notice = ref('');
 const nextOverBowlerId = ref('');
+const fieldZone = ref<number | null>(null);
 const firstInningsStartAttempted = ref(false);
 let loadGeneration = 0;
 let organizationGeneration = 0;
@@ -73,7 +74,7 @@ async function refetch(conflict = false): Promise<boolean> {
   if (conflict) notice.value = 'This practice match changed in another tab. The latest private state has been loaded.';
   return true;
 }
-function clearPrivateWorkflow() { loadGeneration += 1; gameId.value = ''; state.value = null; frozenA.value = []; frozenB.value = []; nextOverBowlerId.value = ''; firstInningsStartAttempted.value = false; notice.value = ''; error.value = ''; }
+function clearPrivateWorkflow() { loadGeneration += 1; gameId.value = ''; state.value = null; frozenA.value = []; frozenB.value = []; nextOverBowlerId.value = ''; fieldZone.value = null; firstInningsStartAttempted.value = false; notice.value = ''; error.value = ''; }
 function clearOrganizationState() {
   organizationGeneration += 1; clearPrivateWorkflow(); teams.value = []; teamAId.value = ''; teamBId.value = '';
   rosterA.value = []; rosterB.value = []; selectedA.value = []; selectedB.value = []; loading.value = false;
@@ -89,24 +90,26 @@ async function loadOrganizationState() {
     if (typeof requestedGameId === 'string' && requestedGameId) { gameId.value = requestedGameId; await refetch(); }
   } catch (reason) { if (generation === organizationGeneration && requestedOrganizationId === organizationId.value) error.value = getErrorMessage(reason); }
 }
-async function perform(action: () => Promise<PracticeWorkflowState | void>) {
+async function perform(action: () => Promise<PracticeWorkflowState | void>): Promise<boolean> {
   const generation = organizationGeneration; const requestedOrganizationId = organizationId.value;
   loading.value = true; error.value = ''; notice.value = '';
   try {
     const result = await action();
-    if (generation !== organizationGeneration || requestedOrganizationId !== organizationId.value) return;
+    if (generation !== organizationGeneration || requestedOrganizationId !== organizationId.value) return false;
     if (result) {
       // A route replacement may have started a GET before this private mutation
       // completed. Do not let that older snapshot restore the "started" state.
       loadGeneration += 1;
       state.value = result;
     }
+    return Boolean(result);
   }
   catch (reason) {
-    if (generation !== organizationGeneration || requestedOrganizationId !== organizationId.value) return;
+    if (generation !== organizationGeneration || requestedOrganizationId !== organizationId.value) return false;
     if ((reason as { status?: number }).status === 409 && gameId.value) { await refetch(true); }
     else error.value = getErrorMessage(reason);
   } finally { if (generation === organizationGeneration && requestedOrganizationId === organizationId.value) loading.value = false; }
+  return false;
 }
 function startFirstInnings() {
   if (firstInningsStartAttempted.value) return;
@@ -149,25 +152,28 @@ async function createAndStart() {
     });
   });
 }
-function score(runs: number) {
-  return perform(() => scorePracticeDelivery(organizationId.value, gameId.value, {
+async function score(runs: number) {
+  const scored = await perform(() => scorePracticeDelivery(organizationId.value, gameId.value, {
     expected_revision: revision.value, striker_id: currentStriker.value, non_striker_id: currentNonStriker.value,
-    bowler_id: currentBowler.value, runs_scored: runs,
+    bowler_id: currentBowler.value, runs_scored: runs, field_zone: fieldZone.value,
   }));
+  if (scored) fieldZone.value = null;
 }
-function scoreExtra(extra: 'wd' | 'nb' | 'b' | 'lb', runs: number) {
-  return perform(() => scorePracticeDelivery(organizationId.value, gameId.value, {
+async function scoreExtra(extra: 'wd' | 'nb' | 'b' | 'lb', runs: number) {
+  const scored = await perform(() => scorePracticeDelivery(organizationId.value, gameId.value, {
     expected_revision: revision.value, striker_id: currentStriker.value, non_striker_id: currentNonStriker.value,
-    bowler_id: currentBowler.value, runs_scored: runs, extra,
+    bowler_id: currentBowler.value, runs_scored: runs, extra, field_zone: extra === 'nb' ? fieldZone.value : null,
   }));
+  if (scored) fieldZone.value = null;
 }
-function scoreWicket(dismissal: { type: string; dismissed: 'striker' | 'non_striker' }) {
+async function scoreWicket(dismissal: { type: string; dismissed: 'striker' | 'non_striker' }) {
   const dismissedPlayerId = dismissal.dismissed === 'striker' ? currentStriker.value : currentNonStriker.value;
-  return perform(() => scorePracticeDelivery(organizationId.value, gameId.value, {
+  const scored = await perform(() => scorePracticeDelivery(organizationId.value, gameId.value, {
     expected_revision: revision.value, striker_id: currentStriker.value, non_striker_id: currentNonStriker.value,
     bowler_id: currentBowler.value, runs_scored: 0, is_wicket: true,
-    dismissal_type: dismissal.type, dismissed_player_id: dismissedPlayerId,
+    dismissal_type: dismissal.type, dismissed_player_id: dismissedPlayerId, field_zone: fieldZone.value,
   }));
+  if (scored) fieldZone.value = null;
 }
 async function setPracticePublication(publicationState: 'private' | 'published_live') {
   if (!gameId.value || !canPublishScorecards.value) return;
@@ -201,7 +207,7 @@ watch(() => route.query.gameId, async () => { clearPrivateWorkflow(); const requ
       <button :disabled="!canCreate || loading" data-testid="create-practice" @click="createAndStart">Create and start private practice</button>
     </template>
     <section v-else-if="state" class="scoring" data-testid="practice-scoring">
-      <PracticeScorerShell :status="state.status" :revision="revision" :total-runs="scorer.totalRuns.value" :total-wickets="scorer.totalWickets.value" :overs="scorer.overs.value" :inning="scorer.inning.value" :target="scorer.target.value" :striker-name="scorer.strikerName.value" :non-striker-name="scorer.nonStrikerName.value" :bowler-name="scorer.bowlerName.value" :can-score="state.status === 'in_progress' && !needsNextOver" :needs-next-over="needsNextOver" :loading="loading" :start-locked="firstInningsStartAttempted" :publication-state="state.publication_state" :can-publish="canPublishScorecards" :public-href="publicPracticeHref" @score="score" @extra="scoreExtra" @wicket="scoreWicket" @publication="setPracticePublication" @undo="undo" @start-over="beginNextOver" @start-innings="startVisibleInnings" @reload="reloadPrivateWorkflow" />
+      <PracticeScorerShell :status="state.status" :revision="revision" :total-runs="scorer.totalRuns.value" :total-wickets="scorer.totalWickets.value" :overs="scorer.overs.value" :inning="scorer.inning.value" :target="scorer.target.value" :striker-name="scorer.strikerName.value" :non-striker-name="scorer.nonStrikerName.value" :bowler-name="scorer.bowlerName.value" :can-score="state.status === 'in_progress' && !needsNextOver" :needs-next-over="needsNextOver" :loading="loading" :start-locked="firstInningsStartAttempted" :publication-state="state.publication_state" :can-publish="canPublishScorecards" :public-href="publicPracticeHref" :field-zone="fieldZone" @update:field-zone="fieldZone = $event" @score="score" @extra="scoreExtra" @wicket="scoreWicket" @publication="setPracticePublication" @undo="undo" @start-over="beginNextOver" @start-innings="startVisibleInnings" @reload="reloadPrivateWorkflow" />
       <div v-if="needsNextOver"><label>Next over bowler <select v-model="nextOverBowlerId" data-testid="next-over-bowler"><option v-for="player in bowling" :key="player.player_profile_id" :value="player.player_profile_id">{{ player.player_name }}</option></select></label></div>
     </section>
     <section v-else-if="gameId" class="scoring">

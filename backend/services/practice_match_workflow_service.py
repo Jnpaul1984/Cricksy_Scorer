@@ -358,6 +358,7 @@ async def score_practice_delivery(
     is_wicket: bool,
     dismissal_type: str | None,
     dismissed_player_id: str | None,
+    field_zone: int | None = None,
 ) -> tuple[models.Game, dict[str, Any]]:
     game = await _load_private_game(
         db, organization_id=organization_id, actor_user_id=actor_user_id, game_id=game_id, lock=True
@@ -390,6 +391,10 @@ async def score_practice_delivery(
     if kwargs["is_wicket"]:
         game.total_wickets = int(game.total_wickets) + 1
     delivery = dict(kwargs)
+    # Keep the shared scorer's canonical field section solely on the private
+    # practice delivery ledger.  It is deliberately not interpreted by the
+    # official scoring/statistics services or public scorecard projection.
+    delivery["field_zone"] = field_zone if extra in {None, "nb"} else None
     delivery["inning"] = game.current_inning
     game.deliveries = [*(game.deliveries or []), delivery]
     _close_if_terminal(game)

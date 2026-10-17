@@ -645,7 +645,7 @@ export const startPracticeOver = (organizationId: string, gameId: string, payloa
 export const scorePracticeDelivery = (organizationId: string, gameId: string, payload: {
   expected_revision: number; striker_id: string; non_striker_id: string; bowler_id: string;
   runs_scored: number; extra?: 'nb' | 'wd' | 'b' | 'lb'; is_wicket?: boolean;
-  dismissal_type?: string; dismissed_player_id?: string;
+  dismissal_type?: string; dismissed_player_id?: string; field_zone?: number | null;
 }) => apiRequest<PracticeWorkflowState>(orgPath(organizationId, `/practice-matches/${encodeURIComponent(gameId)}/deliveries`), {
   method: 'POST', body: JSON.stringify(payload),
 });
