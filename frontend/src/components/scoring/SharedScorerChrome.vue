@@ -14,6 +14,8 @@ defineProps<{
   nonStriker: string;
   bowler: string;
   battingPlayers?: Player[];
+  strikerPlayers?: Player[];
+  nonStrikerPlayers?: Player[];
   bowlingPlayers?: Player[];
   editable?: boolean;
   showBowlerActions?: boolean;
@@ -52,14 +54,14 @@ const emit = defineEmits<{
     <div class="player-box striker-box">
       <div class="pb-label">STRIKER</div>
       <select v-if="battingPlayers" :value="striker" class="pb-select-full" data-testid="scorer-striker-select" :disabled="!editable" @change="emit('update:striker', ($event.target as HTMLSelectElement).value)">
-        <option disabled value="">Select...</option><option v-for="player in battingPlayers" :key="player.id" :value="player.id" :disabled="player.disabled">{{ player.name }}</option>
+        <option disabled value="">Select...</option><option v-for="player in (strikerPlayers || battingPlayers)" :key="player.id" :value="player.id" :disabled="player.disabled">{{ player.name }}</option>
       </select>
       <div v-else class="pb-select-full">{{ striker }}</div>
     </div>
     <div class="player-box non-striker-box">
       <div class="pb-label">NON-STRIKER</div>
       <select v-if="battingPlayers" :value="nonStriker" class="pb-select-full" data-testid="scorer-nonstriker-select" :disabled="!editable" @change="emit('update:nonStriker', ($event.target as HTMLSelectElement).value)">
-        <option disabled value="">Select...</option><option v-for="player in battingPlayers" :key="player.id" :value="player.id" :disabled="player.disabled">{{ player.name }}</option>
+        <option disabled value="">Select...</option><option v-for="player in (nonStrikerPlayers || battingPlayers)" :key="player.id" :value="player.id" :disabled="player.disabled">{{ player.name }}</option>
       </select>
       <div v-else class="pb-select-full">{{ nonStriker }}</div>
     </div>

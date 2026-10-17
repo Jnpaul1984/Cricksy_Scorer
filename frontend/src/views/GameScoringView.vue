@@ -1851,7 +1851,7 @@ async function confirmChangeBowler(): Promise<void> {
       :runs="headerRuns" :wickets="headerWickets" :overs="headerOvers"
       :primary-stat-label="`CRR: ${((liveSnapshot as any)?.current_run_rate ?? (liveSnapshot as any)?.crr ?? 0).toFixed(2)}`"
       :secondary-stat-label="targetSafe ? `Target: ${targetSafe} · RRR: ${(requiredRunRate ?? 0).toFixed(2)} · Need ${runsRequired}` : ''"
-      :striker="selectedStriker" :non-striker="selectedNonStriker" :bowler="selectedBowler" :batting-players="battingPlayers.map(p => ({ id: p.id, name: `${p.name} ${roleBadge(p.id)}`, disabled: p.id === selectedNonStriker }))" :bowling-players="bowlingPlayers.map(p => ({ id: p.id, name: `${p.name} ${bowlerRoleBadge(p.id)}` }))"
+      :striker="selectedStriker" :non-striker="selectedNonStriker" :bowler="selectedBowler" :batting-players="battingPlayers" :striker-players="battingPlayers.map(p => ({ id: p.id, name: `${p.name} ${roleBadge(p.id)}`, disabled: p.id === selectedNonStriker }))" :non-striker-players="battingPlayers.map(p => ({ id: p.id, name: `${p.name} ${roleBadge(p.id)}`, disabled: p.id === selectedStriker }))" :bowling-players="bowlingPlayers.map(p => ({ id: p.id, name: `${p.name} ${bowlerRoleBadge(p.id)}` }))"
       :editable="canOperateCurrentMatch && !isStartingInnings" :show-bowler-actions="canOperateCurrentMatch"
       @update:striker="selectedStriker = $event" @update:non-striker="selectedNonStriker = $event" @update:bowler="selectedBowler = $event"
     >
