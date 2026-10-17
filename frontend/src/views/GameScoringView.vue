@@ -32,6 +32,8 @@ import InningsGradeWidget from '@/components/InningsGradeWidget.vue'
 import PressureMapWidget from '@/components/PressureMapWidget.vue'
 import PhaseTimelineWidget from '@/components/PhaseTimelineWidget.vue'
 import BroadcastScorerFrame from '@/components/scoring/BroadcastScorerFrame.vue'
+import SharedScorerChrome from '@/components/scoring/SharedScorerChrome.vue'
+import SharedDeliveryControls from '@/components/scoring/SharedDeliveryControls.vue'
 import SharedFieldMap from '@/components/scoring/SharedFieldMap.vue'
 import { useRoleBadge } from '@/composables/useRoleBadge'
 import { useInningsGrade } from '@/composables/useInningsGrade'
@@ -1842,93 +1844,22 @@ async function confirmChangeBowler(): Promise<void> {
 
 <template>
   <BroadcastScorerFrame>
-    <!-- Top toolbar -->
-    <header class="broadcast-header">
-      <div class="header-left">
-        <div class="brand">CRICKSY</div>
-        <div v-if="gameId" class="game-meta">#{{ gameId.slice(0,6) }}</div>
-      </div>
-
-      <!-- Dense Match State -->
-      <div class="header-center dense-stats">
-        <div class="stat-group main-score">
-          <span class="team-name">{{ battingTeamName || 'Team' }}</span>
-          <span class="score-display">
-            <span data-testid="scoreboard-runs">{{ headerRuns }}</span>/{{ headerWickets }}
-          </span>
-          <span class="overs-display">
-            (<span data-testid="scoreboard-overs">{{ headerOvers }}</span>)
-          </span>
-        </div>
-
-        <div class="stat-divider"></div>
-
-        <div class="stat-group rates">
-          <span class="rate-item">CRR: <strong>{{ ((liveSnapshot as any)?.current_run_rate ?? (liveSnapshot as any)?.crr ?? 0).toFixed(2) }}</strong></span>
-          <span v-if="targetSafe" class="rate-item" data-testid="scoreboard-target">Target: <strong>{{ targetSafe }}</strong></span>
-          <span v-if="targetSafe" class="rate-item">RRR: <strong>{{ (requiredRunRate ?? 0).toFixed(2) }}</strong></span>
-          <span v-if="targetSafe" class="rate-item need-txt">Need <strong>{{ runsRequired }}</strong></span>
-        </div>
-      </div>
-
-      <div class="header-right">
-        <button class="btn-ghost-sm" @click="shareOpen = true">
-          Share
-        </button>
-      </div>
-    </header>
-
-    <!-- PLAYER BAR (Split Panels) -->
-    <section class="player-bar">
-      <!-- Striker Panel -->
-      <div class="player-box striker-box">
-        <div class="pb-label">STRIKER</div>
-        <select v-model="selectedStriker" class="pb-select-full" data-testid="scorer-striker-select" :disabled="!canOperateCurrentMatch || isStartingInnings">
-          <option disabled value="">Select...</option>
-          <option v-for="p in battingPlayers" :key="p.id" :value="p.id" :disabled="p.id === selectedNonStriker">
-            {{ p.name }} {{ roleBadge(p.id) }}
-          </option>
-        </select>
-      </div>
-
-      <!-- Non-Striker Panel -->
-      <div class="player-box non-striker-box">
-        <div class="pb-label">NON-STRIKER</div>
-        <select v-model="selectedNonStriker" class="pb-select-full" data-testid="scorer-nonstriker-select" :disabled="!canOperateCurrentMatch || isStartingInnings">
-          <option disabled value="">Select...</option>
-          <option v-for="p in battingPlayers" :key="p.id" :value="p.id" :disabled="p.id === selectedStriker">
-            {{ p.name }} {{ roleBadge(p.id) }}
-          </option>
-        </select>
-      </div>
-
-      <!-- Bowler Panel -->
-      <div class="player-box bowler-box">
-        <div class="pb-label">
-          <span>BOWLER</span>
-          <div class="bowler-actions" v-if="canOperateCurrentMatch">
-            <button class="btn-action-xs" @click="openStartOver" :disabled="!canStartOverNow" title="Start new over / Change bowler">
-              New Over
-            </button>
-            <button class="btn-action-xs" @click="openChangeBowler" :disabled="!canUseMidOverChange" title="Mid-over replacement (injury/suspension)">
-              Replace
-            </button>
-            <button class="btn-action-xs"
-              @click="openCorrectionBowler"
-              :disabled="!canCorrectBowler"
-              :title="!canCorrectBowler ? 'Correction only available at the start of an over' : 'Correct wrong bowler selection'">
-              Correction
-            </button>
-          </div>
-        </div>
-        <select v-model="selectedBowler" class="pb-select-full" data-testid="scorer-bowler-select" :disabled="!canOperateCurrentMatch || isStartingInnings">
-          <option disabled value="">Select...</option>
-          <option v-for="p in bowlingPlayers" :key="p.id" :value="p.id">
-            {{ p.name }} {{ bowlerRoleBadge(p.id) }}
-          </option>
-        </select>
-      </div>
-    </section>
+    <SharedScorerChrome
+      :game-meta="gameId ? `#${gameId.slice(0, 6)}` : ''" :team-name="battingTeamName || 'Team'"
+      :runs="headerRuns" :wickets="headerWickets" :overs="headerOvers"
+      :primary-stat-label="`CRR: ${((liveSnapshot as any)?.current_run_rate ?? (liveSnapshot as any)?.crr ?? 0).toFixed(2)}`"
+      :secondary-stat-label="targetSafe ? `Target: ${targetSafe} · RRR: ${(requiredRunRate ?? 0).toFixed(2)} · Need ${runsRequired}` : ''"
+      :striker="selectedStriker" :non-striker="selectedNonStriker" :bowler="selectedBowler" :batting-players="battingPlayers.map(p => ({ id: p.id, name: `${p.name} ${roleBadge(p.id)}`, disabled: p.id === selectedNonStriker }))" :bowling-players="bowlingPlayers.map(p => ({ id: p.id, name: `${p.name} ${bowlerRoleBadge(p.id)}` }))"
+      :editable="canOperateCurrentMatch && !isStartingInnings" :show-bowler-actions="canOperateCurrentMatch"
+      @update:striker="selectedStriker = $event" @update:non-striker="selectedNonStriker = $event" @update:bowler="selectedBowler = $event"
+    >
+      <template #header-actions><button class="btn-ghost-sm" @click="shareOpen = true">Share</button></template>
+      <template #bowler-actions>
+        <button class="btn-action-xs" @click="openStartOver" :disabled="!canStartOverNow">New Over</button>
+        <button class="btn-action-xs" @click="openChangeBowler" :disabled="!canUseMidOverChange">Replace</button>
+        <button class="btn-action-xs" @click="openCorrectionBowler" :disabled="!canCorrectBowler">Correction</button>
+      </template>
+    </SharedScorerChrome>
 
     <main class="broadcast-main">
 
@@ -1980,7 +1911,23 @@ async function confirmChangeBowler(): Promise<void> {
            </div>
         </div>
 
+        <SharedDeliveryControls
+          :can-score="canScore" :loading="isSubmitting" :extra="extra"
+          :runs="extra === 'none' || extra === 'nb' ? offBat : extraRuns"
+          :wicket="isWicket" :dismissal="dismissal || 'bowled'"
+          :striker-name="selectedStrikerName" :non-striker-name="selectedNonStrikerName"
+          :can-submit="canSubmitSimple" :undo-disabled="!canDeleteLast"
+          @update:extra="extra = $event"
+          @update:runs="extra === 'none' || extra === 'nb' ? offBat = $event : extraRuns = $event"
+          @update:wicket="isWicket = $event" @update:dismissal="dismissal = $event"
+          @submit="submitSimple" @undo="deleteLastDelivery"
+        >
+          <template #wicket-details-extra>
+            <select v-if="needsFielder" v-model="selectedFielderId" class="sel-sm" aria-label="Fielder attribution"><option v-for="p in fielderOptions" :key="p.id" :value="p.id">{{ p.name }}</option></select>
+          </template>
+        </SharedDeliveryControls>
         <div
+          v-if="false"
           class="scoring-grid-inputs scorer-controls"
           :class="{'scorer-controls--disabled': !canScore}"
           :aria-disabled="!canScore"

@@ -2,6 +2,8 @@
 import { computed, ref } from 'vue';
 import BroadcastScorerFrame from './BroadcastScorerFrame.vue';
 import SharedFieldMap from './SharedFieldMap.vue';
+import SharedScorerChrome from './SharedScorerChrome.vue';
+import SharedDeliveryControls from './SharedDeliveryControls.vue';
 
 type Extra = 'none' | 'wd' | 'nb' | 'b' | 'lb';
 const props = defineProps<{
@@ -27,26 +29,11 @@ function submit() {
 
 <template>
   <BroadcastScorerFrame>
-    <header class="broadcast-header">
-      <div class="header-left"><div class="brand">CRICKSY</div><div class="game-meta">PRACTICE</div></div>
-      <div class="header-center dense-stats"><div class="stat-group main-score"><span class="team-name">Practice innings {{ props.inning }}</span><span class="score-display">{{ props.totalRuns }}/{{ props.totalWickets }}</span><span class="overs-display">({{ props.overs }})</span></div><div class="stat-divider" /><div class="stat-group rates"><span class="rate-item">PRIVATE PRACTICE</span><span v-if="props.target !== null" class="rate-item">Target: <strong>{{ props.target }}</strong></span></div></div>
-      <div class="header-right"><span class="practice-tag">PRIVATE</span></div>
-    </header>
-    <section class="player-bar">
-      <div class="player-box striker-box"><div class="pb-label">STRIKER</div><div class="pb-select-full">{{ props.strikerName }}</div></div>
-      <div class="player-box non-striker-box"><div class="pb-label">NON-STRIKER</div><div class="pb-select-full">{{ props.nonStrikerName }}</div></div>
-      <div class="player-box bowler-box"><div class="pb-label">BOWLER</div><div class="pb-select-full">{{ props.bowlerName }}</div></div>
-    </section>
+    <SharedScorerChrome mode="practice" :team-name="`Practice innings ${props.inning}`" :runs="props.totalRuns" :wickets="props.totalWickets" :overs="props.overs" primary-stat-label="PRIVATE PRACTICE" :secondary-stat-label="props.target !== null ? `Target: ${props.target}` : ''" :striker="props.strikerName" :non-striker="props.nonStrikerName" :bowler="props.bowlerName" />
     <main class="broadcast-main">
       <div class="panel scoring-panel">
         <div v-if="props.status !== 'in_progress' || props.needsNextOver" class="gate-overlay"><div class="gate-card"><span class="gate-eyebrow">Practice action</span><h3>{{ props.status === 'started' ? 'Ready to Start' : props.needsNextOver ? 'End of Over' : 'Innings Break' }}</h3><button class="btn-gate" :data-testid="props.needsNextOver ? 'btn-open-start-over' : 'btn-open-start-innings'" type="button" :disabled="props.loading || props.startDisabled" @click="props.needsNextOver ? emit('start-over') : emit('start-innings')">{{ props.needsNextOver ? 'Start Next Over' : 'Start Innings' }}</button></div></div>
-        <div class="scoring-grid-inputs scorer-controls" :class="{ 'scorer-controls--disabled': !props.canScore }" data-testid="practice-shared-scorer">
-          <div class="input-row extras-row"><button v-for="kind in ['none', 'wd', 'nb', 'b', 'lb'] as Extra[]" :key="kind" type="button" class="btn-input" :data-testid="`delivery-extra-${kind === 'none' ? 'legal' : kind}`" :class="[{ active: extra === kind }, `btn-extra-${kind}`]" :disabled="!props.canScore || props.loading" @click="extra = kind">{{ kind === 'none' ? 'LEGAL' : kind.toUpperCase() }}</button></div>
-          <div class="input-matrix"><button v-for="run in [0, 1, 2, 3, 4, 6, 5]" :key="run" type="button" class="btn-score" :data-testid="`delivery-run-${run}`" :class="[`btn-score-${run}`, { active: runs === run }]" :disabled="!props.canScore || props.loading" @click="runs = run">{{ run }}</button></div>
-          <div class="input-row action-row"><label class="wicket-toggle" :class="{ checked: wicket, disabled: !props.canScore }"><input data-testid="delivery-wicket" type="checkbox" v-model="wicket" :disabled="!props.canScore || props.loading"> WICKET</label><button data-testid="submit-delivery" type="button" class="btn-submit" :disabled="!canSubmit" @click="submit">SUBMIT</button></div>
-          <div v-if="wicket" class="wicket-details"><select v-model="dismissal"><option v-for="option in ['bowled', 'caught', 'lbw', 'run_out', 'stumped']" :key="option" :value="option">{{ option.replace('_', ' ') }}</option></select><select v-model="dismissed"><option value="striker">{{ props.strikerName }}</option><option value="non_striker">{{ props.nonStrikerName }}</option></select></div>
-          <div class="undo-row"><button data-testid="undo-ball" type="button" class="btn-undo" :disabled="props.loading" @click="emit('undo')">UNDO LAST</button></div>
-        </div>
+        <SharedDeliveryControls data-testid="practice-shared-scorer" :can-score="props.canScore" :loading="props.loading" :extra="extra" :runs="runs" :wicket="wicket" :dismissal="dismissal" :striker-name="props.strikerName" :non-striker-name="props.nonStrikerName" :can-submit="canSubmit" @update:extra="extra = $event" @update:runs="runs = $event" @update:wicket="wicket = $event" @update:dismissal="dismissal = $event" @submit="submit" @undo="emit('undo')" />
       </div>
       <div class="panel map-panel"><div class="recent-strip"><div class="recent-label">LAST 6 <span class="active-ball-text">(Over {{ props.overs }})</span></div><div class="recent-balls"><span v-for="slot in 6" :key="slot" class="ball-badge empty">–</span></div></div><SharedFieldMap :model-value="props.fieldZone" :disabled="!props.canScore || props.loading" @update:model-value="emit('update:fieldZone', $event)" /></div>
     </main>
