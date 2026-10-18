@@ -316,7 +316,8 @@ onBeforeUnmount(() => {
           Games outside the selected format or cohort are counted separately.
         </p>
         <p v-if="Object.keys(data.coverage.warning_counts).length" class="notice">
-          Usable recorded data is shown with validation warnings.
+          Recorded-data validation warnings are listed above; data availability is reported
+          separately.
         </p>
         <p
           v-if="data.coverage.eligible_games > 0 && data.coverage.usable_batting_innings === 0"

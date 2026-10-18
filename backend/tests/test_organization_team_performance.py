@@ -8,6 +8,7 @@ from uuid import uuid4
 import pytest
 from sqlalchemy import select
 
+from backend.services.organization_entitlement_service import SCHOOL_FREE_CAPABILITIES
 from backend.services.organization_team_performance_access import (
     TeamPerformanceAccessError,
     grant_organization_team_performance,
@@ -547,8 +548,19 @@ async def test_team_performance_revalidates_role_user_and_team_on_every_request(
     assert organization["id"] not in removed.text
 
     async with school_client.session_maker() as session:  # type: ignore[attr-defined]
+        user = await session.get(User, owner.id)
+        assert user is not None
+        user.is_active = False
+        await session.commit()
+    inactive = school_client.get(endpoint, headers=owner.headers)
+    assert inactive.status_code == 400
+    assert inactive.json()["detail"] == "Inactive user"
+
+    async with school_client.session_maker() as session:  # type: ignore[attr-defined]
+        user = await session.get(User, owner.id)
         team_row = await session.get(Team, team.id)
-        assert team_row is not None
+        assert user is not None and team_row is not None
+        user.is_active = True
         await session.delete(team_row)
         await session.commit()
     missing_team = school_client.get(endpoint, headers=owner.headers)
@@ -556,14 +568,92 @@ async def test_team_performance_revalidates_role_user_and_team_on_every_request(
     assert missing_team.json()["detail"] == "Team not found"
     assert team.id not in missing_team.text
 
+
+@pytest.mark.asyncio
+async def test_healthy_free_capabilities_and_personal_account_survive_pilot_lifecycle(
+    school_client,
+) -> None:
+    owner = register_user(school_client, "pilot-healthy-free@example.com")
+    organization = create_school(school_client, owner, "Healthy Free invariance")
+    team, _, _, _ = await _seed_team_game(
+        school_client,
+        organization["id"],
+        owner.id,
+        deliveries=None,
+    )
+    organization_id = organization["id"]
+    performance_endpoint = (
+        f"/api/organizations/{organization_id}/team-performance/teams/{team.id}?overs_limit=20"
+    )
+
+    def read_free_state() -> dict[str, object]:
+        entitlement = school_client.get(
+            f"/api/organizations/{organization_id}/entitlements",
+            headers=owner.headers,
+        )
+        team_statistics = school_client.get(
+            f"/api/organizations/{organization_id}/statistics/teams",
+            headers=owner.headers,
+        )
+        player_statistics = school_client.get(
+            f"/api/organizations/{organization_id}/statistics/players",
+            headers=owner.headers,
+        )
+        personal_account = school_client.get("/auth/me", headers=owner.headers)
+        assert entitlement.status_code == 200, entitlement.text
+        assert team_statistics.status_code == 200, team_statistics.text
+        assert player_statistics.status_code == 200, player_statistics.text
+        assert personal_account.status_code == 200, personal_account.text
+        entitlement_body = entitlement.json()
+        assert entitlement_body["status"] == "active"
+        assert set(entitlement_body["capabilities"]) == SCHOOL_FREE_CAPABILITIES
+        return {
+            "entitlement": entitlement_body,
+            "team_statistics": team_statistics.json(),
+            "player_statistics": player_statistics.json(),
+            "personal_account": personal_account.json(),
+        }
+
+    baseline = read_free_state()
+    assert school_client.get(performance_endpoint, headers=owner.headers).status_code == 403
+
+    grant, _ = await _grant_async(school_client, organization_id, owner)
+    granted = school_client.get(performance_endpoint, headers=owner.headers)
+    assert granted.status_code == 200, granted.text
+    assert read_free_state() == baseline
+
     async with school_client.session_maker() as session:  # type: ignore[attr-defined]
-        user = await session.get(User, owner.id)
-        assert user is not None
-        user.is_active = False
+        _, changed = await revoke_organization_team_performance(
+            session,
+            organization_id=organization_id,
+            grant_id=grant.id,
+            operator_user_id=owner.id,
+            reason="Pilot closed",
+        )
+        assert changed
         await session.commit()
-    inactive = school_client.get(endpoint, headers=owner.headers)
-    assert inactive.status_code != 500
-    assert team.id not in inactive.text
+    assert school_client.get(performance_endpoint, headers=owner.headers).status_code == 403
+    assert read_free_state() == baseline
+
+    expiring, _ = await _grant_async(
+        school_client,
+        organization_id,
+        owner,
+        reason="Short pilot renewal",
+        effective_until=dt.datetime.now(dt.UTC) + dt.timedelta(days=1),
+    )
+    renewed = school_client.get(performance_endpoint, headers=owner.headers)
+    assert renewed.status_code == 200, renewed.text
+    assert read_free_state() == baseline
+
+    async with school_client.session_maker() as session:  # type: ignore[attr-defined]
+        current = await session.get(OrganizationTeamPerformanceGrant, expiring.id)
+        assert current is not None
+        current.effective_from = dt.datetime.now(dt.UTC) - dt.timedelta(days=2)
+        current.effective_until = dt.datetime.now(dt.UTC) - dt.timedelta(days=1)
+        await session.commit()
+    assert school_client.get(performance_endpoint, headers=owner.headers).status_code == 403
+    assert read_free_state() == baseline
 
 
 @pytest.mark.asyncio

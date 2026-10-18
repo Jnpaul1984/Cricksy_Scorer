@@ -210,13 +210,13 @@ describe('organization Team Performance pilot view', () => {
     expect(wrapper.text()).not.toContain('11\n');
   });
 
-  it('ignores rejected stale team and analytics requests after scope changes', async () => {
-    let rejectOldTeams: (error: Error) => void = () => undefined;
+  it('ignores rejected stale analytics after old team selection loads and scope changes', async () => {
+    let resolveOldTeams: (teams: SchoolTeam[]) => void = () => undefined;
     let rejectOldAnalytics: (error: Error) => void = () => undefined;
     vi.mocked(schoolApi.listSchoolTeams).mockImplementation(async (organizationId) => {
       if (organizationId === 'school-a') {
-        return new Promise<SchoolTeam[]>((_resolve, reject) => {
-          rejectOldTeams = reject;
+        return new Promise<SchoolTeam[]>((resolve) => {
+          resolveOldTeams = resolve;
         });
       }
       return [team('team-b', organizationId)];
@@ -232,16 +232,51 @@ describe('organization Team Performance pilot view', () => {
     const organizationId = ref('school-a');
     const wrapper = mountView(organizationId);
     await flushPromises();
+    expect(schoolApi.listSchoolTeams).toHaveBeenCalledWith('school-a');
+    resolveOldTeams([team('team-a', 'school-a')]);
+    await flushPromises();
+    expect(schoolApi.getOrganizationTeamPerformance).toHaveBeenCalledWith('school-a', 'team-a', 20);
+
     organizationId.value = 'club-b';
     await flushPromises();
+    expect(schoolApi.getOrganizationTeamPerformance).toHaveBeenCalledWith('club-b', 'team-b', 20);
     expect(wrapper.text()).toContain('77');
 
-    rejectOldTeams(Object.assign(new Error('stale team load'), { status: 404 }));
     rejectOldAnalytics(Object.assign(new Error('stale analytics'), { status: 500 }));
     await flushPromises();
     expect(wrapper.text()).toContain('77');
     expect(wrapper.text()).not.toContain('unavailable for this organization');
     expect(wrapper.text()).not.toContain('stale analytics');
+  });
+
+  it('ignores a rejected stale team list after switching organizations', async () => {
+    let rejectOldTeams: (error: Error) => void = () => undefined;
+    vi.mocked(schoolApi.listSchoolTeams).mockImplementation(async (organizationId) => {
+      if (organizationId === 'school-a') {
+        return new Promise<SchoolTeam[]>((_resolve, reject) => {
+          rejectOldTeams = reject;
+        });
+      }
+      return [team('team-b', organizationId)];
+    });
+    vi.mocked(schoolApi.getOrganizationTeamPerformance).mockResolvedValue(
+      performance('club-b', 'team-b', 77),
+    );
+
+    const organizationId = ref('school-a');
+    const wrapper = mountView(organizationId);
+    await flushPromises();
+    expect(schoolApi.listSchoolTeams).toHaveBeenCalledWith('school-a');
+
+    organizationId.value = 'club-b';
+    await flushPromises();
+    expect(wrapper.text()).toContain('77');
+
+    rejectOldTeams(Object.assign(new Error('stale team load'), { status: 404 }));
+    await flushPromises();
+    expect(wrapper.text()).toContain('77');
+    expect(wrapper.text()).not.toContain('unavailable for this organization');
+    expect(wrapper.text()).not.toContain('stale team load');
   });
 
   it('clears aggregates immediately when contextual staff access is lost', async () => {
@@ -332,6 +367,7 @@ describe('organization Team Performance pilot view', () => {
         usable_bowling_innings: 0,
         used_delivery_rows: 0,
         no_ledger_games: 1,
+        warning_counts: { invalid_numeric_field: 1 },
       },
     });
     const noLedger = mountView(ref('school-a'));
@@ -339,6 +375,10 @@ describe('organization Team Performance pilot view', () => {
     expect(noLedger.text()).toContain(
       'Eligible games exist, but no usable batting or bowling delivery ledger is available.',
     );
+    expect(noLedger.text()).toContain(
+      'Recorded-data validation warnings are listed above; data availability is reported separately.',
+    );
+    expect(noLedger.text()).not.toContain('Usable recorded data is shown');
     expect(noLedger.find('[aria-labelledby="batting-heading"]').exists()).toBe(false);
     expect(noLedger.find('[aria-labelledby="bowling-heading"]').exists()).toBe(false);
   });

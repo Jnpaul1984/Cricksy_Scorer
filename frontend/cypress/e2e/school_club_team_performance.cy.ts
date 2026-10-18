@@ -150,7 +150,7 @@ describe('School/Club Team Performance staff pilot', () => {
         .should('include', '/team-performance/teams/team-archived?overs_limit=20');
     });
 
-    it(`clears stale aggregates when the ${kind} pilot request is denied`, () => {
+    it(`shows unavailable access when the ${kind} pilot request is initially denied`, () => {
       cy.intercept('GET', `**/api/organizations/${id}`, {
         id,
         name: title,
@@ -206,6 +206,25 @@ describe('School/Club Team Performance staff pilot', () => {
       }).as(`deniedPerformance-${id}`);
       cy.visitWithAuth(`/${base}/${id}/team-performance`, 'free');
       cy.wait(`@deniedPerformance-${id}`);
+      cy.contains(
+        'Team Performance is unavailable for this organization or your current access.',
+      ).should('be.visible');
+      cy.contains('Team batting').should('not.exist');
+      cy.contains('Team runs').should('not.exist');
+    });
+
+    it(`clears displayed ${kind} aggregates after a later denied request`, () => {
+      stubOrganization(kind, id);
+      cy.wait(`@teamPerformance-${id}`);
+      cy.contains('Team runs').parent().should('contain', '19');
+      cy.contains('Team batting').should('be.visible');
+
+      cy.intercept('GET', `**/api/organizations/${id}/team-performance/teams/**`, {
+        statusCode: 403,
+        body: { detail: 'Team Performance is unavailable' },
+      }).as(`deniedPerformanceAfterDisplay-${id}`);
+      cy.get('input[aria-label="Overs limit"]').clear().type('21');
+      cy.wait(`@deniedPerformanceAfterDisplay-${id}`);
       cy.contains(
         'Team Performance is unavailable for this organization or your current access.',
       ).should('be.visible');
