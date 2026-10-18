@@ -104,7 +104,7 @@ def _source(side: object) -> tuple[str | None, str | None]:
 def _valid_opponent_boundary(side: object, organization_id: str) -> bool:
     if not isinstance(side, dict):
         return False
-    if "school_source" not in side or side["school_source"] is None:
+    if "school_source" not in side:
         return True
     source = side["school_source"]
     return (
@@ -133,27 +133,42 @@ async def _validate_game_ledger(
     *,
     organization_id: str,
     team_id: str,
+    existing_team_ids: set[str],
 ) -> tuple[str | None, str | None]:
     if not isinstance(game.team_a, dict) or not isinstance(game.team_b, dict):
         return "ambiguous_team_attribution", None
     sources = (_source(game.team_a), _source(game.team_b))
+    side_names: tuple[Literal["team_a", "team_b"], Literal["team_a", "team_b"]] = (
+        "team_a",
+        "team_b",
+    )
     team_sides = [
         side
-        for side, (source_org, source_team) in zip(("team_a", "team_b"), sources, strict=True)
+        for side, (source_org, source_team) in zip(side_names, sources, strict=True)
         if source_org == organization_id and source_team == team_id
     ]
     if len(team_sides) != 1:
         return "ambiguous_team_attribution", None
-    target_side: Literal["team_a", "team_b"] = team_sides[0]  # type: ignore[assignment]
+    target_side = team_sides[0]
     opposite_side = game.team_b if target_side == "team_a" else game.team_a
     if not _valid_opponent_boundary(opposite_side, organization_id):
         return "ambiguous_team_attribution", None
+    for side, (source_org, source_team) in zip((game.team_a, game.team_b), sources, strict=True):
+        if "school_source" in side and (
+            source_org != organization_id
+            or source_team is None
+            or source_team not in existing_team_ids
+        ):
+            return "ambiguous_team_attribution", None
 
     ids_a = _frozen_side_ids(game.team_a, require_canonical=target_side == "team_a")
     ids_b = _frozen_side_ids(game.team_b, require_canonical=target_side == "team_b")
     if not ids_a or not ids_b or ids_a.intersection(ids_b):
         return "ambiguous_team_attribution", None
-    side_ids = {"team_a": ids_a, "team_b": ids_b}
+    side_ids: dict[Literal["team_a", "team_b"], set[str]] = {
+        "team_a": ids_a,
+        "team_b": ids_b,
+    }
 
     raw_deliveries = game.deliveries
     if not isinstance(raw_deliveries, list) or not raw_deliveries:
@@ -171,7 +186,7 @@ async def _validate_game_ledger(
 
     team_roles: set[str] = set()
     for _, deliveries in sorted(grouped.items()):
-        inferred_sides: set[str] = set()
+        inferred_sides: set[Literal["team_a", "team_b"]] = set()
         for row in deliveries:
             striker = row.get("striker_id")
             matching = (
@@ -238,42 +253,45 @@ async def evaluate_team_match_readiness(
 
     candidate_clause = _candidate_clause(request)
     byte_length = _delivery_payload_byte_length(db.get_bind().dialect.name)
-    metadata_rows = (
+    candidates = (
         await db.execute(
-            select(
-                models.Game.id,
-                models.Game.actual_played_date,
-                models.Game.played_date_trust_state,
-                models.Game.original_overs_limit,
-                models.Game.original_format_trust_state,
-                models.Game.team_performance_metadata_revision,
-                byte_length,
-            )
+            select(models.Game, byte_length)
             .where(candidate_clause)
             .order_by(models.Game.id)
             .limit(MAX_CANDIDATE_GAMES + 1)
+            .execution_options(populate_existing=True)
         )
     ).all()
     counts = _empty_counts()
-    if len(metadata_rows) > MAX_CANDIDATE_GAMES or sum(row[-1] or 0 for row in metadata_rows) > (
+    if len(candidates) > MAX_CANDIDATE_GAMES or sum(row[1] or 0 for row in candidates) > (
         MAX_DELIVERY_PAYLOAD_BYTES
     ):
         counts["scope_too_large"] = 1
         return _summary(request, state="data_unavailable", counts=counts)
-
-    game_ids = {row[0] for row in metadata_rows}
-    games = (
-        list(
+    games = [row[0] for row in candidates]
+    by_id = {game.id: game for game in games}
+    candidate_team_ids: set[str] = set()
+    for game in games:
+        for side in (game.team_a, game.team_b):
+            if not isinstance(side, dict) or "school_source" not in side:
+                continue
+            source_org, source_team = _source(side)
+            if source_org == request.organization_id and source_team is not None:
+                candidate_team_ids.add(source_team)
+    existing_team_ids = (
+        set(
             (
                 await db.scalars(
-                    select(models.Game).where(models.Game.id.in_(game_ids)).order_by(models.Game.id)
+                    select(models.Team.id).where(
+                        models.Team.id.in_(candidate_team_ids),
+                        models.Team.organization_id == request.organization_id,
+                    )
                 )
             ).all()
         )
-        if game_ids
-        else []
+        if candidate_team_ids
+        else set()
     )
-    by_id = {game.id: game for game in games}
     if request.reference_game_id is not None:
         reference = by_id.get(request.reference_game_id)
         if reference is None:
@@ -331,6 +349,7 @@ async def evaluate_team_match_readiness(
                 game,
                 organization_id=request.organization_id,
                 team_id=request.team_id,
+                existing_team_ids=existing_team_ids,
             )
             if reason is None:
                 assert digest is not None

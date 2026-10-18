@@ -49,21 +49,25 @@ def upgrade() -> None:
         )
         batch_op.create_check_constraint(
             "ck_games_played_date_provenance",
-            "(played_date_trust_state = 'unknown' AND actual_played_date IS NULL "
+            "(played_date_trust_state IS NOT NULL AND "
+            "((played_date_trust_state = 'unknown' AND actual_played_date IS NULL "
             "AND played_date_source IS NULL) OR "
             "(played_date_trust_state = 'confirmed' AND actual_played_date IS NOT NULL "
-            "AND played_date_source = 'staff_confirmed')",
+            "AND played_date_source IS NOT NULL AND played_date_source = 'staff_confirmed')))",
         )
         batch_op.create_check_constraint(
             "ck_games_original_format_provenance",
-            "(original_format_trust_state = 'unknown' AND original_overs_limit IS NULL "
+            "(original_format_trust_state IS NOT NULL AND "
+            "((original_format_trust_state = 'unknown' AND original_overs_limit IS NULL "
             "AND original_format_source IS NULL) OR "
             "(original_format_trust_state = 'setup_capture' "
-            "AND original_overs_limit BETWEEN 1 AND 120 "
+            "AND original_overs_limit IS NOT NULL AND original_overs_limit BETWEEN 1 AND 120 "
+            "AND original_format_source IS NOT NULL "
             "AND original_format_source = 'school_match_setup') OR "
             "(original_format_trust_state = 'staff_corrected' "
-            "AND original_overs_limit BETWEEN 1 AND 120 "
-            "AND original_format_source = 'staff_correction')",
+            "AND original_overs_limit IS NOT NULL AND original_overs_limit BETWEEN 1 AND 120 "
+            "AND original_format_source IS NOT NULL "
+            "AND original_format_source = 'staff_correction')))",
         )
         batch_op.create_check_constraint(
             "ck_games_team_performance_metadata_revision",

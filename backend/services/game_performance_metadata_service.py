@@ -35,7 +35,7 @@ def _source(side: object) -> tuple[str | None, str | None]:
 def _valid_opponent_boundary(side: object, organization_id: str) -> bool:
     if not isinstance(side, dict):
         return False
-    if "school_source" not in side or side["school_source"] is None:
+    if "school_source" not in side:
         return True
     source = side["school_source"]
     return (
