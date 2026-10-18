@@ -81,7 +81,12 @@ def _run_alembic(
         capture_output=True,
         check=False,
     )
-    output = result.stdout + result.stderr
+    output = re.sub(
+        r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b",
+        "[redacted-email]",
+        result.stdout + result.stderr,
+        flags=re.IGNORECASE,
+    )
     if output:
         print(output, end="" if output.endswith("\n") else "\n", flush=True)
     if expect_success and result.returncode != 0:
