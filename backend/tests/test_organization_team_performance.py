@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import asyncio
 import datetime as dt
+import json
 from copy import deepcopy
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import String, cast, select, text
 
 from backend.services.organization_entitlement_service import SCHOOL_FREE_CAPABILITIES
 from backend.services.organization_team_performance_access import (
@@ -88,6 +89,7 @@ def test_team_performance_is_default_off_and_returns_only_safe_aggregates(
     assert payload["coverage"]["status"] == "no_usable_ledger"
     assert payload["coverage"]["eligible_games"] == 1
     assert payload["coverage"]["no_ledger_games"] == 1
+    assert payload["coverage"]["warning_counts"] == {}
     assert "source_game_ids" not in payload
     assert "innings_attribution" not in payload
     assert "exclusions" not in payload
@@ -343,6 +345,125 @@ def test_team_performance_rejects_oversized_scope_without_truncating(
     )
     assert response.status_code == 413
     assert "too large" in response.json()["detail"]
+
+
+def test_team_performance_payload_limit_counts_utf8_bytes_at_boundaries(school_client) -> None:
+    import backend.services.school_team_analytics_service as analytics_service
+
+    owner = register_user(school_client, "payload-boundary-owner@example.com")
+    organization = create_school(school_client, owner, "Payload boundary pilot")
+    team, game, target, opponent = asyncio.run(
+        _seed_team_game(school_client, organization["id"], owner.id, deliveries=None)
+    )
+    _grant(school_client, organization["id"], owner)
+    endpoint = (
+        f"/api/organizations/{organization['id']}/team-performance/teams/{team.id}?overs_limit=20"
+    )
+
+    async def store_payload_and_get_utf8_size(payload: list[dict]) -> int:
+        async with school_client.session_maker() as session:  # type: ignore[attr-defined]
+            dialect_name = session.get_bind().dialect.name
+            update_statement = (
+                text("UPDATE games SET deliveries = CAST(:payload AS JSONB) WHERE id = :game_id")
+                if dialect_name == "postgresql"
+                else text("UPDATE games SET deliveries = :payload WHERE id = :game_id")
+            )
+            await session.execute(
+                update_statement,
+                {
+                    "payload": json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
+                    "game_id": game.id,
+                },
+            )
+            await session.commit()
+            serialized_payload = await session.scalar(
+                select(cast(Game.deliveries, String)).where(Game.id == game.id)
+            )
+            assert isinstance(serialized_payload, str)
+            return len(serialized_payload.encode("utf-8"))
+
+    async def exercise_boundaries() -> None:
+        for character in ("a", "é"):
+            deliveries = _hand_calculated_deliveries(target, opponent)
+            deliveries[0]["padding"] = ""
+            base_size = await store_payload_and_get_utf8_size(deliveries)
+
+            for offset, expected_status in ((-1, 200), (0, 200), (1, 413)):
+                remaining_bytes = analytics_service.MAX_DELIVERY_PAYLOAD_BYTES + offset - base_size
+                encoded_width = len(character.encode("utf-8"))
+                repeated, remainder = divmod(remaining_bytes, encoded_width)
+                deliveries[0]["padding"] = character * repeated + "x" * remainder
+                actual_size = await store_payload_and_get_utf8_size(deliveries)
+                assert actual_size == analytics_service.MAX_DELIVERY_PAYLOAD_BYTES + offset
+
+                response = school_client.get(endpoint, headers=owner.headers)
+                assert response.status_code == expected_status, response.text
+                if expected_status == 413:
+                    assert "too large" in response.json()["detail"]
+
+    asyncio.run(exercise_boundaries())
+
+
+@pytest.mark.parametrize(
+    ("ordinary_exclusion", "invalid_ledger", "expected_status", "expected_warnings"),
+    [
+        (False, False, "usable_recorded_data", {}),
+        (True, False, "usable_with_exclusions", {}),
+        (False, True, "no_usable_ledger", {"invalid_numeric_field": 2}),
+    ],
+)
+def test_team_performance_api_coverage_status_distinguishes_cohort_and_ledger_exclusions(
+    school_client,
+    ordinary_exclusion: bool,
+    invalid_ledger: bool,
+    expected_status: str,
+    expected_warnings: dict[str, int],
+) -> None:
+    owner = register_user(
+        school_client,
+        f"coverage-status-{ordinary_exclusion}-{invalid_ledger}@example.com",
+    )
+    organization = create_school(school_client, owner, "Coverage status pilot")
+    team, game, target, opponent = asyncio.run(
+        _seed_team_game(school_client, organization["id"], owner.id, deliveries=None)
+    )
+    deliveries = _hand_calculated_deliveries(target, opponent)
+    if invalid_ledger:
+        for delivery in deliveries:
+            delivery["runs_scored"] = -1
+    if ordinary_exclusion:
+        asyncio.run(
+            _seed_team_game(
+                school_client,
+                organization["id"],
+                owner.id,
+                deliveries=[],
+                purpose="practice",
+                reuse_team=team,
+            )
+        )
+
+    async def store_games() -> None:
+        async with school_client.session_maker() as session:  # type: ignore[attr-defined]
+            stored_game = await session.get(Game, game.id)
+            assert stored_game is not None
+            stored_game.deliveries = deliveries
+            await session.commit()
+
+    asyncio.run(store_games())
+    _grant(school_client, organization["id"], owner)
+    response = school_client.get(
+        f"/api/organizations/{organization['id']}/team-performance/teams/{team.id}?overs_limit=20",
+        headers=owner.headers,
+    )
+    assert response.status_code == 200, response.text
+    coverage = response.json()["coverage"]
+    assert coverage["status"] == expected_status
+    assert coverage["warning_counts"] == expected_warnings
+    assert coverage["cohort_excluded_games"] == int(ordinary_exclusion)
+    assert coverage["cohort_exclusion_counts"] == (
+        {"non_official_match": 1} if ordinary_exclusion else {}
+    )
 
 
 @pytest.mark.asyncio

@@ -61,7 +61,7 @@ def _safe_team_performance_response(
         coverage_status = "no_eligible_games"
     elif result.included_innings_count == 0:
         coverage_status = "no_usable_ledger"
-    elif result.exclusions:
+    elif result.exclusions or cohort_counts:
         coverage_status = "usable_with_exclusions"
     else:
         coverage_status = "usable_recorded_data"

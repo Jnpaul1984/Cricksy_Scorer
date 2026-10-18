@@ -15,7 +15,7 @@ from backend.domain.constants import (
 )
 from backend.services import school_statistics_service
 from backend.sql_app import models
-from sqlalchemy import Select, String, and_, case, cast, func, or_, select
+from sqlalchemy import LargeBinary, Select, String, and_, case, cast, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -60,7 +60,6 @@ CoverageStatus = Literal[
 ]
 MAX_CANDIDATE_GAMES = 250
 MAX_DELIVERY_PAYLOAD_BYTES = 5 * 1024 * 1024
-MAX_JSON_BYTES_PER_CHARACTER = 6
 _SUPPORTED_INNINGS: frozenset[int] = frozenset({1, 2})
 _SUPPORTED_DISMISSALS = CREDIT_BOWLER | CREDIT_TEAM
 
@@ -234,11 +233,18 @@ def _eligible_team_game_clause(request: TeamAnalyticsRequest):
     )
 
 
-def _team_metadata_stmt(request: TeamAnalyticsRequest):
+def _delivery_payload_byte_length(dialect_name: str):
+    serialized_payload = cast(models.Game.deliveries, String)
+    if dialect_name == "postgresql":
+        return func.octet_length(serialized_payload)
+    return func.length(cast(serialized_payload, LargeBinary))
+
+
+def _team_metadata_stmt(request: TeamAnalyticsRequest, dialect_name: str):
     return (
         select(
             models.Game.id,
-            func.length(cast(models.Game.deliveries, String)),
+            _delivery_payload_byte_length(dialect_name),
         )
         .where(_team_scope_clause(request), _eligible_team_game_clause(request))
         .order_by(models.Game.id)
@@ -494,7 +500,9 @@ async def calculate_team_limited_overs_analytics(
     if team is None:
         raise school_statistics_service._not_found("Team")
 
-    metadata_rows = (await db.execute(_team_metadata_stmt(request))).all()
+    metadata_rows = (
+        await db.execute(_team_metadata_stmt(request, db.get_bind().dialect.name))
+    ).all()
     if len(metadata_rows) > MAX_CANDIDATE_GAMES:
         raise TeamAnalyticsScopeTooLargeError("Team Performance eligible-game limit exceeded")
     eligible_game_ids = {game_id for game_id, _ in metadata_rows}
@@ -505,10 +513,8 @@ async def calculate_team_limited_overs_analytics(
     }
     exclusions: list[AnalyticsExclusion] = []
     eligible_delivery_payload_bytes = 0
-    for _, delivery_payload_chars in metadata_rows:
-        eligible_delivery_payload_bytes += (
-            delivery_payload_chars or 0
-        ) * MAX_JSON_BYTES_PER_CHARACTER
+    for _, delivery_payload_bytes in metadata_rows:
+        eligible_delivery_payload_bytes += delivery_payload_bytes or 0
     if eligible_delivery_payload_bytes > MAX_DELIVERY_PAYLOAD_BYTES:
         raise TeamAnalyticsScopeTooLargeError(
             "Team Performance recorded-delivery payload limit exceeded"
