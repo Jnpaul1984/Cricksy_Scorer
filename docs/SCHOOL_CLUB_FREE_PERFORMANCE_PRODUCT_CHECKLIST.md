@@ -327,6 +327,53 @@ Performance is one shared School/Club bundle architecture. Access must resolve a
 | PERF-AN-016 | Matchup analysis | Performance | NEW | USAGE-SENSITIVE | No organization matchup product. | Define batter/bowler evidence and sample rules. | Analytics foundation | No | C-DATA |
 | PERF-AN-017 | Organization/Team/season filters and safe Analyst workspace | Performance | ADAPT | USAGE-SENSITIVE | `analyst_pro.py::run_analytics_query`; `analyst_access.py` uses `User.org_id`/created-by; Analyst tests/UI. | Replace legacy scope with membership/resource predicates; add seat/read-only limits. | Performance authority | No | C-DATA |
 
+### Internal limited-overs team analytics foundation
+
+`backend/services/school_team_analytics_service.py` provides private orchestration only; no route, frontend, paid entitlement, or existing Free payload uses it. Its typed request scopes every calculation to an actor, organization, exact Team ID, and one explicit `overs_limit`. It reuses the existing `school_basic_statistics` capability, active organization membership, supported organization type, and contextual read-role checks. The team must resolve inside the authorized organization or the service returns the existing non-disclosing 404 behavior.
+
+Metadata-only SQL first selects games whose frozen `school_source` matches that organization and Team ID, classifies stable cohort exclusions, and passes only eligible game IDs into the delivery query. Eligible records are official, completed, `limited` games with the exact overs limit, no multi-day/DLS setting, and no unsupported rules. Archived Teams remain eligible. Innings use persisted `inning` tags and frozen participant IDs; missing or ambiguous side/participant identity is excluded rather than inferred from names, current rosters, creator, or personal roles. In intra-organization games, the result includes only the requested Team's batting innings and its bowling perspective on opposition innings.
+
+The result contract includes `analysis_basis="recorded_delivery_ledger"`, `completeness="unknown"`, one of `no_eligible_games`, `no_usable_ledger`, `invalid_or_ambiguous_records`, or `usable_recorded_data`, eligible/included match and innings counts, observed/included delivery counts, source game IDs, innings/side attribution, stable exclusion codes, and summed batting/bowling counters with aggregate ratios. Rates use integer legal balls and are `null` for zero denominators. Fours/sixes mean recorded `runs_off_bat` values of four/six; they make no physical-boundary, location, or shot-quality claim. A shortened chase or innings is not rejected for using fewer than scheduled overs. This is recorded-ledger analysis only: syntactically valid records do not prove every historical delivery was recorded; completeness/reconciliation remain unknown. Recalculation reads persisted deliveries each time, so corrections and undo are reflected.
+
+Example (counter values abbreviated to show the response shape):
+
+```json
+{
+  "organization_id": "org-id",
+  "team_id": "team-id",
+  "overs_limit": 20,
+  "analysis_basis": "recorded_delivery_ledger",
+  "completeness": "unknown",
+  "coverage_status": "usable_recorded_data",
+  "eligible_match_count": 1,
+  "included_match_count": 1,
+  "included_innings_count": 2,
+  "observed_delivery_count": 17,
+  "included_delivery_count": 17,
+  "source_game_ids": ["game-id"],
+  "innings_attribution": [
+    {"game_id": "game-id", "innings_number": 1, "batting_side": "team_a", "team_role": "batting"},
+    {"game_id": "game-id", "innings_number": 2, "batting_side": "team_b", "team_role": "bowling"}
+  ],
+  "exclusions": [],
+  "batting": {
+    "team_runs": 19, "bat_runs": 12, "wides": 2, "no_ball_penalties": 2,
+    "byes": 2, "leg_byes": 1, "wickets_lost": 1, "legal_balls": 6,
+    "legal_dots": 2, "fours": 1, "sixes": 1, "run_rate": 19.0,
+    "legal_dot_percentage": 33.33, "runs_per_wicket": 19.0
+  },
+  "bowling": {
+    "opposition_team_runs": 13, "bowler_charged_runs": 9, "wides": 2,
+    "no_ball_penalties": 1, "byes": 3, "leg_byes": 1, "team_wickets": 1,
+    "bowler_credited_wickets": 1, "legal_balls": 6, "legal_dots": 3,
+    "team_concession_rate": 13.0, "bowling_economy": 9.0,
+    "legal_dot_percentage": 50.0
+  }
+}
+```
+
+Exclusion codes distinguish cohort selection (`non_official_match`, `not_completed`, `unsupported_match_type`, `overs_limit_mismatch`, `multi_day_or_dls_match`, `unsupported_match_rules`), absent ledger (`no_usable_ledger`), and invalid/ambiguous records (including `invalid_ledger_shape`, `invalid_numeric_field`, `unknown_extra_type`, `contradictory_run_record`, `invalid_innings_tag`, and identity/dismissal validation codes). Any invalid required record excludes its affected innings when the innings tag is trustworthy; an untagged record is reported at game scope and never contributes invented totals. If any invalid/ambiguous record exists, the overall coverage status reports it even when other innings have usable recorded data.
+
 ### 6.2 Performance dashboards
 
 | ID | Capability | Product | Status | Cost | Existing evidence | Required work | Dependencies | Owner decision? | Controls |
