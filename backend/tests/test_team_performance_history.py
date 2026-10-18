@@ -577,6 +577,8 @@ async def test_readiness_keeps_ordinary_and_evidence_exclusion_reasons_distinct(
     ("source_change", "candidate_expected"),
     [
         (None, True),
+        ("malformed-source", True),
+        ({"organization_id": "same-org"}, True),
         ({"organization_id": "same-org", "team_id": "missing-team"}, True),
         ("cross-organization", False),
         ("duplicate-target", True),
@@ -614,6 +616,8 @@ async def test_readiness_fails_closed_for_opponent_source_ownership(
         side = dict(stored.team_b)
         if source_change is None:
             side["school_source"] = None
+        elif source_change == "malformed-source":
+            side["school_source"] = "malformed"
         elif source_change == "duplicate-target":
             side["school_source"] = {
                 "organization_id": organization["id"],
@@ -627,7 +631,7 @@ async def test_readiness_fails_closed_for_opponent_source_ownership(
         elif source_change["organization_id"] == "same-org":
             side["school_source"] = {
                 "organization_id": organization["id"],
-                "team_id": source_change["team_id"],
+                "team_id": source_change.get("team_id"),
             }
         else:
             side["school_source"] = source_change
