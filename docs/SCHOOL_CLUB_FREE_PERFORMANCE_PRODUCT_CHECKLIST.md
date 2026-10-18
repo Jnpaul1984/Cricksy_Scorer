@@ -364,7 +364,7 @@ Example (counter values abbreviated to show the response shape):
   },
   "bowling": {
     "opposition_team_runs": 13, "bowler_charged_runs": 9, "wides": 2,
-    "no_ball_penalties": 1, "byes": 3, "leg_byes": 1, "team_wickets": 1,
+    "no_ball_penalties": 1, "byes": 3, "leg_byes": 1, "team_wickets": 2,
     "bowler_credited_wickets": 1, "legal_balls": 6, "legal_dots": 3,
     "team_concession_rate": 13.0, "bowling_economy": 9.0,
     "legal_dot_percentage": 50.0
