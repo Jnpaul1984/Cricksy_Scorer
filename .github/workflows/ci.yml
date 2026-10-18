@@ -226,6 +226,15 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r backend/requirements.txt
 
+      - name: Verify Team Performance migration lifecycle (disposable PostgreSQL)
+        env:
+          TEAM_HISTORY_MIGRATION_ALLOW_LOCAL_TEST_DATABASE: "1"
+          TEAM_HISTORY_MIGRATION_ADMIN_USER: test
+          TEAM_HISTORY_MIGRATION_ADMIN_PASSWORD: test
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          python backend/scripts/check_team_history_migration_lifecycle.py
+
       - name: Run deploy-parity migration verification (pre-upgrade)
         env:
           APP_SECRET_KEY: ci-test-secret-not-for-production
