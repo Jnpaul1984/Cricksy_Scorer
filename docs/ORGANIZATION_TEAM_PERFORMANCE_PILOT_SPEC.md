@@ -1,6 +1,6 @@
 # Organization Team Performance Staff Pilot — Locked Scope
 
-This document locks the bounded scope for issue #626 before implementation. It authorizes a private, read-only School/Club Team Performance pilot surface only. It does not authorize enabling access for any real organization, changing existing permissions or Free entitlements, billing, credential creation, deployment, or any later product expansion.
+This document records the delivered aggregate pilot from issue #626 and locks the additive, bounded history/readiness foundation for issue #628. It authorizes a private, read-only School/Club Team Performance pilot surface only. It does not authorize enabling access for any real organization, changing existing permissions or Free entitlements, billing, credential creation, deployment, or any later product expansion.
 
 ## Product contract
 
@@ -30,7 +30,37 @@ This document locks the bounded scope for issue #626 before implementation. It a
 
 ## Explicit non-goals
 
-No changes to scoring, DLS, results, personal plans, billing, existing Free statistics, public surfaces, or existing permissions. No recent-form chronology, phases, comparisons, AI, exports, checkout, real-organization grant, or deployment is in this slice.
+No changes to scoring, DLS, results, personal plans, billing, existing Free statistics, public surfaces, or existing permissions. No phase names/calculations, recent-form analytics, coach reports, AI, exports, checkout, real-organization grant, trial lifecycle, or deployment in this slice. The owner-approved offer remains three further free premium games after readiness; this slice neither exposes nor consumes that offer.
+
+## Issue #628 — locked metadata and readiness slice
+
+### Focused audit and file boundary
+
+The audit was performed against current `main` at `9db046bfd00da2a36c47b7264bbe277a30ef378c` (the post-#627 baseline). `Game` had no actual-play date; `Fixture.scheduled_date` is a plan, not evidence. Saved-Team setup freezes exact organization/Team identity and requested limits in `school_match_service.create_school_match`; `games.overs_limit` is subsequently mutable and cannot establish original format. Existing team analytics validates recorded-ledger identity and dismissal/run evidence, but filters on current overs and orders by Game ID, so neither that cohort nor ID order is a history/readiness source.
+
+Allowed runtime changes are limited to `Game` metadata/audit persistence, its additive Alembic migration, the saved-Team match-setup capture point, the existing authenticated Game-mutation route/service boundary, a bounded internal readiness service and a read nested under the already gated Team Performance route. Tests and this spec/product checklist may change. Scoring, DLS, results, innings/practice rules, historical import, Selection, publication, entitlements/grants, ordinary statistics/Free APIs, trial/billing, player identity, public routes, and unrelated UI/workflows are protected.
+
+### Metadata data contract and write authority
+
+- `actual_played_date` is a nullable SQL `DATE`: the venue-local civil calendar date on which play occurred, with no inferred time or timezone conversion. It is independent of fixture schedule and creation/import timestamps. Only explicit staff confirmation makes it trusted.
+- `original_overs_limit` is nullable and independent of current `overs_limit`. Capture it from the validated saved-Team limited-overs setup request before any later reduction. Do not infer it for existing games or from current limit/interruption data. Trust state/source distinguish unknown from setup capture and explicit correction.
+- Every metadata change increments a per-game revision and writes old/new values, changed field, reason, provenance source, server timestamp, and actor to immutable audit history in the same transaction. The initial setup capture is audited. A confirmation/correction requires the caller's expected revision; stale writes fail without partial changes. Date-only confirmation never copies a Fixture schedule. Clearing a value is an audited correction back to unknown.
+- A narrowly scoped authenticated metadata mutation reuses `require_game_mutation_access` inside the service, then independently requires unambiguous exact organization-owned saved-Team attribution. It does not add roles or require pilot/premium access; ordinary scoring remains unchanged. The existing live overs-limit mutation continues to change only the effective limit and existing interruption record.
+
+### Read contract, authority, and readiness rule
+
+- The service is scoped to the active actor, current organization, exact saved Team ID, and original 25-over limited-overs format. School and Club have identical semantics. Any route must remain beneath the existing default-off Team Performance access check (active user, membership/contextual owner/admin/coach role, current grant, exact Team ownership); scorer/viewer and direct-service unauthorized calls fail closed.
+- A counted game must be distinct, official, completed, limited-overs, not multi-day, have no unsupported custom rules, have trusted actual date and trusted original format equal to 25, and have exactly one matching frozen Team attribution with only a same-organization or external-opponent boundary. Practice, incomplete, wrong-format/current-limit-only, multi-day, and unsupported-rules rows are ordinary exclusions; unknown metadata, missing ledger, malformed/ambiguous ledger, and chronology problems are separately counted warnings/exclusions.
+- Match-level ledger rule: the nonempty delivery list is atomic. Every row must be a dictionary with supported innings tag 1 or 2 and pass the existing strict frozen-side, participant, run/extras, and dismissal validator; both Team batting and Team bowling must be represented. Any malformed/ambiguous/unsupported row invalidates the entire game for readiness, even if other innings are usable. This is a conservative evidence rule, not a completeness/result claim; shorter/DLS innings do not get missing deliveries inferred.
+- `as_of_date` is an explicit exclusive venue-local date boundary. An optional reference Game must be in the exact Team/organization scope, have trusted played date equal to that boundary, and is always excluded. A candidate dated on/after the boundary is not prior. A same-date group cannot establish internal prior order, so the whole group is excluded and counted as `same_date_ambiguous`; Game ID may only make diagnostics stable, never claim chronology. Dates are ordered newest first; each Game counts once, and the latest five eligible dates form a stable internal selection.
+- The safe readiness response contains only `required_history=5`, usable count, remaining count, ready/not-ready/data-unavailable state, stable fixed reason counts, and separate batting/bowling coverage counts. Selected Game IDs and metadata/ledger revisions are retained only inside the service result for later analytics; never serialize them, player identities, audit actors, raw ledger, or exclusion IDs through the aggregate pilot response. There is no completeness claim.
+- Evaluate at most 250 candidate games and 5 MiB of candidate delivery JSON. Exceeding either cap returns explicit unavailable/scope-too-large; no truncation may produce a definitive readiness result. Candidate query order is deterministic but never substitutes for played-date chronology.
+
+### Migration, rollback, and verification boundary
+
+The migration adds nullable fact columns with conservative `unknown` defaults, trust/source consistency checks, revision default, an indexed per-Game audit table, and no historical data backfill. Clean downgrade removes the additive schema. Downgrade must refuse when any non-default metadata or audit history exists, rather than silently deleting corrections. PostgreSQL upgrade, downgrade on clean data, and clean re-upgrade are required in addition to SQLite tests; there is no production data operation.
+
+Tests lock setup capture and limit preservation, unknown history, authorized/unauthorized direct writes, exact tenant ownership, atomic audited corrections and stale revisions, School/Club parity, 0/4/5/6+ usable games, latest-five and duplicate behavior, reference/future/date boundaries, tie exclusion, original 50→25 and 25→18 semantics, all exclusion classes, game-atomic invalid-ledger handling, safe response serialization, and query/payload overflow. Existing aggregate pilot, Free, match setup/Selection, scoring, DLS, results, and practice regressions remain required. Phase analysis, reports, and trial/offer behavior are later separately scoped work and remain undelivered.
 
 ## Verification gate
 
