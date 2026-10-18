@@ -5,11 +5,20 @@ from typing import Annotated, Any, cast
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+
+from backend.api.schemas.game_performance_metadata import (
+    GamePerformanceMetadataResponse,
+    GamePerformanceMetadataUpdate,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.security import get_current_active_user
 from backend.services import game_helpers as gh
 from backend.services.game_access_service import require_game_mutation_access
+from backend.services.game_performance_metadata_service import (
+    GamePerformanceMetadataError,
+    update_game_performance_metadata,
+)
 from backend.services.live_bus import emit_state_update
 from backend.services.snapshot_service import build_snapshot as _snapshot_from_game
 from backend.sql_app import crud, models, schemas
@@ -28,6 +37,42 @@ def _gh(name: str, *args: Any, **kwargs: Any) -> Any:
 router = APIRouter(prefix="/games", tags=["game-admin"])
 
 BASE_DIR = Path(__file__).resolve().parent
+
+
+@router.patch(
+    "/{game_id}/team-performance-metadata",
+    response_model=GamePerformanceMetadataResponse,
+)
+async def update_team_performance_metadata(
+    game_id: str,
+    body: GamePerformanceMetadataUpdate,
+    current_user: Annotated[models.User, Depends(get_current_active_user)],
+    db: AsyncSession = Depends(get_db),
+) -> GamePerformanceMetadataResponse:
+    fields = body.model_fields_set
+    if not ({"actual_played_date", "original_overs_limit"} & fields):
+        raise HTTPException(status_code=422, detail="At least one metadata field must be supplied")
+    try:
+        game = await update_game_performance_metadata(
+            db,
+            game_id=game_id,
+            actor_user_id=current_user.id,
+            expected_revision=body.expected_revision,
+            reason=body.reason,
+            played_date_supplied="actual_played_date" in fields,
+            played_date=body.actual_played_date,
+            original_overs_supplied="original_overs_limit" in fields,
+            original_overs_limit=body.original_overs_limit,
+        )
+    except GamePerformanceMetadataError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    return GamePerformanceMetadataResponse(
+        actual_played_date=game.actual_played_date,
+        played_date_trust_state=game.played_date_trust_state,
+        original_overs_limit=game.original_overs_limit,
+        original_format_trust_state=game.original_format_trust_state,
+        metadata_revision=game.team_performance_metadata_revision,
+    )
 
 
 class OversLimitBody(BaseModel):

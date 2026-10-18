@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import datetime as dt
 from typing import Literal
 
 from pydantic import BaseModel
@@ -77,3 +78,16 @@ class OrganizationTeamPerformanceTeamOption(BaseModel):
     id: str
     name: str
     status: Literal["active", "archived"]
+
+
+class OrganizationTeamPerformanceReadiness(BaseModel):
+    organization_id: str
+    team_id: str
+    as_of_date: dt.date
+    required_history: Literal[5] = 5
+    usable_prior_match_count: int
+    remaining_match_count: int
+    state: Literal["ready", "not_ready", "data_unavailable"]
+    usable_batting_match_count: int
+    usable_bowling_match_count: int
+    exclusion_counts: dict[str, int]

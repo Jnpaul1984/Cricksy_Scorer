@@ -705,6 +705,19 @@ class Game(Base):
     )
     practice_innings_history: Mapped[list[dict[str, Any]] | None] = mapped_column(JSON, nullable=True)
     overs_limit: Mapped[int | None] = mapped_column(Integer, nullable=True)  # None for unlimited
+    actual_played_date: Mapped[dt.date | None] = mapped_column(Date, nullable=True)
+    played_date_trust_state: Mapped[str] = mapped_column(
+        String(16), default="unknown", server_default="unknown", nullable=False
+    )
+    played_date_source: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    original_overs_limit: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    original_format_trust_state: Mapped[str] = mapped_column(
+        String(24), default="unknown", server_default="unknown", nullable=False
+    )
+    original_format_source: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    team_performance_metadata_revision: Mapped[int] = mapped_column(
+        Integer, default=1, server_default="1", nullable=False
+    )
     days_limit: Mapped[int | None] = mapped_column(Integer, nullable=True)  # For multi-day matches
     dls_enabled: Mapped[bool] = mapped_column(
         Boolean, default=False, nullable=False
@@ -840,6 +853,28 @@ class Game(Base):
 
     __table_args__ = (
         CheckConstraint(
+            "(played_date_trust_state = 'unknown' AND actual_played_date IS NULL "
+            "AND played_date_source IS NULL) OR "
+            "(played_date_trust_state = 'confirmed' AND actual_played_date IS NOT NULL "
+            "AND played_date_source = 'staff_confirmed')",
+            name="ck_games_played_date_provenance",
+        ),
+        CheckConstraint(
+            "(original_format_trust_state = 'unknown' AND original_overs_limit IS NULL "
+            "AND original_format_source IS NULL) OR "
+            "(original_format_trust_state = 'setup_capture' "
+            "AND original_overs_limit BETWEEN 1 AND 120 "
+            "AND original_format_source = 'school_match_setup') OR "
+            "(original_format_trust_state = 'staff_corrected' "
+            "AND original_overs_limit BETWEEN 1 AND 120 "
+            "AND original_format_source = 'staff_correction')",
+            name="ck_games_original_format_provenance",
+        ),
+        CheckConstraint(
+            "team_performance_metadata_revision >= 1",
+            name="ck_games_team_performance_metadata_revision",
+        ),
+        CheckConstraint(
             "match_purpose IN ('official', 'practice')",
             name="ck_games_match_purpose",
         ),
@@ -847,6 +882,11 @@ class Game(Base):
             "publication_state IS NULL OR publication_state IN "
             "('private', 'published_live', 'published_final')",
             name="ck_games_publication_state",
+        ),
+        Index(
+            "ix_games_original_overs_played_date",
+            "original_overs_limit",
+            "actual_played_date",
         ),
         Index("ix_games_is_fan_match", "is_fan_match"),
         Index("ix_games_publication_state", "publication_state"),
@@ -884,6 +924,52 @@ class Game(Base):
     @property
     def needs_new_innings(self) -> bool:
         return self.status == GameStatus.innings_break
+
+
+class GamePerformanceMetadataAudit(Base):
+    """Immutable actor/reason history for explicit Team Performance metadata changes."""
+
+    __tablename__ = "game_performance_metadata_audit"
+    __table_args__ = (
+        CheckConstraint(
+            "field_name IN ('actual_played_date', 'original_overs_limit')",
+            name="ck_game_performance_metadata_audit_field",
+        ),
+        CheckConstraint(
+            "length(trim(reason)) > 0",
+            name="ck_game_performance_metadata_audit_reason",
+        ),
+        UniqueConstraint(
+            "game_id",
+            "metadata_revision",
+            "field_name",
+            name="uq_game_performance_metadata_audit_revision_field",
+        ),
+        Index(
+            "ix_game_performance_metadata_audit_game_revision",
+            "game_id",
+            "metadata_revision",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(
+        String, primary_key=True, default=lambda: str(uuid.uuid4()), nullable=False
+    )
+    game_id: Mapped[str] = mapped_column(
+        ForeignKey("games.id", ondelete="CASCADE"), nullable=False
+    )
+    metadata_revision: Mapped[int] = mapped_column(Integer, nullable=False)
+    field_name: Mapped[str] = mapped_column(String(32), nullable=False)
+    old_value: Mapped[Any | None] = mapped_column(JSON, nullable=True)
+    new_value: Mapped[Any | None] = mapped_column(JSON, nullable=True)
+    source: Mapped[str] = mapped_column(String(32), nullable=False)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    actor_user_id: Mapped[str | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    recorded_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
 
 
 # ---------- Pydantic payloads you already had ----------

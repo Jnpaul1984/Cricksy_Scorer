@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import datetime as dt
 from typing import Annotated, Never
 
 from backend.api.schemas.organization_team_performance import (
     OrganizationTeamPerformanceResponse,
+    OrganizationTeamPerformanceReadiness,
     OrganizationTeamPerformanceTeamOption,
     TeamPerformanceCoverage,
 )
@@ -28,6 +30,10 @@ from backend.services.school_team_analytics_service import (
     TeamAnalyticsResult,
     TeamAnalyticsScopeTooLargeError,
     calculate_team_limited_overs_analytics,
+)
+from backend.services.school_team_readiness_service import (
+    TeamReadinessRequest,
+    evaluate_team_match_readiness,
 )
 from backend.sql_app import models
 from backend.sql_app.database import get_db
@@ -320,3 +326,42 @@ async def get_organization_team_performance(
             else "Team Performance is unavailable",
         ) from exc
     return _safe_team_performance_response(result)
+
+
+@router.get(
+    "/api/organizations/{organization_id}/team-performance/teams/{team_id}/readiness",
+    response_model=OrganizationTeamPerformanceReadiness,
+)
+async def get_organization_team_performance_readiness(
+    organization_id: str,
+    team_id: str,
+    as_of_date: dt.date,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    reference_game_id: str | None = Query(default=None, min_length=1),
+) -> OrganizationTeamPerformanceReadiness:
+    try:
+        result = await evaluate_team_match_readiness(
+            db,
+            TeamReadinessRequest(
+                actor_user_id=current_user.id,
+                organization_id=organization_id,
+                team_id=team_id,
+                as_of_date=as_of_date,
+                reference_game_id=reference_game_id,
+            ),
+        )
+    except TeamPerformanceAccessError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    return OrganizationTeamPerformanceReadiness(
+        organization_id=result.organization_id,
+        team_id=result.team_id,
+        as_of_date=result.as_of_date,
+        required_history=result.required_history,
+        usable_prior_match_count=result.usable_prior_match_count,
+        remaining_match_count=result.remaining_match_count,
+        state=result.state,
+        usable_batting_match_count=result.usable_batting_match_count,
+        usable_bowling_match_count=result.usable_bowling_match_count,
+        exclusion_counts=result.exclusion_counts,
+    )
