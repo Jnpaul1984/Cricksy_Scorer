@@ -15,7 +15,7 @@ from backend.domain.constants import (
 )
 from backend.services import school_statistics_service
 from backend.sql_app import models
-from sqlalchemy import Select, and_, or_, select
+from sqlalchemy import Select, String, and_, cast, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -58,8 +58,15 @@ CoverageStatus = Literal[
     "invalid_or_ambiguous_records",
     "usable_recorded_data",
 ]
+MAX_CANDIDATE_GAMES = 250
+MAX_DELIVERY_PAYLOAD_BYTES = 5 * 1024 * 1024
+MAX_JSON_BYTES_PER_CHARACTER = 6
 _SUPPORTED_INNINGS: frozenset[int] = frozenset({1, 2})
 _SUPPORTED_DISMISSALS = CREDIT_BOWLER | CREDIT_TEAM
+
+
+class TeamAnalyticsScopeTooLargeError(ValueError):
+    """The complete recorded cohort exceeds the explicit read workload limit."""
 
 
 @dataclass(frozen=True)
@@ -183,9 +190,11 @@ def _team_metadata_stmt(request: TeamAnalyticsRequest):
             models.Game.overs_limit,
             models.Game.days_limit,
             models.Game.match_rules,
+            func.length(cast(models.Game.deliveries, String)),
         )
         .where(_team_scope_clause(request))
         .order_by(models.Game.id)
+        .limit(MAX_CANDIDATE_GAMES + 1)
     )
 
 
@@ -454,8 +463,11 @@ async def calculate_team_limited_overs_analytics(
         raise school_statistics_service._not_found("Team")
 
     metadata_rows = (await db.execute(_team_metadata_stmt(request))).all()
+    if len(metadata_rows) > MAX_CANDIDATE_GAMES:
+        raise TeamAnalyticsScopeTooLargeError("Team Performance candidate-game limit exceeded")
     eligible_game_ids: set[str] = set()
     exclusions: list[AnalyticsExclusion] = []
+    eligible_delivery_payload_bytes = 0
     for (
         game_id,
         match_purpose,
@@ -464,6 +476,7 @@ async def calculate_team_limited_overs_analytics(
         overs_limit,
         days_limit,
         match_rules,
+        delivery_payload_chars,
     ) in metadata_rows:
         reason = _cohort_exclusion(
             match_purpose=match_purpose,
@@ -476,8 +489,15 @@ async def calculate_team_limited_overs_analytics(
         )
         if reason is None:
             eligible_game_ids.add(game_id)
+            eligible_delivery_payload_bytes += (
+                delivery_payload_chars or 0
+            ) * MAX_JSON_BYTES_PER_CHARACTER
         else:
             exclusions.append(AnalyticsExclusion(game_id, reason))
+    if eligible_delivery_payload_bytes > MAX_DELIVERY_PAYLOAD_BYTES:
+        raise TeamAnalyticsScopeTooLargeError(
+            "Team Performance recorded-delivery payload limit exceeded"
+        )
     games = list((await db.scalars(_team_games_stmt(request, eligible_game_ids))).all())
     batting = {key: value for key, value in _empty_batting().items() if isinstance(value, int)}
     bowling = {key: value for key, value in _empty_bowling().items() if isinstance(value, int)}

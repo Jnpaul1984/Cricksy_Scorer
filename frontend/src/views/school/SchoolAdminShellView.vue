@@ -277,6 +277,11 @@ watch(
           >Statistics</RouterLink
         >
         <RouterLink
+          v-if="canManageTeams"
+          :to="`${organizationBasePath}/${organizationId}/team-performance`"
+          >Team Performance</RouterLink
+        >
+        <RouterLink
           v-if="canViewFixturesResults"
           :to="`${organizationBasePath}/${organizationId}/fixtures-results`"
           >Fixtures / Results</RouterLink
