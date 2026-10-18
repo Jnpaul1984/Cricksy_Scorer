@@ -91,32 +91,16 @@ function stubOrganization(kind: 'school' | 'club', id: string) {
     created_at: timestamp,
     updated_at: timestamp,
   });
-  cy.intercept('GET', `**/api/organizations/${id}/teams`, [
+  cy.intercept('GET', `**/api/organizations/${id}/team-performance/teams`, [
     {
       id: 'team-active',
-      organization_id: id,
       name: 'First XI',
       status: 'active',
-      home_ground: null,
-      season: null,
-      owner_user_id: null,
-      coach_user_id: null,
-      coach_name: null,
-      created_at: timestamp,
-      updated_at: timestamp,
     },
     {
       id: 'team-archived',
-      organization_id: id,
       name: 'Archive XI',
       status: 'archived',
-      home_ground: null,
-      season: null,
-      owner_user_id: null,
-      coach_user_id: null,
-      coach_name: null,
-      created_at: timestamp,
-      updated_at: timestamp,
     },
   ]);
   cy.intercept('GET', `**/api/organizations/${id}/team-performance/teams/**`, (req) => {
@@ -150,7 +134,7 @@ describe('School/Club Team Performance staff pilot', () => {
         .should('include', '/team-performance/teams/team-archived?overs_limit=20');
     });
 
-    it(`shows unavailable access when the ${kind} pilot request is initially denied`, () => {
+    it(`shows unavailable access when the ${kind} pilot team listing is denied`, () => {
       cy.intercept('GET', `**/api/organizations/${id}`, {
         id,
         name: title,
@@ -185,6 +169,10 @@ describe('School/Club Team Performance staff pilot', () => {
         created_at: timestamp,
         updated_at: timestamp,
       });
+      cy.intercept('GET', `**/api/organizations/${id}/team-performance/teams`, {
+        statusCode: 403,
+        body: { detail: 'Team Performance is unavailable' },
+      }).as(`deniedTeams-${id}`);
       cy.intercept('GET', `**/api/organizations/${id}/teams`, [
         {
           id: 'team-active',
@@ -200,12 +188,8 @@ describe('School/Club Team Performance staff pilot', () => {
           updated_at: timestamp,
         },
       ]);
-      cy.intercept('GET', `**/api/organizations/${id}/team-performance/teams/**`, {
-        statusCode: 403,
-        body: { detail: 'Team Performance is unavailable' },
-      }).as(`deniedPerformance-${id}`);
       cy.visitWithAuth(`/${base}/${id}/team-performance`, 'free');
-      cy.wait(`@deniedPerformance-${id}`);
+      cy.wait(`@deniedTeams-${id}`);
       cy.contains(
         'Team Performance is unavailable for this organization or your current access.',
       ).should('be.visible');

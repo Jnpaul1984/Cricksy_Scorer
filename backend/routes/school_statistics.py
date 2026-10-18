@@ -6,6 +6,7 @@ from typing import Annotated, Never
 
 from backend.api.schemas.organization_team_performance import (
     OrganizationTeamPerformanceResponse,
+    OrganizationTeamPerformanceTeamOption,
     TeamPerformanceCoverage,
 )
 from backend.api.schemas.school_statistics import (
@@ -20,6 +21,7 @@ from backend.services.organization_entitlement_service import OrganizationCapabi
 from backend.services.organization_team_performance_access import (
     TeamPerformanceAccessError,
     require_team_performance_access,
+    require_team_performance_organization_access,
 )
 from backend.services.school_team_analytics_service import (
     TeamAnalyticsRequest,
@@ -27,14 +29,44 @@ from backend.services.school_team_analytics_service import (
     TeamAnalyticsScopeTooLargeError,
     calculate_team_limited_overs_analytics,
 )
+from backend.sql_app import models
 from backend.sql_app.database import get_db
 from backend.sql_app.models import User
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(tags=["school-statistics"])
 
 NO_LEDGER_CODES = frozenset({"no_usable_ledger"})
+
+
+@router.get(
+    "/api/organizations/{organization_id}/team-performance/teams",
+    response_model=list[OrganizationTeamPerformanceTeamOption],
+)
+async def list_organization_team_performance_teams(
+    organization_id: str,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> list[OrganizationTeamPerformanceTeamOption]:
+    try:
+        await require_team_performance_organization_access(
+            db,
+            organization_id=organization_id,
+            actor_user_id=current_user.id,
+        )
+    except TeamPerformanceAccessError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+
+    rows = (
+        await db.execute(
+            select(models.Team.id, models.Team.name, models.Team.status)
+            .where(models.Team.organization_id == organization_id)
+            .order_by(models.Team.name, models.Team.id)
+        )
+    ).all()
+    return [OrganizationTeamPerformanceTeamOption.model_validate(row._mapping) for row in rows]
 
 
 def _safe_team_performance_response(

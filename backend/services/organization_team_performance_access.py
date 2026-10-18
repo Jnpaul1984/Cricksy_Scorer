@@ -201,14 +201,13 @@ async def revoke_organization_team_performance(
     return grant, True
 
 
-async def require_team_performance_access(
+async def require_team_performance_organization_access(
     db: AsyncSession,
     *,
     organization_id: str,
-    team_id: str,
     actor_user_id: str,
-) -> models.Team:
-    """Revalidate active principal, organization membership, grant, and exact Team."""
+) -> models.Organization:
+    """Revalidate active principal, organization membership, and the current pilot grant."""
     user_is_active = await db.scalar(
         select(models.User.id).where(
             models.User.id == actor_user_id,
@@ -255,7 +254,22 @@ async def require_team_performance_access(
     )
     if grant is None:
         raise TeamPerformanceAccessError(403, "Team Performance is unavailable")
+    return organization
 
+
+async def require_team_performance_access(
+    db: AsyncSession,
+    *,
+    organization_id: str,
+    team_id: str,
+    actor_user_id: str,
+) -> models.Team:
+    """Revalidate pilot organization access and exact tenant-owned Team."""
+    await require_team_performance_organization_access(
+        db,
+        organization_id=organization_id,
+        actor_user_id=actor_user_id,
+    )
     team = await db.scalar(
         select(models.Team).where(
             models.Team.id == team_id,

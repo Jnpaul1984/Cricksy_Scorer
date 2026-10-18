@@ -50,6 +50,7 @@ import type {
   OrganizationSelectionPlan,
   OrganizationSelectionPublication,
   OrganizationSelectionPlanUpdate,
+  OrganizationTeamPerformanceTeamOption,
   OrganizationAvailabilityReminderResult,
   OrganizationEventNotificationResult,
   OrganizationSelectionNotificationResult,
@@ -503,6 +504,10 @@ export const recordOrganizationPlayerAttendance = (
 
 export const listSchoolTeams = (organizationId: string) =>
   apiRequest<SchoolTeam[]>(orgPath(organizationId, '/teams'));
+export const listOrganizationTeamPerformanceTeams = (organizationId: string) =>
+  apiRequest<OrganizationTeamPerformanceTeamOption[]>(
+    orgPath(organizationId, '/team-performance/teams'),
+  );
 export const getOrganizationTeamPerformance = (
   organizationId: string,
   teamId: string,

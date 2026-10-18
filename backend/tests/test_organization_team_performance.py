@@ -97,6 +97,158 @@ def test_team_performance_is_default_off_and_returns_only_safe_aggregates(
     assert all(player.player_name not in response.text for player in [*target, *opponent])
 
 
+@pytest.mark.parametrize("organization_type", ["school", "club"])
+@pytest.mark.parametrize("include_active_team", [False, True])
+def test_team_performance_team_list_includes_owned_active_and_archived_teams(
+    school_client, organization_type: str, include_active_team: bool
+) -> None:
+    owner = register_user(
+        school_client,
+        f"team-list-{organization_type}-{include_active_team}@example.com",
+    )
+    create_organization = create_school if organization_type == "school" else create_club
+    organization = create_organization(school_client, owner, "Team list pilot")
+    archived_team, seed_game, _, _ = asyncio.run(
+        _seed_team_game(school_client, organization["id"], owner.id, deliveries=None)
+    )
+    opponent_team_id = seed_game.team_b["school_source"]["team_id"]
+    active_team_id = str(uuid4())
+    if include_active_team:
+
+        async def add_active_team() -> None:
+            async with school_client.session_maker() as session:  # type: ignore[attr-defined]
+                session.add(
+                    Team(
+                        id=active_team_id,
+                        name="Active XI",
+                        organization_id=organization["id"],
+                        owner_user_id=owner.id,
+                        status="active",
+                        players=[],
+                        competitions=[],
+                    )
+                )
+                await session.commit()
+
+        asyncio.run(add_active_team())
+
+    _grant(school_client, organization["id"], owner)
+    response = school_client.get(
+        f"/api/organizations/{organization['id']}/team-performance/teams",
+        headers=owner.headers,
+    )
+
+    assert response.status_code == 200, response.text
+    options = response.json()
+    assert all(set(option) == {"id", "name", "status"} for option in options)
+    assert {option["id"]: option["status"] for option in options} == (
+        {
+            archived_team.id: "archived",
+            opponent_team_id: "archived",
+            active_team_id: "active",
+        }
+        if include_active_team
+        else {
+            archived_team.id: "archived",
+            opponent_team_id: "archived",
+        }
+    )
+    assert "owner_user_id" not in response.text
+    assert "players" not in response.text
+
+
+def test_team_performance_team_list_requires_current_grant_and_excludes_other_tenants(
+    school_client,
+) -> None:
+    owner = register_user(school_client, "team-list-security-owner@example.com")
+    other_owner = register_user(school_client, "team-list-security-other@example.com")
+    scorer = register_user(school_client, "team-list-security-scorer@example.com")
+    viewer = register_user(school_client, "team-list-security-viewer@example.com")
+    organization = create_school(school_client, owner, "Team list security")
+    other_organization = create_school(school_client, other_owner, "Other team list")
+    add_membership(school_client, owner, organization["id"], scorer.id, "scorer")
+    add_membership(school_client, owner, organization["id"], viewer.id, "viewer")
+    archived_team, _, _, _ = asyncio.run(
+        _seed_team_game(school_client, organization["id"], owner.id, deliveries=None)
+    )
+    foreign_team, _, _, _ = asyncio.run(
+        _seed_team_game(school_client, other_organization["id"], other_owner.id, deliveries=None)
+    )
+    endpoint = f"/api/organizations/{organization['id']}/team-performance/teams"
+
+    assert school_client.get(endpoint, headers=owner.headers).status_code == 403
+    grant, _ = _grant(school_client, organization["id"], owner)
+    assert school_client.get(endpoint, headers=scorer.headers).status_code == 403
+    assert school_client.get(endpoint, headers=viewer.headers).status_code == 403
+
+    async def revoke_grant() -> None:
+        async with school_client.session_maker() as session:  # type: ignore[attr-defined]
+            await revoke_organization_team_performance(
+                session,
+                organization_id=organization["id"],
+                operator_user_id=owner.id,
+                grant_id=grant.id,
+                reason="Pilot access revoked",
+            )
+            await session.commit()
+
+    asyncio.run(revoke_grant())
+    assert school_client.get(endpoint, headers=owner.headers).status_code == 403
+
+    now = dt.datetime.now(dt.UTC)
+    _grant(
+        school_client,
+        organization["id"],
+        owner,
+        effective_from=now - dt.timedelta(days=2),
+        effective_until=now - dt.timedelta(days=1),
+    )
+    assert school_client.get(endpoint, headers=owner.headers).status_code == 403
+
+    _grant(school_client, organization["id"], owner)
+    _grant(school_client, other_organization["id"], other_owner)
+    foreign_response = school_client.get(
+        f"/api/organizations/{other_organization['id']}/team-performance/teams",
+        headers=owner.headers,
+    )
+    assert foreign_response.status_code == 404
+    assert foreign_team.id not in foreign_response.text
+    assert archived_team.id not in foreign_response.text
+
+
+def test_archived_team_list_option_can_load_its_historical_analytics(school_client) -> None:
+    owner = register_user(school_client, "archived-history-owner@example.com")
+    organization = create_school(school_client, owner, "Archived history pilot")
+    archived_team, game, target, opponent = asyncio.run(
+        _seed_team_game(school_client, organization["id"], owner.id, deliveries=None)
+    )
+
+    async def add_historical_ledger() -> None:
+        async with school_client.session_maker() as session:  # type: ignore[attr-defined]
+            stored_game = await session.get(Game, game.id)
+            assert stored_game is not None
+            stored_game.deliveries = _hand_calculated_deliveries(target, opponent)
+            await session.commit()
+
+    asyncio.run(add_historical_ledger())
+    _grant(school_client, organization["id"], owner)
+    listing = school_client.get(
+        f"/api/organizations/{organization['id']}/team-performance/teams",
+        headers=owner.headers,
+    )
+    assert listing.status_code == 200, listing.text
+    archived_option = next(option for option in listing.json() if option["id"] == archived_team.id)
+    assert archived_option["status"] == "archived"
+
+    response = school_client.get(
+        f"/api/organizations/{organization['id']}/team-performance/teams/"
+        f"{archived_option['id']}?overs_limit=20",
+        headers=owner.headers,
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["batting"]["team_runs"] == 19
+
+
 @pytest.mark.asyncio
 async def test_team_performance_returns_weighted_safe_ledger_metrics(school_client) -> None:
     owner = register_user(school_client, "pilot-ledger@example.com")

@@ -71,3 +71,9 @@ class OrganizationTeamPerformanceResponse(BaseModel):
     batting: TeamPerformanceBatting
     bowling: TeamPerformanceBowling
     coverage: TeamPerformanceCoverage
+
+
+class OrganizationTeamPerformanceTeamOption(BaseModel):
+    id: str
+    name: str
+    status: Literal["active", "archived"]

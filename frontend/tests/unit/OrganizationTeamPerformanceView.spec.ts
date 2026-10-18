@@ -11,8 +11,8 @@ import * as schoolApi from '@/services/schoolAdminApi';
 import type {
   FreeOrganizationType,
   OrganizationTeamPerformance,
+  OrganizationTeamPerformanceTeamOption,
   SchoolMembershipRole,
-  SchoolTeam,
 } from '@/types/schoolAdmin';
 import OrganizationTeamPerformanceView from '@/views/school/OrganizationTeamPerformanceView.vue';
 
@@ -23,21 +23,13 @@ vi.mock('vue-router', () => ({
 
 function team(
   id: string,
-  organizationId: string,
+  _organizationId: string,
   status: 'active' | 'archived' = 'active',
-): SchoolTeam {
+): OrganizationTeamPerformanceTeamOption {
   return {
     id,
-    organization_id: organizationId,
     name: id === 'team-a' ? 'First XI' : 'Archive XI',
     status,
-    home_ground: null,
-    season: null,
-    owner_user_id: null,
-    coach_user_id: null,
-    coach_name: null,
-    created_at: '',
-    updated_at: '',
   };
 }
 
@@ -152,9 +144,9 @@ function mountView(organizationId: Ref<string>, role: Ref<SchoolMembershipRole> 
 describe('organization Team Performance pilot view', () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    vi.mocked(schoolApi.listSchoolTeams).mockImplementation(async (organizationId) => [
-      team('team-a', organizationId, 'archived'),
-    ]);
+    vi.mocked(schoolApi.listOrganizationTeamPerformanceTeams).mockImplementation(
+      async (organizationId) => [team('team-a', organizationId, 'archived')],
+    );
     vi.mocked(schoolApi.getOrganizationTeamPerformance).mockImplementation(
       async (organizationId, teamId) => performance(organizationId, teamId),
     );
@@ -164,6 +156,8 @@ describe('organization Team Performance pilot view', () => {
     const wrapper = mountView(ref('school-a'));
     await flushPromises();
 
+    expect(schoolApi.listOrganizationTeamPerformanceTeams).toHaveBeenCalledWith('school-a');
+    expect(schoolApi.listSchoolTeams).not.toHaveBeenCalled();
     expect(wrapper.text()).toContain('First XI (archived)');
     expect(wrapper.text()).toContain(
       'Based on recorded delivery data. Historical completeness has not been verified.',
@@ -211,16 +205,18 @@ describe('organization Team Performance pilot view', () => {
   });
 
   it('ignores rejected stale analytics after old team selection loads and scope changes', async () => {
-    let resolveOldTeams: (teams: SchoolTeam[]) => void = () => undefined;
+    let resolveOldTeams: (teams: OrganizationTeamPerformanceTeamOption[]) => void = () => undefined;
     let rejectOldAnalytics: (error: Error) => void = () => undefined;
-    vi.mocked(schoolApi.listSchoolTeams).mockImplementation(async (organizationId) => {
-      if (organizationId === 'school-a') {
-        return new Promise<SchoolTeam[]>((resolve) => {
-          resolveOldTeams = resolve;
-        });
-      }
-      return [team('team-b', organizationId)];
-    });
+    vi.mocked(schoolApi.listOrganizationTeamPerformanceTeams).mockImplementation(
+      async (organizationId) => {
+        if (organizationId === 'school-a') {
+          return new Promise<OrganizationTeamPerformanceTeamOption[]>((resolve) => {
+            resolveOldTeams = resolve;
+          });
+        }
+        return [team('team-b', organizationId)];
+      },
+    );
     vi.mocked(schoolApi.getOrganizationTeamPerformance).mockImplementation((organizationId) => {
       if (organizationId === 'school-a') {
         return new Promise<OrganizationTeamPerformance>((_resolve, reject) => {
@@ -232,7 +228,7 @@ describe('organization Team Performance pilot view', () => {
     const organizationId = ref('school-a');
     const wrapper = mountView(organizationId);
     await flushPromises();
-    expect(schoolApi.listSchoolTeams).toHaveBeenCalledWith('school-a');
+    expect(schoolApi.listOrganizationTeamPerformanceTeams).toHaveBeenCalledWith('school-a');
     resolveOldTeams([team('team-a', 'school-a')]);
     await flushPromises();
     expect(schoolApi.getOrganizationTeamPerformance).toHaveBeenCalledWith('school-a', 'team-a', 20);
@@ -251,14 +247,16 @@ describe('organization Team Performance pilot view', () => {
 
   it('ignores a rejected stale team list after switching organizations', async () => {
     let rejectOldTeams: (error: Error) => void = () => undefined;
-    vi.mocked(schoolApi.listSchoolTeams).mockImplementation(async (organizationId) => {
-      if (organizationId === 'school-a') {
-        return new Promise<SchoolTeam[]>((_resolve, reject) => {
-          rejectOldTeams = reject;
-        });
-      }
-      return [team('team-b', organizationId)];
-    });
+    vi.mocked(schoolApi.listOrganizationTeamPerformanceTeams).mockImplementation(
+      async (organizationId) => {
+        if (organizationId === 'school-a') {
+          return new Promise<OrganizationTeamPerformanceTeamOption[]>((_resolve, reject) => {
+            rejectOldTeams = reject;
+          });
+        }
+        return [team('team-b', organizationId)];
+      },
+    );
     vi.mocked(schoolApi.getOrganizationTeamPerformance).mockResolvedValue(
       performance('club-b', 'team-b', 77),
     );
@@ -266,7 +264,7 @@ describe('organization Team Performance pilot view', () => {
     const organizationId = ref('school-a');
     const wrapper = mountView(organizationId);
     await flushPromises();
-    expect(schoolApi.listSchoolTeams).toHaveBeenCalledWith('school-a');
+    expect(schoolApi.listOrganizationTeamPerformanceTeams).toHaveBeenCalledWith('school-a');
 
     organizationId.value = 'club-b';
     await flushPromises();

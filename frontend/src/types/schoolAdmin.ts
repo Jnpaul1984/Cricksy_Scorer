@@ -121,6 +121,12 @@ export interface SchoolTeam {
   updated_at: string;
 }
 
+export interface OrganizationTeamPerformanceTeamOption {
+  id: string;
+  name: string;
+  status: 'active' | 'archived';
+}
+
 export interface SchoolTeamInput {
   name: string;
   home_ground?: string | null;

@@ -3,8 +3,14 @@ import { onBeforeUnmount, ref, watch } from 'vue';
 
 import { useSchoolContext } from '@/composables/useSchoolContext';
 import { getErrorMessage } from '@/services/api';
-import { getOrganizationTeamPerformance, listSchoolTeams } from '@/services/schoolAdminApi';
-import type { OrganizationTeamPerformance, SchoolTeam } from '@/types/schoolAdmin';
+import {
+  getOrganizationTeamPerformance,
+  listOrganizationTeamPerformanceTeams,
+} from '@/services/schoolAdminApi';
+import type {
+  OrganizationTeamPerformance,
+  OrganizationTeamPerformanceTeamOption,
+} from '@/types/schoolAdmin';
 
 type ViewState =
   | 'unavailable_access'
@@ -18,7 +24,7 @@ type ViewState =
   | 'scope_too_large';
 
 const { organizationId, organizationBasePath, terminology, canManageTeams } = useSchoolContext();
-const teams = ref<SchoolTeam[]>([]);
+const teams = ref<OrganizationTeamPerformanceTeamOption[]>([]);
 const selectedTeamId = ref('');
 const oversLimit = ref(20);
 const data = ref<OrganizationTeamPerformance | null>(null);
@@ -59,7 +65,7 @@ watch(
     }
     state.value = 'loading';
     try {
-      const result = await listSchoolTeams(requestedOrganizationId);
+      const result = await listOrganizationTeamPerformanceTeams(requestedOrganizationId);
       if (
         teamsRequestGeneration !== teamGeneration ||
         requestedOrganizationId !== organizationId.value ||
