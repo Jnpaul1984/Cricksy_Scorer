@@ -11,6 +11,7 @@ from backend.services.organization_service import OrganizationServiceError
 from backend.services.school_statistics_service import SchoolStatisticsServiceError
 from backend.services.school_team_analytics_service import (
     TeamAnalyticsRequest,
+    _delivery_error,
     calculate_team_limited_overs_analytics,
 )
 from backend.sql_app.models import (
@@ -454,6 +455,227 @@ async def test_team_analytics_excludes_bad_innings_atomically_and_keeps_valid_si
         and exclusion.innings_number is None
         for exclusion in invalid_record_result.exclusions
     )
+
+
+@pytest.mark.asyncio
+async def test_team_analytics_excludes_unsupported_innings_and_preserves_sibling_game(
+    school_client: TestClient,
+) -> None:
+    owner = register_user(school_client, "team-analytics-unsupported-innings@example.com")
+    organization = create_school(school_client, owner, "Unsupported Innings Analytics Org")
+    team, invalid_game, target, opponent = await _seed_team_game(
+        school_client, organization["id"], owner.id, deliveries=[]
+    )
+    valid_innings = [
+        _delivery(1, target[0].player_id, target[1].player_id, opponent[0].player_id, runs=4),
+        _delivery(2, opponent[0].player_id, opponent[1].player_id, target[0].player_id, runs=6),
+    ]
+    unsupported_innings = [
+        _delivery(innings, target[0].player_id, target[1].player_id, opponent[0].player_id)
+        for innings in (3, 99)
+    ]
+    async with school_client.session_maker() as session:  # type: ignore[attr-defined]
+        saved = await session.get(Game, invalid_game.id)
+        assert saved is not None
+        saved.deliveries = valid_innings + unsupported_innings
+        await session.commit()
+
+    _, sibling_game, sibling_target, sibling_opponent = await _seed_team_game(
+        school_client, organization["id"], owner.id, deliveries=[], reuse_team=team
+    )
+    sibling_delivery = _delivery(
+        1,
+        sibling_target[0].player_id,
+        sibling_target[1].player_id,
+        sibling_opponent[0].player_id,
+        runs=2,
+    )
+    async with school_client.session_maker() as session:  # type: ignore[attr-defined]
+        saved = await session.get(Game, sibling_game.id)
+        assert saved is not None
+        saved.deliveries = [sibling_delivery]
+        await session.commit()
+
+    async with school_client.session_maker() as session:  # type: ignore[attr-defined]
+        result = await calculate_team_limited_overs_analytics(
+            session, TeamAnalyticsRequest(owner.id, organization["id"], team.id, 20)
+        )
+
+    assert result.coverage_status == "invalid_or_ambiguous_records"
+    assert result.included_match_count == 1
+    assert result.included_innings_count == 1
+    assert result.included_delivery_count == 1
+    assert result.source_game_ids == (sibling_game.id,)
+    assert result.batting["team_runs"] == 2
+    assert {
+        (exclusion.reason_code, exclusion.innings_number)
+        for exclusion in result.exclusions
+        if exclusion.game_id == invalid_game.id
+    } == {("unsupported_innings_tag", 3), ("unsupported_innings_tag", 99)}
+
+
+def test_team_analytics_delivery_validation_rejects_unsupported_categories() -> None:
+    side_ids = {"team_a": {"batter", "partner"}, "team_b": {"bowler"}}
+    delivery = _delivery(1, "batter", "partner", "bowler", wicket="caught", dismissed="batter")
+    for innings in (3, 99):
+        assert (
+            _delivery_error(
+                {**delivery, "inning": innings}, batting_side="team_a", side_ids=side_ids
+            )
+            == "unsupported_innings_tag"
+        )
+    assert (
+        _delivery_error(
+            {**delivery, "dismissal_type": "mystery"}, batting_side="team_a", side_ids=side_ids
+        )
+        == "unsupported_dismissal_type"
+    )
+    assert (
+        _delivery_error(
+            {
+                **delivery,
+                "dismissal_type": " caught  ",
+                "extra_type": "no_ball",
+                "runs_scored": 1,
+            },
+            batting_side="team_a",
+            side_ids=side_ids,
+        )
+        == "invalid_dismissal_record"
+    )
+    wide_bowled = _delivery(
+        1,
+        "batter",
+        "partner",
+        "bowler",
+        extra="wide",
+        extra_runs=1,
+        wicket="bowled",
+        dismissed="batter",
+    )
+    assert (
+        _delivery_error(wide_bowled, batting_side="team_a", side_ids=side_ids)
+        == "invalid_dismissal_record"
+    )
+
+
+@pytest.mark.asyncio
+async def test_team_analytics_normalizes_supported_dismissals_and_rejects_unknown_labels(
+    school_client: TestClient,
+) -> None:
+    owner = register_user(school_client, "team-analytics-dismissals@example.com")
+    organization = create_school(school_client, owner, "Dismissal Analytics Org")
+    team, game, target, opponent = await _seed_team_game(
+        school_client, organization["id"], owner.id, deliveries=[]
+    )
+    dismissal_types = (
+        "bowled",
+        "caught",
+        "lbw",
+        "stumped",
+        "HIT   WICKET",
+        "run out",
+        "obstructing the field",
+        "hit the ball twice",
+        "timed out",
+        "retired out",
+        "handled the ball",
+    )
+    valid_innings = [
+        _delivery(
+            2,
+            opponent[0].player_id,
+            opponent[1].player_id,
+            target[0].player_id,
+            wicket=dismissal,
+            dismissed=opponent[0].player_id,
+        )
+        for dismissal in dismissal_types
+    ]
+    valid_innings[0]["dismissal_type"] = "  BOWLED "
+    unknown_wicket = _delivery(
+        2,
+        opponent[0].player_id,
+        opponent[1].player_id,
+        target[0].player_id,
+        wicket="mystery dismissal",
+        dismissed=opponent[0].player_id,
+    )
+    valid_sibling_inning = _delivery(
+        1, target[0].player_id, target[1].player_id, opponent[0].player_id, runs=4
+    )
+    async with school_client.session_maker() as session:  # type: ignore[attr-defined]
+        saved = await session.get(Game, game.id)
+        assert saved is not None
+        saved.deliveries = [valid_sibling_inning, *valid_innings, unknown_wicket]
+        await session.commit()
+
+    async with school_client.session_maker() as session:  # type: ignore[attr-defined]
+        result = await calculate_team_limited_overs_analytics(
+            session, TeamAnalyticsRequest(owner.id, organization["id"], team.id, 20)
+        )
+
+    assert result.coverage_status == "invalid_or_ambiguous_records"
+    assert result.included_innings_count == 1
+    assert result.included_delivery_count == 1
+    assert result.batting["team_runs"] == 4
+    assert result.bowling["team_wickets"] == 0
+    assert result.bowling["bowler_credited_wickets"] == 0
+    assert any(
+        exclusion.game_id == game.id
+        and exclusion.innings_number == 2
+        and exclusion.reason_code == "unsupported_dismissal_type"
+        for exclusion in result.exclusions
+    )
+
+
+@pytest.mark.asyncio
+async def test_team_analytics_counts_normalized_bowler_and_team_dismissals(
+    school_client: TestClient,
+) -> None:
+    owner = register_user(school_client, "team-analytics-dismissal-categories@example.com")
+    organization = create_school(school_client, owner, "Dismissal Category Analytics Org")
+    team, game, target, opponent = await _seed_team_game(
+        school_client, organization["id"], owner.id, deliveries=[]
+    )
+    dismissal_types = (
+        "bowled",
+        "caught",
+        "lbw",
+        "stumped",
+        "hit wicket",
+        "run out",
+        "obstructing the field",
+        "hit the ball twice",
+        "timed out",
+        "retired out",
+        "handled the ball",
+    )
+    deliveries = [
+        _delivery(
+            2,
+            opponent[0].player_id,
+            opponent[1].player_id,
+            target[0].player_id,
+            wicket=dismissal,
+            dismissed=opponent[0].player_id,
+        )
+        for dismissal in dismissal_types
+    ]
+    async with school_client.session_maker() as session:  # type: ignore[attr-defined]
+        saved = await session.get(Game, game.id)
+        assert saved is not None
+        saved.deliveries = deliveries
+        await session.commit()
+
+    async with school_client.session_maker() as session:  # type: ignore[attr-defined]
+        result = await calculate_team_limited_overs_analytics(
+            session, TeamAnalyticsRequest(owner.id, organization["id"], team.id, 20)
+        )
+
+    assert result.coverage_status == "usable_recorded_data"
+    assert result.bowling["team_wickets"] == 11
+    assert result.bowling["bowler_credited_wickets"] == 5
 
 
 @pytest.mark.asyncio
