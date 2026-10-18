@@ -621,9 +621,7 @@ class OrganizationTeamPerformanceGrant(Base):
     revoked_by_user_id: Mapped[str | None] = mapped_column(
         ForeignKey("users.id", ondelete="RESTRICT"), nullable=True
     )
-    revoked_at: Mapped[dt.datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    revoked_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     revocation_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
@@ -703,7 +701,9 @@ class Game(Base):
     practice_workflow_revision: Mapped[int] = mapped_column(
         Integer, default=1, server_default="1", nullable=False
     )
-    practice_innings_history: Mapped[list[dict[str, Any]] | None] = mapped_column(JSON, nullable=True)
+    practice_innings_history: Mapped[list[dict[str, Any]] | None] = mapped_column(
+        JSON, nullable=True
+    )
     overs_limit: Mapped[int | None] = mapped_column(Integer, nullable=True)  # None for unlimited
     actual_played_date: Mapped[dt.date | None] = mapped_column(Date, nullable=True)
     played_date_trust_state: Mapped[str] = mapped_column(
@@ -939,6 +939,14 @@ class GamePerformanceMetadataAudit(Base):
             "length(trim(reason)) > 0",
             name="ck_game_performance_metadata_audit_reason",
         ),
+        CheckConstraint(
+            "metadata_revision >= 1",
+            name="ck_game_performance_metadata_audit_revision",
+        ),
+        CheckConstraint(
+            "length(trim(source)) > 0",
+            name="ck_game_performance_metadata_audit_source",
+        ),
         UniqueConstraint(
             "game_id",
             "metadata_revision",
@@ -955,17 +963,15 @@ class GamePerformanceMetadataAudit(Base):
     id: Mapped[str] = mapped_column(
         String, primary_key=True, default=lambda: str(uuid.uuid4()), nullable=False
     )
-    game_id: Mapped[str] = mapped_column(
-        ForeignKey("games.id", ondelete="CASCADE"), nullable=False
-    )
+    game_id: Mapped[str] = mapped_column(ForeignKey("games.id", ondelete="CASCADE"), nullable=False)
     metadata_revision: Mapped[int] = mapped_column(Integer, nullable=False)
     field_name: Mapped[str] = mapped_column(String(32), nullable=False)
     old_value: Mapped[Any | None] = mapped_column(JSON, nullable=True)
     new_value: Mapped[Any | None] = mapped_column(JSON, nullable=True)
     source: Mapped[str] = mapped_column(String(32), nullable=False)
     reason: Mapped[str] = mapped_column(Text, nullable=False)
-    actor_user_id: Mapped[str | None] = mapped_column(
-        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    actor_user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
     )
     recorded_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
@@ -4590,8 +4596,7 @@ class VideoSession(Base):
         String(32),
         nullable=True,
         comment=(
-            "V2 discipline context (batting, pace_bowling, spin_bowling, "
-            "wicketkeeping, fielding)"
+            "V2 discipline context (batting, pace_bowling, spin_bowling, wicketkeeping, fielding)"
         ),
     )
     coaching_focus: Mapped[str | None] = mapped_column(

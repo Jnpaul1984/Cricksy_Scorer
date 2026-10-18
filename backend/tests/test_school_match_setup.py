@@ -11,6 +11,7 @@ from sqlalchemy import func, select
 from backend.services import organization_entitlement_service
 from backend.sql_app.models import (
     Game,
+    GamePerformanceMetadataAudit,
     GameStatus,
     OrganizationEntitlement,
     PlayerProfile,
@@ -199,6 +200,21 @@ async def test_contextual_school_roles_create_match_from_explicit_eligible_xi(
         assert game is not None
         assert game.publication_state == "private"
         assert game.created_by_user_id == actor.id
+        assert game.original_overs_limit == 20
+        assert game.original_format_trust_state == "setup_capture"
+        assert game.original_format_source == "school_match_setup"
+        assert game.actual_played_date is None
+        assert game.played_date_trust_state == "unknown"
+        audit = await session.scalar(
+            select(GamePerformanceMetadataAudit).where(
+                GamePerformanceMetadataAudit.game_id == game.id,
+                GamePerformanceMetadataAudit.field_name == "original_overs_limit",
+            )
+        )
+        assert audit is not None
+        assert audit.old_value is None
+        assert audit.new_value == 20
+        assert audit.actor_user_id == actor.id
         assert game.team_a["school_source"] == {
             "organization_id": organization["id"],
             "team_id": team_a.id,

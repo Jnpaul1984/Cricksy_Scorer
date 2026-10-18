@@ -7,6 +7,9 @@ from dataclasses import dataclass
 from typing import Any
 
 import structlog
+from sqlalchemy import and_, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from backend.api.schemas.school_matches import (
     ExternalOpponentSelection,
     SchoolMatchCreate,
@@ -18,8 +21,6 @@ from backend.services.organization_entitlement_service import (
     require_organization_capability,
 )
 from backend.sql_app import models
-from sqlalchemy import and_, select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = structlog.get_logger(__name__)
 
@@ -353,9 +354,7 @@ async def create_school_match(
         original_format_trust_state=(
             "setup_capture" if payload.match_type == "limited" else "unknown"
         ),
-        original_format_source=(
-            "school_match_setup" if payload.match_type == "limited" else None
-        ),
+        original_format_source=("school_match_setup" if payload.match_type == "limited" else None),
         days_limit=payload.days_limit if payload.match_type == "multi_day" else None,
         overs_per_day=(payload.overs_per_day if payload.match_type == "multi_day" else None),
         dls_enabled=payload.dls_enabled,

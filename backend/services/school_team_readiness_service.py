@@ -8,20 +8,23 @@ import json
 from dataclasses import dataclass
 from typing import Literal
 
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from backend.services.organization_team_performance_access import (
     TeamPerformanceAccessError,
     require_team_performance_access,
 )
 from backend.services.school_team_analytics_service import (
+    TeamAnalyticsRequest,
     _delivery_error,
     _delivery_payload_byte_length,
     _frozen_side_ids,
+    _team_scope_clause,
 )
 from backend.sql_app import models
-from sqlalchemy import and_, or_, select
-from sqlalchemy.ext.asyncio import AsyncSession
 
-REQUIRED_PRIOR_MATCHES = 5
+REQUIRED_PRIOR_MATCHES: Literal[5] = 5
 SUPPORTED_ORIGINAL_OVERS = 25
 MAX_CANDIDATE_GAMES = 250
 MAX_DELIVERY_PAYLOAD_BYTES = 5 * 1024 * 1024
@@ -98,14 +101,30 @@ def _source(side: object) -> tuple[str | None, str | None]:
     )
 
 
+def _valid_opponent_boundary(side: object, organization_id: str) -> bool:
+    if not isinstance(side, dict):
+        return False
+    if "school_source" not in side or side["school_source"] is None:
+        return True
+    source = side["school_source"]
+    return (
+        isinstance(source, dict)
+        and isinstance(source.get("organization_id"), str)
+        and bool(source["organization_id"].strip())
+        and isinstance(source.get("team_id"), str)
+        and bool(source["team_id"].strip())
+        and source["organization_id"] == organization_id
+    )
+
+
 def _candidate_clause(request: TeamReadinessRequest):
-    org_a = models.Game.team_a["school_source"]["organization_id"].as_string()
-    team_a = models.Game.team_a["school_source"]["team_id"].as_string()
-    org_b = models.Game.team_b["school_source"]["organization_id"].as_string()
-    team_b = models.Game.team_b["school_source"]["team_id"].as_string()
-    return or_(
-        and_(org_a == request.organization_id, team_a == request.team_id),
-        and_(org_b == request.organization_id, team_b == request.team_id),
+    return _team_scope_clause(
+        TeamAnalyticsRequest(
+            actor_user_id=request.actor_user_id,
+            organization_id=request.organization_id,
+            team_id=request.team_id,
+            overs_limit=SUPPORTED_ORIGINAL_OVERS,
+        )
     )
 
 
@@ -126,8 +145,8 @@ async def _validate_game_ledger(
     if len(team_sides) != 1:
         return "ambiguous_team_attribution", None
     target_side: Literal["team_a", "team_b"] = team_sides[0]  # type: ignore[assignment]
-    opposite_org_id = sources[1 if target_side == "team_a" else 0][0]
-    if opposite_org_id not in {None, organization_id}:
+    opposite_side = game.team_b if target_side == "team_a" else game.team_a
+    if not _valid_opponent_boundary(opposite_side, organization_id):
         return "ambiguous_team_attribution", None
 
     ids_a = _frozen_side_ids(game.team_a, require_canonical=target_side == "team_a")
@@ -243,15 +262,17 @@ async def evaluate_team_match_readiness(
         return _summary(request, state="data_unavailable", counts=counts)
 
     game_ids = {row[0] for row in metadata_rows}
-    games = list(
-        (
-            await db.scalars(
-                select(models.Game)
-                .where(models.Game.id.in_(game_ids))
-                .order_by(models.Game.id)
-            )
-        ).all()
-    ) if game_ids else []
+    games = (
+        list(
+            (
+                await db.scalars(
+                    select(models.Game).where(models.Game.id.in_(game_ids)).order_by(models.Game.id)
+                )
+            ).all()
+        )
+        if game_ids
+        else []
+    )
     by_id = {game.id: game for game in games}
     if request.reference_game_id is not None:
         reference = by_id.get(request.reference_game_id)
@@ -283,15 +304,16 @@ async def evaluate_team_match_readiness(
             reason = "non_official_match"
         elif game.status != models.GameStatus.completed:
             reason = "not_completed"
+        elif game.match_type == "multi_day" or game.days_limit is not None:
+            reason = "multi_day_match"
         elif game.match_type != "limited":
             reason = "unsupported_match_type"
-        elif game.days_limit is not None:
-            reason = "multi_day_match"
         elif game.match_rules is not None:
             reason = "unsupported_match_rules"
         elif (
-            game.original_format_trust_state == "unknown"
+            game.original_format_trust_state not in {"setup_capture", "staff_corrected"}
             or game.original_overs_limit is None
+            or game.original_format_source not in {"school_match_setup", "staff_correction"}
         ):
             reason = "unknown_original_format"
         elif game.original_overs_limit != SUPPORTED_ORIGINAL_OVERS:
@@ -299,6 +321,7 @@ async def evaluate_team_match_readiness(
         elif (
             game.played_date_trust_state != "confirmed"
             or game.actual_played_date is None
+            or game.played_date_source != "staff_confirmed"
         ):
             reason = "unknown_played_date"
         elif game.actual_played_date >= request.as_of_date:
@@ -319,6 +342,7 @@ async def evaluate_team_match_readiness(
     for game, _ in eligible:
         assert game.actual_played_date is not None
         date_counts[game.actual_played_date] = date_counts.get(game.actual_played_date, 0) + 1
+    ambiguous_dates = {played_date for played_date, count in date_counts.items() if count > 1}
     chronologically_usable: list[tuple[models.Game, str]] = []
     for game, digest in eligible:
         assert game.actual_played_date is not None
@@ -342,14 +366,25 @@ async def evaluate_team_match_readiness(
         for game, digest in chronologically_usable[:REQUIRED_PRIOR_MATCHES]
         if game.actual_played_date is not None
     )
-    state: Literal["ready", "not_ready"] = (
-        "ready" if usable_count >= REQUIRED_PRIOR_MATCHES else "not_ready"
+    cutoff_date = (
+        chronologically_usable[REQUIRED_PRIOR_MATCHES - 1][0].actual_played_date
+        if usable_count >= REQUIRED_PRIOR_MATCHES
+        else None
     )
+    chronology_unavailable = cutoff_date is not None and any(
+        ambiguous_date >= cutoff_date for ambiguous_date in ambiguous_dates
+    )
+    if chronology_unavailable:
+        state: Literal["ready", "not_ready", "data_unavailable"] = "data_unavailable"
+    elif usable_count >= REQUIRED_PRIOR_MATCHES:
+        state = "ready"
+    else:
+        state = "not_ready"
     return _summary(
         request,
         state=state,
         counts=counts,
-        selected=selected,
+        selected=() if chronology_unavailable else selected,
         usable_count=usable_count,
         batting_count=usable_count,
         bowling_count=usable_count,

@@ -5,9 +5,13 @@ from __future__ import annotations
 import datetime as dt
 from typing import Annotated, Never
 
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from backend.api.schemas.organization_team_performance import (
-    OrganizationTeamPerformanceResponse,
     OrganizationTeamPerformanceReadiness,
+    OrganizationTeamPerformanceResponse,
     OrganizationTeamPerformanceTeamOption,
     TeamPerformanceCoverage,
 )
@@ -38,9 +42,6 @@ from backend.services.school_team_readiness_service import (
 from backend.sql_app import models
 from backend.sql_app.database import get_db
 from backend.sql_app.models import User
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(tags=["school-statistics"])
 
@@ -335,11 +336,17 @@ async def get_organization_team_performance(
 async def get_organization_team_performance_readiness(
     organization_id: str,
     team_id: str,
-    as_of_date: dt.date,
+    as_of_date: Annotated[str, Query(pattern=r"^\d{4}-\d{2}-\d{2}$")],
     current_user: Annotated[User, Depends(get_current_active_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
     reference_game_id: str | None = Query(default=None, min_length=1),
 ) -> OrganizationTeamPerformanceReadiness:
+    try:
+        parsed_as_of_date = dt.date.fromisoformat(as_of_date)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=422, detail="as_of_date must be an ISO calendar date"
+        ) from exc
     try:
         result = await evaluate_team_match_readiness(
             db,
@@ -347,7 +354,7 @@ async def get_organization_team_performance_readiness(
                 actor_user_id=current_user.id,
                 organization_id=organization_id,
                 team_id=team_id,
-                as_of_date=as_of_date,
+                as_of_date=parsed_as_of_date,
                 reference_game_id=reference_game_id,
             ),
         )

@@ -7,7 +7,6 @@ Revises: 20261018010000
 from collections.abc import Sequence
 
 import sqlalchemy as sa
-
 from alembic import op
 
 revision: str = "20261018020000"
@@ -86,7 +85,7 @@ def upgrade() -> None:
         sa.Column("new_value", sa.JSON(), nullable=True),
         sa.Column("source", sa.String(length=32), nullable=False),
         sa.Column("reason", sa.Text(), nullable=False),
-        sa.Column("actor_user_id", sa.String(), nullable=True),
+        sa.Column("actor_user_id", sa.String(), nullable=False),
         sa.Column(
             "recorded_at",
             sa.DateTime(timezone=True),
@@ -101,8 +100,16 @@ def upgrade() -> None:
             "length(trim(reason)) > 0",
             name="ck_game_performance_metadata_audit_reason",
         ),
+        sa.CheckConstraint(
+            "metadata_revision >= 1",
+            name="ck_game_performance_metadata_audit_revision",
+        ),
+        sa.CheckConstraint(
+            "length(trim(source)) > 0",
+            name="ck_game_performance_metadata_audit_source",
+        ),
         sa.ForeignKeyConstraint(["game_id"], ["games.id"], ondelete="CASCADE"),
-        sa.ForeignKeyConstraint(["actor_user_id"], ["users.id"], ondelete="SET NULL"),
+        sa.ForeignKeyConstraint(["actor_user_id"], ["users.id"], ondelete="RESTRICT"),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint(
             "game_id",
