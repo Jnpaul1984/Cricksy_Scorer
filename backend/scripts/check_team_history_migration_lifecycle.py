@@ -73,7 +73,7 @@ def _run_alembic(
     )
     env["PYTHONPATH"] = str(backend_dir.parent)
     print(f"\n$ {' '.join(command)} [DATABASE_URL=<isolated disposable database>]", flush=True)
-    result = subprocess.run(  # noqa: S603
+    result = subprocess.run(
         command,
         cwd=backend_dir,
         env=env,
