@@ -151,8 +151,16 @@ def _team_scope_clause(request: TeamAnalyticsRequest):
     org_b = models.Game.team_b["school_source"]["organization_id"].as_string()
     team_b = models.Game.team_b["school_source"]["team_id"].as_string()
     return or_(
-        and_(org_a == request.organization_id, team_a == request.team_id),
-        and_(org_b == request.organization_id, team_b == request.team_id),
+        and_(
+            org_a == request.organization_id,
+            team_a == request.team_id,
+            or_(org_b == request.organization_id, org_b.is_(None)),
+        ),
+        and_(
+            org_b == request.organization_id,
+            team_b == request.team_id,
+            or_(org_a == request.organization_id, org_a.is_(None)),
+        ),
     )
 
 
@@ -165,7 +173,6 @@ def _team_metadata_stmt(request: TeamAnalyticsRequest):
             models.Game.match_type,
             models.Game.overs_limit,
             models.Game.days_limit,
-            models.Game.dls_enabled,
             models.Game.match_rules,
         )
         .where(_team_scope_clause(request))
@@ -194,7 +201,6 @@ def _cohort_exclusion(
     match_type: str,
     overs_limit: int | None,
     days_limit: int | None,
-    dls_enabled: bool,
     match_rules: object,
     requested_overs_limit: int,
 ) -> str | None:
@@ -206,8 +212,8 @@ def _cohort_exclusion(
         return "unsupported_match_type"
     if overs_limit != requested_overs_limit:
         return "overs_limit_mismatch"
-    if days_limit is not None or dls_enabled:
-        return "multi_day_or_dls_match"
+    if days_limit is not None:
+        return "multi_day_match"
     if match_rules is not None:
         return "unsupported_match_rules"
     return None
@@ -433,7 +439,6 @@ async def calculate_team_limited_overs_analytics(
         match_type,
         overs_limit,
         days_limit,
-        dls_enabled,
         match_rules,
     ) in metadata_rows:
         reason = _cohort_exclusion(
@@ -442,7 +447,6 @@ async def calculate_team_limited_overs_analytics(
             match_type=match_type,
             overs_limit=overs_limit,
             days_limit=days_limit,
-            dls_enabled=dls_enabled,
             match_rules=match_rules,
             requested_overs_limit=request.overs_limit,
         )
@@ -455,11 +459,11 @@ async def calculate_team_limited_overs_analytics(
     bowling = {key: value for key, value in _empty_bowling().items() if isinstance(value, int)}
     attributions: list[InningsAttribution] = []
     source_game_ids: set[str] = set()
-    eligible_matches = observed_deliveries = included_deliveries = included_innings = 0
+    eligible_matches = len(eligible_game_ids)
+    observed_deliveries = included_deliveries = included_innings = 0
     invalid_records = False
     no_ledger = False
 
-    eligible_matches = len(eligible_game_ids)
     for game in games:
         raw_deliveries = game.deliveries
         if raw_deliveries is None or raw_deliveries == []:
@@ -499,17 +503,23 @@ async def calculate_team_limited_overs_analytics(
         }
 
         grouped: dict[int, list[dict]] = {}
+        game_has_unattributed_record = False
         for record in raw_deliveries:
             if not isinstance(record, dict):
                 exclusions.append(AnalyticsExclusion(game.id, "invalid_delivery_record"))
                 invalid_records = True
+                game_has_unattributed_record = True
                 continue
             inning = record.get("inning")
             if type(inning) is not int or inning < 1:
                 exclusions.append(AnalyticsExclusion(game.id, "invalid_innings_tag"))
                 invalid_records = True
+                game_has_unattributed_record = True
                 continue
             grouped.setdefault(inning, []).append(record)
+
+        if game_has_unattributed_record:
+            continue
 
         for inning, deliveries in sorted(grouped.items()):
             inferred_sides: set[str] = set()

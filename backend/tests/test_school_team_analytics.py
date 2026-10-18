@@ -4,9 +4,10 @@ import uuid
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import select
+from sqlalchemy import event, select
 
 from backend.services.organization_entitlement_service import OrganizationCapabilityError
+from backend.services.organization_service import OrganizationServiceError
 from backend.services.school_statistics_service import SchoolStatisticsServiceError
 from backend.services.school_team_analytics_service import (
     TeamAnalyticsRequest,
@@ -16,6 +17,7 @@ from backend.sql_app.models import (
     Game,
     GameStatus,
     OrganizationEntitlement,
+    OrganizationMembership,
     PlayerProfile,
     RoleEnum,
     Team,
@@ -24,7 +26,13 @@ from backend.sql_app.models import (
 from backend.tests.school_test_helpers import create_school, register_user
 
 
-def _team_snapshot(organization_id: str, team_id: str, players: list[PlayerProfile]) -> dict:
+def _team_snapshot(
+    organization_id: str,
+    team_id: str,
+    players: list[PlayerProfile],
+    *,
+    source_organization_id: str | None = None,
+) -> dict:
     ids = [player.player_id for player in players]
     return {
         "name": "Same display name",
@@ -37,7 +45,10 @@ def _team_snapshot(organization_id: str, team_id: str, players: list[PlayerProfi
             for player in players
         ],
         "playing_xi": ids,
-        "school_source": {"organization_id": organization_id, "team_id": team_id},
+        "school_source": {
+            "organization_id": source_organization_id or organization_id,
+            "team_id": team_id,
+        },
     }
 
 
@@ -83,6 +94,8 @@ async def _seed_team_game(
     match_type: str = "limited",
     overs_limit: int = 20,
     reuse_team: Team | None = None,
+    dls_enabled: bool = False,
+    opponent_organization_id: str | None = None,
 ) -> tuple[Team, Game, list[PlayerProfile], list[PlayerProfile]]:
     async with client.session_maker() as session:  # type: ignore[attr-defined]
         team = reuse_team or Team(
@@ -119,13 +132,18 @@ async def _seed_team_game(
         game = Game(
             id=str(uuid.uuid4()),
             team_a=_team_snapshot(organization_id, team.id, target_players),
-            team_b=_team_snapshot(organization_id, opponent_team.id, opponent_players),
+            team_b=_team_snapshot(
+                organization_id,
+                opponent_team.id,
+                opponent_players,
+                source_organization_id=opponent_organization_id,
+            ),
             status=status,
             match_purpose=purpose,
             match_type=match_type,
             overs_limit=overs_limit,
             days_limit=None,
-            dls_enabled=False,
+            dls_enabled=dls_enabled,
             match_rules=None,
             deliveries=deliveries,
         )
@@ -308,34 +326,316 @@ async def test_team_analytics_reports_cohort_and_ledger_exclusions(
         match_type="custom",
         reuse_team=team,
     )
-    malformed = _hand_calculated_deliveries(target, opponent)
-    malformed[0] = {**malformed[0], "runs_off_bat": -1}
     await _seed_team_game(
-        school_client, organization["id"], owner.id, deliveries=malformed, reuse_team=team
-    )
-    malformed_ledger_team, malformed_ledger_game, _, _ = await _seed_team_game(
         school_client, organization["id"], owner.id, deliveries=[], reuse_team=team
     )
     async with school_client.session_maker() as session:  # type: ignore[attr-defined]
-        saved = await session.get(Game, malformed_ledger_game.id)
+        saved = await session.get(Game, game.id)
         assert saved is not None
-        saved.deliveries = {"not": "a ledger"}  # type: ignore[assignment]
+        malformed = _hand_calculated_deliveries(target, opponent)
+        malformed[0] = {**malformed[0], "runs_off_bat": -1}
+        saved.deliveries = malformed
         await session.commit()
     async with school_client.session_maker() as session:  # type: ignore[attr-defined]
         result = await calculate_team_limited_overs_analytics(
             session, TeamAnalyticsRequest(owner.id, organization["id"], team.id, 20)
         )
     assert result.coverage_status == "invalid_or_ambiguous_records"
-    assert result.eligible_match_count == 3
-    assert result.included_innings_count == 0
+    assert result.eligible_match_count == 2
+    assert result.included_innings_count == 1
     assert {row.reason_code for row in result.exclusions} >= {
         "non_official_match",
         "overs_limit_mismatch",
         "no_usable_ledger",
-        "invalid_ledger_shape",
         "invalid_numeric_field",
     }
-    assert malformed_ledger_team.id == team.id
+
+
+@pytest.mark.asyncio
+async def test_team_analytics_excludes_bad_innings_atomically_and_keeps_valid_sibling(
+    school_client: TestClient,
+) -> None:
+    owner = register_user(school_client, "team-analytics-atomic@example.com")
+    organization = create_school(school_client, owner, "Atomic Ledger School")
+    team, game, target, opponent = await _seed_team_game(
+        school_client, organization["id"], owner.id, deliveries=[]
+    )
+    good_inning = _delivery(
+        1, target[0].player_id, target[1].player_id, opponent[0].player_id, runs=4
+    )
+    malformed_inning = _delivery(
+        2, opponent[0].player_id, opponent[1].player_id, target[0].player_id, runs=6
+    )
+    malformed_inning["runs_scored"] = -1
+    async with school_client.session_maker() as session:  # type: ignore[attr-defined]
+        saved = await session.get(Game, game.id)
+        assert saved is not None
+        saved.deliveries = [good_inning, malformed_inning]
+        await session.commit()
+    async with school_client.session_maker() as session:  # type: ignore[attr-defined]
+        result = await calculate_team_limited_overs_analytics(
+            session, TeamAnalyticsRequest(owner.id, organization["id"], team.id, 20)
+        )
+    assert result.coverage_status == "invalid_or_ambiguous_records"
+    assert result.included_innings_count == 1
+    assert result.included_delivery_count == 1
+    assert result.source_game_ids == (game.id,)
+    assert result.batting["team_runs"] == 4
+    assert result.bowling["opposition_team_runs"] == 0
+    assert any(
+        exclusion.game_id == game.id
+        and exclusion.innings_number == 2
+        and exclusion.reason_code == "invalid_numeric_field"
+        for exclusion in result.exclusions
+    )
+
+    second_team, second_game, second_target, second_opponent = await _seed_team_game(
+        school_client, organization["id"], owner.id, deliveries=[], reuse_team=team
+    )
+    tagged_sibling = _delivery(
+        1,
+        second_target[0].player_id,
+        second_target[1].player_id,
+        second_opponent[0].player_id,
+        runs=6,
+    )
+    missing_tag = _delivery(
+        2,
+        second_opponent[0].player_id,
+        second_opponent[1].player_id,
+        second_target[0].player_id,
+    )
+    missing_tag.pop("inning")
+    async with school_client.session_maker() as session:  # type: ignore[attr-defined]
+        saved = await session.get(Game, second_game.id)
+        assert saved is not None
+        saved.deliveries = [tagged_sibling, missing_tag]
+        await session.commit()
+    async with school_client.session_maker() as session:  # type: ignore[attr-defined]
+        missing_tag_result = await calculate_team_limited_overs_analytics(
+            session, TeamAnalyticsRequest(owner.id, organization["id"], team.id, 20)
+        )
+    assert missing_tag_result.batting["team_runs"] == 4
+    assert missing_tag_result.included_innings_count == 1
+    assert missing_tag_result.source_game_ids == (game.id,)
+    assert any(
+        exclusion.game_id == second_game.id
+        and exclusion.reason_code == "invalid_innings_tag"
+        and exclusion.innings_number is None
+        for exclusion in missing_tag_result.exclusions
+    )
+    assert second_team.id == team.id
+
+    _, invalid_record_game, third_target, third_opponent = await _seed_team_game(
+        school_client, organization["id"], owner.id, deliveries=[], reuse_team=team
+    )
+    async with school_client.session_maker() as session:  # type: ignore[attr-defined]
+        saved = await session.get(Game, invalid_record_game.id)
+        assert saved is not None
+        valid_record = _delivery(
+            1,
+            third_target[0].player_id,
+            third_target[1].player_id,
+            third_opponent[0].player_id,
+            runs=6,
+        )
+        saved.deliveries = [valid_record, "malformed"]  # type: ignore[list-item]
+        await session.commit()
+    async with school_client.session_maker() as session:  # type: ignore[attr-defined]
+        invalid_record_result = await calculate_team_limited_overs_analytics(
+            session, TeamAnalyticsRequest(owner.id, organization["id"], team.id, 20)
+        )
+    assert invalid_record_result.batting["team_runs"] == 4
+    assert invalid_record_result.included_innings_count == 1
+    assert invalid_record_game.id not in invalid_record_result.source_game_ids
+    assert any(
+        exclusion.game_id == invalid_record_game.id
+        and exclusion.reason_code == "invalid_delivery_record"
+        and exclusion.innings_number is None
+        for exclusion in invalid_record_result.exclusions
+    )
+
+
+@pytest.mark.asyncio
+async def test_team_analytics_weights_match_rates_and_accepts_eleven_ball_reduced_innings(
+    school_client: TestClient,
+) -> None:
+    owner = register_user(school_client, "team-analytics-weighted@example.com")
+    organization = create_school(school_client, owner, "Weighted Analytics School")
+    team, first_game, target, opponent = await _seed_team_game(
+        school_client, organization["id"], owner.id, deliveries=[]
+    )
+    first_innings = [
+        _delivery(
+            1,
+            target[0].player_id,
+            target[1].player_id,
+            opponent[0].player_id,
+            runs=4 if index == 0 else 0,
+        )
+        for index in range(6)
+    ]
+    async with school_client.session_maker() as session:  # type: ignore[attr-defined]
+        saved = await session.get(Game, first_game.id)
+        assert saved is not None
+        saved.deliveries = first_innings
+        await session.commit()
+    _, reduced_game, reduced_target, reduced_opponent = await _seed_team_game(
+        school_client,
+        organization["id"],
+        owner.id,
+        deliveries=[],
+        reuse_team=team,
+        dls_enabled=True,
+    )
+    opposition_first_innings = [
+        _delivery(
+            1,
+            reduced_opponent[0].player_id,
+            reduced_opponent[1].player_id,
+            reduced_target[0].player_id,
+            runs=1,
+        )
+        for _ in range(6)
+    ]
+    reduced_chase = [
+        _delivery(
+            2,
+            reduced_target[0].player_id,
+            reduced_target[1].player_id,
+            reduced_opponent[0].player_id,
+            runs=1 if index == 0 else 0,
+        )
+        for index in range(11)
+    ]
+    async with school_client.session_maker() as session:  # type: ignore[attr-defined]
+        saved = await session.get(Game, reduced_game.id)
+        assert saved is not None
+        saved.deliveries = opposition_first_innings + reduced_chase
+        await session.commit()
+
+    statements: list[str] = []
+    engine = school_client.session_maker.kw["bind"]  # type: ignore[attr-defined]
+
+    def record_statement(*args: object) -> None:
+        statement = str(args[2]).upper()
+        if "FROM GAMES" in statement:
+            statements.append(statement)
+
+    event.listen(engine.sync_engine, "before_cursor_execute", record_statement)
+    try:
+        async with school_client.session_maker() as session:  # type: ignore[attr-defined]
+            result = await calculate_team_limited_overs_analytics(
+                session, TeamAnalyticsRequest(owner.id, organization["id"], team.id, 20)
+            )
+    finally:
+        event.remove(engine.sync_engine, "before_cursor_execute", record_statement)
+
+    assert result.coverage_status == "usable_recorded_data"
+    assert result.eligible_match_count == 2
+    assert result.included_match_count == 2
+    assert result.included_innings_count == 3
+    assert result.batting["team_runs"] == 5
+    assert result.batting["legal_balls"] == 17
+    assert result.batting["run_rate"] == 1.76
+    assert result.batting["legal_dot_percentage"] == 88.24
+    assert len(statements) == 2
+
+
+@pytest.mark.asyncio
+async def test_team_analytics_excludes_a_foreign_opposite_side_in_sql(
+    school_client: TestClient,
+) -> None:
+    owner = register_user(school_client, "team-analytics-foreign-side@example.com")
+    foreign_owner = register_user(school_client, "team-analytics-foreign-other@example.com")
+    organization = create_school(school_client, owner, "Target Analytics Org")
+    foreign_organization = create_school(school_client, foreign_owner, "Opponent Analytics Org")
+    team, _, target, _ = await _seed_team_game(
+        school_client, organization["id"], owner.id, deliveries=[], overs_limit=10
+    )
+    opposing_player = PlayerProfile(player_id=str(uuid.uuid4()), player_name="Foreign Player")
+    async with school_client.session_maker() as session:  # type: ignore[attr-defined]
+        session.add(opposing_player)
+        await session.flush()
+        foreign_team = Team(
+            id=str(uuid.uuid4()),
+            name="Foreign XI",
+            organization_id=foreign_organization["id"],
+            owner_user_id=foreign_owner.id,
+            status="archived",
+            players=[],
+            competitions=[],
+        )
+        session.add(foreign_team)
+        await session.flush()
+        game = Game(
+            id=str(uuid.uuid4()),
+            team_a=_team_snapshot(organization["id"], team.id, target),
+            team_b=_team_snapshot(
+                organization["id"],
+                foreign_team.id,
+                [opposing_player],
+                source_organization_id=foreign_organization["id"],
+            ),
+            status=GameStatus.completed,
+            match_purpose="official",
+            match_type="limited",
+            overs_limit=20,
+            days_limit=None,
+            dls_enabled=False,
+            match_rules=None,
+            deliveries=[],
+        )
+        session.add(game)
+        await session.commit()
+    async with school_client.session_maker() as session:  # type: ignore[attr-defined]
+        result = await calculate_team_limited_overs_analytics(
+            session, TeamAnalyticsRequest(owner.id, organization["id"], team.id, 20)
+        )
+    assert result.coverage_status == "no_eligible_games"
+    assert result.source_game_ids == ()
+    assert game.id not in result.source_game_ids
+
+
+@pytest.mark.asyncio
+async def test_team_analytics_denies_inactive_and_removed_membership(
+    school_client: TestClient,
+) -> None:
+    owner = register_user(school_client, "team-analytics-membership@example.com")
+    organization = create_school(school_client, owner, "Membership Analytics Org")
+    team, _, _, _ = await _seed_team_game(
+        school_client, organization["id"], owner.id, deliveries=[]
+    )
+    async with school_client.session_maker() as session:  # type: ignore[attr-defined]
+        membership = await session.scalar(
+            select(OrganizationMembership).where(
+                OrganizationMembership.organization_id == organization["id"],
+                OrganizationMembership.user_id == owner.id,
+            )
+        )
+        assert membership is not None
+        membership.status = "disabled"
+        await session.commit()
+    async with school_client.session_maker() as session:  # type: ignore[attr-defined]
+        with pytest.raises(OrganizationServiceError):
+            await calculate_team_limited_overs_analytics(
+                session, TeamAnalyticsRequest(owner.id, organization["id"], team.id, 20)
+            )
+    async with school_client.session_maker() as session:  # type: ignore[attr-defined]
+        membership = await session.scalar(
+            select(OrganizationMembership).where(
+                OrganizationMembership.organization_id == organization["id"],
+                OrganizationMembership.user_id == owner.id,
+            )
+        )
+        assert membership is not None
+        await session.delete(membership)
+        await session.commit()
+    async with school_client.session_maker() as session:  # type: ignore[attr-defined]
+        with pytest.raises(OrganizationServiceError):
+            await calculate_team_limited_overs_analytics(
+                session, TeamAnalyticsRequest(owner.id, organization["id"], team.id, 20)
+            )
 
 
 @pytest.mark.asyncio
