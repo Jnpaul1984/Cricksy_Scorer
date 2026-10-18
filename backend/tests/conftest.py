@@ -54,6 +54,7 @@ async def reset_db(_setup_db):
                     "school_player_imports, "
                     "school_team_player_memberships, "
                     "school_player_memberships, teams, "
+                    "organization_team_performance_grants, "
                     "organization_entitlements, organization_memberships, "
                     "organizations, player_profiles, users "
                     "RESTART IDENTITY CASCADE"

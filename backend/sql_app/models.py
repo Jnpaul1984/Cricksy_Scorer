@@ -557,6 +557,76 @@ class OrganizationEntitlement(Base):
     organization: Mapped[Organization] = relationship(back_populates="entitlements")
 
 
+class OrganizationTeamPerformanceGrant(Base):
+    """Default-off, auditable operator grant for the private Team Performance pilot."""
+
+    __tablename__ = "organization_team_performance_grants"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('active', 'expired', 'revoked')",
+            name="ck_org_team_performance_grant_status",
+        ),
+        CheckConstraint(
+            "length(trim(grant_reason)) > 0",
+            name="ck_org_team_performance_grant_reason",
+        ),
+        CheckConstraint(
+            "effective_until IS NULL OR effective_until > effective_from",
+            name="ck_org_team_performance_grant_validity",
+        ),
+        CheckConstraint(
+            "(status = 'revoked' AND revoked_by_user_id IS NOT NULL "
+            "AND revoked_at IS NOT NULL AND revocation_reason IS NOT NULL "
+            "AND length(trim(revocation_reason)) > 0) "
+            "OR (status != 'revoked' AND revoked_by_user_id IS NULL "
+            "AND revoked_at IS NULL AND revocation_reason IS NULL)",
+            name="ck_org_team_performance_grant_revocation_audit",
+        ),
+        Index(
+            "ix_org_team_performance_grant_org_status",
+            "organization_id",
+            "status",
+        ),
+        Index(
+            "uq_org_team_performance_one_active_grant",
+            "organization_id",
+            unique=True,
+            postgresql_where=text("status = 'active'"),
+            sqlite_where=text("status = 'active'"),
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(
+        String, primary_key=True, default=lambda: str(uuid.uuid4()), nullable=False
+    )
+    organization_id: Mapped[str] = mapped_column(
+        ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False
+    )
+    status: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="active", server_default="active"
+    )
+    effective_from: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    effective_until: Mapped[dt.datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    granted_by_user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
+    )
+    grant_reason: Mapped[str] = mapped_column(Text, nullable=False)
+    granted_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    revoked_by_user_id: Mapped[str | None] = mapped_column(
+        ForeignKey("users.id", ondelete="RESTRICT"), nullable=True
+    )
+    revoked_at: Mapped[dt.datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    revocation_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
 # -----------------------------
 # Helpers for safe JSON defaults
 # (avoid default={} or default=[])

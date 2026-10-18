@@ -2,6 +2,71 @@ export type SchoolMembershipRole = 'owner' | 'admin' | 'coach' | 'scorer' | 'vie
 export type SchoolRosterStatus = 'active' | 'inactive';
 export type FreeOrganizationType = 'school' | 'club';
 
+export interface TeamPerformanceBatting {
+  team_runs: number;
+  bat_runs: number;
+  wides: number;
+  no_ball_penalties: number;
+  byes: number;
+  leg_byes: number;
+  wickets_lost: number;
+  legal_balls: number;
+  legal_dots: number;
+  fours: number;
+  sixes: number;
+  run_rate: number | null;
+  legal_dot_percentage: number | null;
+  runs_per_wicket: number | null;
+}
+
+export interface TeamPerformanceBowling {
+  opposition_team_runs: number;
+  bowler_charged_runs: number;
+  wides: number;
+  no_ball_penalties: number;
+  byes: number;
+  leg_byes: number;
+  team_wickets: number;
+  bowler_credited_wickets: number;
+  legal_balls: number;
+  legal_dots: number;
+  team_concession_rate: number | null;
+  bowling_economy: number | null;
+  legal_dot_percentage: number | null;
+}
+
+export interface TeamPerformanceCoverage {
+  status:
+    | 'no_eligible_games'
+    | 'no_usable_ledger'
+    | 'usable_with_exclusions'
+    | 'usable_recorded_data';
+  eligible_games: number;
+  included_games: number;
+  usable_batting_innings: number;
+  usable_bowling_innings: number;
+  used_delivery_rows: number;
+  observed_delivery_rows: number;
+  excluded_games: number;
+  excluded_innings: number;
+  cohort_excluded_games: number;
+  cohort_exclusion_counts: Record<string, number>;
+  no_ledger_games: number;
+  invalid_data_games: number;
+  invalid_data_innings: number;
+  warning_counts: Record<string, number>;
+}
+
+export interface OrganizationTeamPerformance {
+  organization_id: string;
+  team_id: string;
+  overs_limit: number;
+  completeness: 'unknown';
+  batting: TeamPerformanceBatting;
+  bowling: TeamPerformanceBowling;
+  coverage: TeamPerformanceCoverage;
+}
+
 export interface SchoolOrganization {
   id: string;
   name: string;
@@ -54,6 +119,12 @@ export interface SchoolTeam {
   coach_name: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface OrganizationTeamPerformanceTeamOption {
+  id: string;
+  name: string;
+  status: 'active' | 'archived';
 }
 
 export interface SchoolTeamInput {

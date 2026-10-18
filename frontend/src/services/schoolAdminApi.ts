@@ -50,9 +50,11 @@ import type {
   OrganizationSelectionPlan,
   OrganizationSelectionPublication,
   OrganizationSelectionPlanUpdate,
+  OrganizationTeamPerformanceTeamOption,
   OrganizationAvailabilityReminderResult,
   OrganizationEventNotificationResult,
   OrganizationSelectionNotificationResult,
+  OrganizationTeamPerformance,
   OrganizationCommunitySettings,
   OrganizationCommunityCompetitionSettings,
   OrganizationFixtureYoutubeVideo,
@@ -502,6 +504,21 @@ export const recordOrganizationPlayerAttendance = (
 
 export const listSchoolTeams = (organizationId: string) =>
   apiRequest<SchoolTeam[]>(orgPath(organizationId, '/teams'));
+export const listOrganizationTeamPerformanceTeams = (organizationId: string) =>
+  apiRequest<OrganizationTeamPerformanceTeamOption[]>(
+    orgPath(organizationId, '/team-performance/teams'),
+  );
+export const getOrganizationTeamPerformance = (
+  organizationId: string,
+  teamId: string,
+  oversLimit: number,
+) =>
+  apiRequest<OrganizationTeamPerformance>(
+    orgPath(
+      organizationId,
+      `/team-performance/teams/${encodeURIComponent(teamId)}?overs_limit=${oversLimit}`,
+    ),
+  );
 export const getSchoolTeam = (organizationId: string, teamId: string) =>
   apiRequest<SchoolTeam>(orgPath(organizationId, `/teams/${encodeURIComponent(teamId)}`));
 export const createSchoolTeam = (organizationId: string, payload: SchoolTeamInput) =>
