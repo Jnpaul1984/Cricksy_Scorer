@@ -21,7 +21,11 @@ vi.mock('vue-router', () => ({
   RouterLink: { props: ['to'], template: '<a :href="String(to)"><slot /></a>' },
 }));
 
-function team(id: string, organizationId: string, status: 'active' | 'archived' = 'active'): SchoolTeam {
+function team(
+  id: string,
+  organizationId: string,
+  status: 'active' | 'archived' = 'active',
+): SchoolTeam {
   return {
     id,
     organization_id: organizationId,
@@ -161,7 +165,9 @@ describe('organization Team Performance pilot view', () => {
     await flushPromises();
 
     expect(wrapper.text()).toContain('First XI (archived)');
-    expect(wrapper.text()).toContain('Based on recorded delivery data. Historical completeness has not been verified.');
+    expect(wrapper.text()).toContain(
+      'Based on recorded delivery data. Historical completeness has not been verified.',
+    );
     expect(wrapper.text()).toContain('11 (1.5)');
     expect(wrapper.text()).toContain('Team runs per wicket');
     expect(wrapper.text()).not.toContain('Player average');
@@ -204,6 +210,40 @@ describe('organization Team Performance pilot view', () => {
     expect(wrapper.text()).not.toContain('11\n');
   });
 
+  it('ignores rejected stale team and analytics requests after scope changes', async () => {
+    let rejectOldTeams: (error: Error) => void = () => undefined;
+    let rejectOldAnalytics: (error: Error) => void = () => undefined;
+    vi.mocked(schoolApi.listSchoolTeams).mockImplementation(async (organizationId) => {
+      if (organizationId === 'school-a') {
+        return new Promise<SchoolTeam[]>((_resolve, reject) => {
+          rejectOldTeams = reject;
+        });
+      }
+      return [team('team-b', organizationId)];
+    });
+    vi.mocked(schoolApi.getOrganizationTeamPerformance).mockImplementation((organizationId) => {
+      if (organizationId === 'school-a') {
+        return new Promise<OrganizationTeamPerformance>((_resolve, reject) => {
+          rejectOldAnalytics = reject;
+        });
+      }
+      return Promise.resolve(performance(organizationId, 'team-b', 77));
+    });
+    const organizationId = ref('school-a');
+    const wrapper = mountView(organizationId);
+    await flushPromises();
+    organizationId.value = 'club-b';
+    await flushPromises();
+    expect(wrapper.text()).toContain('77');
+
+    rejectOldTeams(Object.assign(new Error('stale team load'), { status: 404 }));
+    rejectOldAnalytics(Object.assign(new Error('stale analytics'), { status: 500 }));
+    await flushPromises();
+    expect(wrapper.text()).toContain('77');
+    expect(wrapper.text()).not.toContain('unavailable for this organization');
+    expect(wrapper.text()).not.toContain('stale analytics');
+  });
+
   it('clears aggregates immediately when contextual staff access is lost', async () => {
     const role = ref<SchoolMembershipRole>('coach');
     const wrapper = mountView(ref('school-a'), role);
@@ -214,6 +254,93 @@ describe('organization Team Performance pilot view', () => {
     await flushPromises();
     expect(wrapper.text()).toContain('unavailable for this organization');
     expect(wrapper.text()).not.toContain('Team batting');
+  });
+
+  it.each([
+    ['batting', 0, 1, 'No usable batting data.'],
+    ['bowling', 1, 0, 'No usable bowling data.'],
+  ])(
+    'does not show an empty %s card when only the other perspective is usable',
+    async (_label, usableBatting, usableBowling, unavailableText) => {
+      vi.mocked(schoolApi.getOrganizationTeamPerformance).mockResolvedValue({
+        ...performance('school-a', 'team-a'),
+        coverage: {
+          ...performance('school-a', 'team-a').coverage,
+          status: 'usable_with_exclusions',
+          usable_batting_innings: usableBatting as number,
+          usable_bowling_innings: usableBowling as number,
+          warning_counts: { invalid_numeric_field: 1 },
+        },
+      });
+      const wrapper = mountView(ref('school-a'));
+      await flushPromises();
+
+      if (usableBatting === 0)
+        expect(wrapper.find('[aria-labelledby="batting-heading"]').exists()).toBe(false);
+      else expect(wrapper.find('[aria-labelledby="batting-heading"]').exists()).toBe(true);
+      if (usableBowling === 0)
+        expect(wrapper.find('[aria-labelledby="bowling-heading"]').exists()).toBe(false);
+      else expect(wrapper.find('[aria-labelledby="bowling-heading"]').exists()).toBe(true);
+      expect(wrapper.text()).toContain(unavailableText as string);
+      expect(wrapper.text()).toContain('validation warnings');
+      expect(wrapper.text()).not.toContain('outside the selected format');
+    },
+  );
+
+  it('reports ordinary cohort exclusions without calling them validation warnings', async () => {
+    vi.mocked(schoolApi.getOrganizationTeamPerformance).mockResolvedValue({
+      ...performance('school-a', 'team-a'),
+      coverage: {
+        ...performance('school-a', 'team-a').coverage,
+        status: 'usable_with_exclusions',
+        cohort_excluded_games: 3,
+        cohort_exclusion_counts: { overs_limit_mismatch: 3 },
+      },
+    });
+    const wrapper = mountView(ref('school-a'));
+    await flushPromises();
+
+    expect(wrapper.text()).toContain(
+      'Games outside the selected format or cohort are counted separately.',
+    );
+    expect(wrapper.text()).not.toContain('validation warnings');
+    expect(wrapper.text()).not.toContain('Recorded-data validation warnings');
+  });
+
+  it.each([403, 404])('clears aggregates after a %i denied request', async (status) => {
+    const wrapper = mountView(ref('school-a'));
+    await flushPromises();
+    expect(wrapper.text()).toContain('Team batting');
+
+    const denied = Object.assign(new Error('denied'), { status });
+    vi.mocked(schoolApi.getOrganizationTeamPerformance).mockRejectedValue(denied);
+    await wrapper.get('input[aria-label="Overs limit"]').setValue(30);
+    await flushPromises();
+    expect(wrapper.text()).toContain('unavailable for this organization');
+    expect(wrapper.text()).not.toContain('Team batting');
+    wrapper.unmount();
+  });
+
+  it('handles an eligible cohort with no usable ledger', async () => {
+    vi.mocked(schoolApi.getOrganizationTeamPerformance).mockResolvedValue({
+      ...performance('school-a', 'team-a'),
+      coverage: {
+        ...performance('school-a', 'team-a').coverage,
+        status: 'no_usable_ledger',
+        included_games: 0,
+        usable_batting_innings: 0,
+        usable_bowling_innings: 0,
+        used_delivery_rows: 0,
+        no_ledger_games: 1,
+      },
+    });
+    const noLedger = mountView(ref('school-a'));
+    await flushPromises();
+    expect(noLedger.text()).toContain(
+      'Eligible games exist, but no usable batting or bowling delivery ledger is available.',
+    );
+    expect(noLedger.find('[aria-labelledby="batting-heading"]').exists()).toBe(false);
+    expect(noLedger.find('[aria-labelledby="bowling-heading"]').exists()).toBe(false);
   });
 
   it('distinguishes an empty eligible cohort from a too-large request', async () => {

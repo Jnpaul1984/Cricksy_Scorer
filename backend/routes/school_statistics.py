@@ -34,34 +34,20 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(tags=["school-statistics"])
 
-COHORT_EXCLUSION_CODES = frozenset(
-    {
-        "non_official_match",
-        "not_completed",
-        "unsupported_match_type",
-        "overs_limit_mismatch",
-        "multi_day_match",
-        "unsupported_match_rules",
-    }
-)
 NO_LEDGER_CODES = frozenset({"no_usable_ledger"})
 
 
 def _safe_team_performance_response(
     result: TeamAnalyticsResult,
 ) -> OrganizationTeamPerformanceResponse:
-    cohort_games: set[str] = set()
     no_ledger_games: set[str] = set()
     invalid_games: set[str] = set()
     invalid_innings: set[tuple[str, int]] = set()
-    cohort_counts: dict[str, int] = {}
+    cohort_counts = result.cohort_exclusion_counts.copy()
     warnings: dict[str, int] = {}
     for exclusion in result.exclusions:
         reason = exclusion.reason_code
-        if reason in COHORT_EXCLUSION_CODES:
-            cohort_games.add(exclusion.game_id)
-            cohort_counts[reason] = cohort_counts.get(reason, 0) + 1
-        elif reason in NO_LEDGER_CODES:
+        if reason in NO_LEDGER_CODES:
             no_ledger_games.add(exclusion.game_id)
         elif exclusion.innings_number is None:
             invalid_games.add(exclusion.game_id)
@@ -91,9 +77,9 @@ def _safe_team_performance_response(
         ),
         used_delivery_rows=result.included_delivery_count,
         observed_delivery_rows=result.observed_delivery_count,
-        excluded_games=len(cohort_games | no_ledger_games | invalid_games),
+        excluded_games=sum(cohort_counts.values()) + len(no_ledger_games | invalid_games),
         excluded_innings=len(invalid_innings),
-        cohort_excluded_games=len(cohort_games),
+        cohort_excluded_games=sum(cohort_counts.values()),
         cohort_exclusion_counts=cohort_counts,
         no_ledger_games=len(no_ledger_games),
         invalid_data_games=len(invalid_games),
@@ -278,5 +264,27 @@ async def get_organization_team_performance(
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
             detail="Selected Team Performance scope is too large; narrow the selected format.",
+        ) from exc
+    except OrganizationCapabilityError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Team Performance is unavailable",
+        ) from exc
+    except organization_service.OrganizationServiceError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Organization or Team not found",
+        ) from exc
+    except school_statistics_service.SchoolStatisticsServiceError as exc:
+        response_status = (
+            status.HTTP_404_NOT_FOUND
+            if exc.status_code == status.HTTP_404_NOT_FOUND
+            else status.HTTP_403_FORBIDDEN
+        )
+        raise HTTPException(
+            status_code=response_status,
+            detail="Organization or Team not found"
+            if response_status == status.HTTP_404_NOT_FOUND
+            else "Team Performance is unavailable",
         ) from exc
     return _safe_team_performance_response(result)

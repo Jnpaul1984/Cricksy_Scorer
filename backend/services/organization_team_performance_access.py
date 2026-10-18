@@ -134,10 +134,11 @@ async def revoke_organization_team_performance(
     db: AsyncSession,
     *,
     organization_id: str,
+    grant_id: str,
     operator_user_id: str,
     reason: str,
 ) -> tuple[models.OrganizationTeamPerformanceGrant, bool]:
-    """Revoke the current grant while retaining operator and reason audit data."""
+    """Revoke one immutable grant identity while retaining operator and reason audit data."""
     normalized_reason = reason.strip()
     if not normalized_reason or len(normalized_reason) > 2000:
         raise TeamPerformanceGrantOperationError(
@@ -157,34 +158,32 @@ async def revoke_organization_team_performance(
     ):
         raise TeamPerformanceGrantOperationError("An active operator account is required")
 
-    await db.scalar(
+    organization = await db.scalar(
         select(models.Organization)
         .where(models.Organization.id == organization_id)
         .with_for_update()
     )
+    if organization is None:
+        raise TeamPerformanceGrantOperationError("Organization not found")
     grant = await db.scalar(
         select(models.OrganizationTeamPerformanceGrant)
         .where(
+            models.OrganizationTeamPerformanceGrant.id == grant_id,
             models.OrganizationTeamPerformanceGrant.organization_id == organization_id,
-            models.OrganizationTeamPerformanceGrant.status == "active",
         )
-        .order_by(models.OrganizationTeamPerformanceGrant.granted_at.desc())
         .with_for_update()
     )
     if grant is None:
-        previously_revoked = await db.scalar(
-            select(models.OrganizationTeamPerformanceGrant)
-            .where(
-                models.OrganizationTeamPerformanceGrant.organization_id == organization_id,
-                models.OrganizationTeamPerformanceGrant.status == "revoked",
-                models.OrganizationTeamPerformanceGrant.revoked_by_user_id == operator_user_id,
-                models.OrganizationTeamPerformanceGrant.revocation_reason == normalized_reason,
-            )
-            .order_by(models.OrganizationTeamPerformanceGrant.revoked_at.desc())
-            .limit(1)
-        )
-        if previously_revoked is not None:
-            return previously_revoked, False
+        raise TeamPerformanceGrantOperationError("No active Team Performance grant exists")
+
+    if grant.status == "revoked":
+        if (
+            grant.revoked_by_user_id == operator_user_id
+            and grant.revocation_reason == normalized_reason
+        ):
+            return grant, False
+        raise TeamPerformanceGrantOperationError("No active Team Performance grant exists")
+    if grant.status != "active":
         raise TeamPerformanceGrantOperationError("No active Team Performance grant exists")
 
     now = _now()

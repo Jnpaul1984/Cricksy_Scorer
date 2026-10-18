@@ -344,9 +344,13 @@ async def test_team_analytics_reports_cohort_and_ledger_exclusions(
     assert result.coverage_status == "invalid_or_ambiguous_records"
     assert result.eligible_match_count == 2
     assert result.included_innings_count == 1
-    assert {row.reason_code for row in result.exclusions} >= {
+    assert set(result.cohort_exclusion_counts) >= {
         "non_official_match",
         "overs_limit_mismatch",
+        "not_completed",
+        "unsupported_match_type",
+    }
+    assert {row.reason_code for row in result.exclusions} >= {
         "no_usable_ledger",
         "invalid_numeric_field",
     }
@@ -761,7 +765,7 @@ async def test_team_analytics_weights_match_rates_and_accepts_eleven_ball_reduce
     assert result.batting["legal_balls"] == 17
     assert result.batting["run_rate"] == 1.76
     assert result.batting["legal_dot_percentage"] == 88.24
-    assert len(statements) == 2
+    assert len(statements) == 3
 
 
 @pytest.mark.asyncio
@@ -951,7 +955,7 @@ async def test_team_analytics_separates_no_cohort_from_empty_ledger_and_zero_den
             session, TeamAnalyticsRequest(owner.id, organization["id"], team.id, 10)
         )
     assert no_cohort.coverage_status == "no_eligible_games"
-    assert no_cohort.exclusions[0].reason_code == "overs_limit_mismatch"
+    assert no_cohort.cohort_exclusion_counts == {"overs_limit_mismatch": 1}
 
     async with school_client.session_maker() as session:  # type: ignore[attr-defined]
         empty_ledger = await calculate_team_limited_overs_analytics(

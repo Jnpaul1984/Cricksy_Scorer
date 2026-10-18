@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import datetime as dt
+from copy import deepcopy
+from uuid import uuid4
 
 import pytest
 from sqlalchemy import select
@@ -15,9 +17,11 @@ from backend.services.organization_team_performance_access import (
 from backend.sql_app.models import (
     Game,
     Organization,
+    OrganizationEntitlement,
     OrganizationMembership,
     OrganizationTeamPerformanceGrant,
     RoleEnum,
+    Team,
     User,
 )
 from backend.tests.school_test_helpers import (
@@ -31,12 +35,13 @@ from backend.tests.test_school_team_analytics import _hand_calculated_deliveries
 
 
 async def _grant_async(client, organization_id: str, operator: RegisteredUser, **kwargs):
+    reason = kwargs.pop("reason", "Owner-approved bounded staff pilot")
     async with client.session_maker() as session:  # type: ignore[attr-defined]
         grant, created = await grant_organization_team_performance(
             session,
             organization_id=organization_id,
             operator_user_id=operator.id,
-            reason="Owner-approved bounded staff pilot",
+            reason=reason,
             **kwargs,
         )
         await session.commit()
@@ -187,8 +192,8 @@ def test_team_performance_hides_foreign_team_and_denies_user_org_id_bypass(schoo
             assert user is not None
             user.org_id = org_a["id"]
             user.is_superuser = True
-            user.role = RoleEnum.coach_pro_plus
-            user.subscription_plan = RoleEnum.coach_pro_plus
+            user.role = RoleEnum.org_pro
+            user.subscription_plan = RoleEnum.org_pro
             await session.commit()
 
     asyncio.run(make_legacy_bypass_look_authorized())
@@ -340,6 +345,70 @@ def test_team_performance_rejects_oversized_scope_without_truncating(
 
 
 @pytest.mark.asyncio
+async def test_workload_limit_counts_selected_games_not_unrelated_history(
+    school_client, monkeypatch
+) -> None:
+    import backend.services.school_team_analytics_service as analytics_service
+
+    owner = register_user(school_client, "cohort-bound-owner@example.com")
+    organization = create_school(school_client, owner, "Cohort bound pilot")
+    team, seed_game, _, _ = await _seed_team_game(
+        school_client,
+        organization["id"],
+        owner.id,
+        deliveries=[],
+    )
+    await _grant_async(school_client, organization["id"], owner)
+    async with school_client.session_maker() as session:  # type: ignore[attr-defined]
+        session.add_all(
+            [
+                Game(
+                    id=str(uuid4()),
+                    team_a=deepcopy(seed_game.team_a),
+                    team_b=deepcopy(seed_game.team_b),
+                    status=seed_game.status,
+                    match_purpose="practice",
+                    match_type=seed_game.match_type,
+                    overs_limit=seed_game.overs_limit,
+                    days_limit=None,
+                    match_rules=None,
+                    deliveries=[],
+                )
+                for _ in range(260)
+            ]
+        )
+        await session.commit()
+    monkeypatch.setattr(analytics_service, "MAX_CANDIDATE_GAMES", 1)
+    endpoint = (
+        f"/api/organizations/{organization['id']}/team-performance/teams/{team.id}?overs_limit=20"
+    )
+    response = school_client.get(endpoint, headers=owner.headers)
+    assert response.status_code == 200, response.text
+    assert response.json()["coverage"]["eligible_games"] == 1
+    assert response.json()["coverage"]["cohort_excluded_games"] == 260
+    assert response.json()["coverage"]["cohort_exclusion_counts"] == {"non_official_match": 260}
+
+    async with school_client.session_maker() as session:  # type: ignore[attr-defined]
+        session.add(
+            Game(
+                id=str(uuid4()),
+                team_a=deepcopy(seed_game.team_a),
+                team_b=deepcopy(seed_game.team_b),
+                status=seed_game.status,
+                match_purpose="official",
+                match_type=seed_game.match_type,
+                overs_limit=seed_game.overs_limit,
+                days_limit=None,
+                match_rules=None,
+                deliveries=[],
+            )
+        )
+        await session.commit()
+    oversized = school_client.get(endpoint, headers=owner.headers)
+    assert oversized.status_code == 413
+
+
+@pytest.mark.asyncio
 async def test_grant_revoke_operations_are_audited_and_idempotent(school_client) -> None:
     operator = register_user(school_client, "grant-operator@example.com")
     organization = create_school(school_client, operator, "Audit pilot")
@@ -378,6 +447,7 @@ async def test_grant_revoke_operations_are_audited_and_idempotent(school_client)
         revoked, did_revoke = await revoke_organization_team_performance(
             session,
             organization_id=organization["id"],
+            grant_id=grant_id,
             operator_user_id=operator.id,
             reason="Pilot closed",
         )
@@ -396,6 +466,7 @@ async def test_grant_revoke_operations_are_audited_and_idempotent(school_client)
         duplicate_revoke, did_revoke = await revoke_organization_team_performance(
             session,
             organization_id=organization["id"],
+            grant_id=grant_id,
             operator_user_id=operator.id,
             reason="Pilot closed",
         )
@@ -408,3 +479,278 @@ async def test_grant_revoke_operations_are_audited_and_idempotent(school_client)
                 team_id="missing",
                 actor_user_id=operator.id,
             )
+
+    replacement, replacement_created = await _grant_async(
+        school_client,
+        organization["id"],
+        operator,
+        reason="Approved renewal",
+    )
+    assert replacement_created
+    async with school_client.session_maker() as session:  # type: ignore[attr-defined]
+        retried_old_revoke, did_revoke = await revoke_organization_team_performance(
+            session,
+            organization_id=organization["id"],
+            grant_id=grant_id,
+            operator_user_id=operator.id,
+            reason="Pilot closed",
+        )
+        assert not did_revoke
+        assert retried_old_revoke.id == grant_id
+        active_grant = await session.scalar(
+            select(OrganizationTeamPerformanceGrant).where(
+                OrganizationTeamPerformanceGrant.organization_id == organization["id"],
+                OrganizationTeamPerformanceGrant.status == "active",
+            )
+        )
+        assert active_grant is not None
+        assert active_grant.id == replacement.id
+        await session.commit()
+
+
+@pytest.mark.asyncio
+async def test_team_performance_revalidates_role_user_and_team_on_every_request(
+    school_client,
+) -> None:
+    owner = register_user(school_client, "request-recheck-owner@example.com")
+    coach = register_user(school_client, "request-recheck-coach@example.com")
+    organization = create_school(school_client, owner, "Request recheck pilot")
+    membership = add_membership(school_client, owner, organization["id"], coach.id, "coach")
+    team, _, _, _ = await _seed_team_game(
+        school_client,
+        organization["id"],
+        owner.id,
+        deliveries=None,
+    )
+    await _grant_async(school_client, organization["id"], owner)
+    endpoint = (
+        f"/api/organizations/{organization['id']}/team-performance/teams/{team.id}?overs_limit=20"
+    )
+    assert school_client.get(endpoint, headers=coach.headers).status_code == 200
+
+    async with school_client.session_maker() as session:  # type: ignore[attr-defined]
+        row = await session.get(OrganizationMembership, membership["id"])
+        assert row is not None
+        row.role = "scorer"
+        await session.commit()
+    downgraded = school_client.get(endpoint, headers=coach.headers)
+    assert downgraded.status_code == 403
+    assert team.id not in downgraded.text
+
+    async with school_client.session_maker() as session:  # type: ignore[attr-defined]
+        row = await session.get(OrganizationMembership, membership["id"])
+        assert row is not None
+        await session.delete(row)
+        await session.commit()
+    removed = school_client.get(endpoint, headers=coach.headers)
+    assert removed.status_code == 404
+    assert organization["id"] not in removed.text
+
+    async with school_client.session_maker() as session:  # type: ignore[attr-defined]
+        team_row = await session.get(Team, team.id)
+        assert team_row is not None
+        await session.delete(team_row)
+        await session.commit()
+    missing_team = school_client.get(endpoint, headers=owner.headers)
+    assert missing_team.status_code == 404
+    assert missing_team.json()["detail"] == "Team not found"
+    assert team.id not in missing_team.text
+
+    async with school_client.session_maker() as session:  # type: ignore[attr-defined]
+        user = await session.get(User, owner.id)
+        assert user is not None
+        user.is_active = False
+        await session.commit()
+    inactive = school_client.get(endpoint, headers=owner.headers)
+    assert inactive.status_code != 500
+    assert team.id not in inactive.text
+
+
+@pytest.mark.asyncio
+async def test_free_entitlement_and_personal_account_are_unchanged_by_pilot_lifecycle(
+    school_client,
+) -> None:
+    owner = register_user(school_client, "pilot-free-invariance@example.com")
+    organization = create_school(school_client, owner, "Free invariance pilot")
+    team, _, _, _ = await _seed_team_game(
+        school_client,
+        organization["id"],
+        owner.id,
+        deliveries=None,
+    )
+    endpoint = (
+        f"/api/organizations/{organization['id']}/team-performance/teams/{team.id}?overs_limit=20"
+    )
+    async with school_client.session_maker() as session:  # type: ignore[attr-defined]
+        entitlement = await session.scalar(
+            select(OrganizationEntitlement).where(
+                OrganizationEntitlement.organization_id == organization["id"]
+            )
+        )
+        user = await session.get(User, owner.id)
+        assert entitlement is not None and user is not None
+        entitlement_snapshot = (entitlement.plan_key, entitlement.status, entitlement.source)
+        account_snapshot = (user.role, user.subscription_plan, user.org_id)
+        entitlement.status = "disabled"
+        await session.commit()
+
+    grant, _ = await _grant_async(school_client, organization["id"], owner)
+    denied_without_free_capability = school_client.get(endpoint, headers=owner.headers)
+    assert denied_without_free_capability.status_code == 403
+    assert denied_without_free_capability.json()["detail"] == "Team Performance is unavailable"
+
+    async with school_client.session_maker() as session:  # type: ignore[attr-defined]
+        entitlement = await session.scalar(
+            select(OrganizationEntitlement).where(
+                OrganizationEntitlement.organization_id == organization["id"]
+            )
+        )
+        assert entitlement is not None
+        assert (entitlement.plan_key, entitlement.status, entitlement.source) == (
+            entitlement_snapshot[0],
+            "disabled",
+            entitlement_snapshot[2],
+        )
+        await session.delete(entitlement)
+        await session.commit()
+    denied_without_free_entitlement = school_client.get(endpoint, headers=owner.headers)
+    assert denied_without_free_entitlement.status_code == 403
+    assert denied_without_free_entitlement.json()["detail"] == "Team Performance is unavailable"
+
+    async with school_client.session_maker() as session:  # type: ignore[attr-defined]
+        _, changed = await revoke_organization_team_performance(
+            session,
+            organization_id=organization["id"],
+            grant_id=grant.id,
+            operator_user_id=owner.id,
+            reason="Pilot closed",
+        )
+        assert changed
+        await session.commit()
+    assert school_client.get(endpoint, headers=owner.headers).status_code == 403
+
+    expiring, _ = await _grant_async(
+        school_client,
+        organization["id"],
+        owner,
+        reason="Short pilot renewal",
+        effective_until=dt.datetime.now(dt.UTC) + dt.timedelta(days=1),
+    )
+    async with school_client.session_maker() as session:  # type: ignore[attr-defined]
+        current = await session.get(OrganizationTeamPerformanceGrant, expiring.id)
+        entitlement = await session.scalar(
+            select(OrganizationEntitlement).where(
+                OrganizationEntitlement.organization_id == organization["id"]
+            )
+        )
+        user = await session.get(User, owner.id)
+        assert current is not None and entitlement is None and user is not None
+        current.effective_from = dt.datetime.now(dt.UTC) - dt.timedelta(days=2)
+        current.effective_until = dt.datetime.now(dt.UTC) - dt.timedelta(days=1)
+        assert (user.role, user.subscription_plan, user.org_id) == account_snapshot
+        await session.commit()
+    expired_denial = school_client.get(endpoint, headers=owner.headers)
+    assert expired_denial.status_code == 403
+    assert expired_denial.json()["detail"] == "Team Performance is unavailable"
+    async with school_client.session_maker() as session:  # type: ignore[attr-defined]
+        entitlement = await session.scalar(
+            select(OrganizationEntitlement).where(
+                OrganizationEntitlement.organization_id == organization["id"]
+            )
+        )
+        user = await session.get(User, owner.id)
+        assert entitlement is None
+        assert user is not None
+        assert (user.role, user.subscription_plan, user.org_id) == account_snapshot
+
+
+@pytest.mark.asyncio
+async def test_grant_validity_and_renewal_constraints(school_client) -> None:
+    operator = register_user(school_client, "grant-constraints@example.com")
+    organization = create_school(school_client, operator, "Grant constraints")
+    start = dt.datetime.now(dt.UTC)
+    async with school_client.session_maker() as session:  # type: ignore[attr-defined]
+        for reason, effective_from, effective_until in (
+            (" ", None, None),
+            ("x" * 2001, None, None),
+            ("naive timestamp", start.replace(tzinfo=None), None),
+            ("invalid range", start, start),
+        ):
+            with pytest.raises(ValueError):
+                await grant_organization_team_performance(
+                    session,
+                    organization_id=organization["id"],
+                    operator_user_id=operator.id,
+                    reason=reason,
+                    effective_from=effective_from,
+                    effective_until=effective_until,
+                )
+
+    first, _ = await _grant_async(
+        school_client,
+        organization["id"],
+        operator,
+        effective_from=start,
+        effective_until=start + dt.timedelta(days=1),
+    )
+    async with school_client.session_maker() as session:  # type: ignore[attr-defined]
+        with pytest.raises(ValueError, match="already exists"):
+            await grant_organization_team_performance(
+                session,
+                organization_id=organization["id"],
+                operator_user_id=operator.id,
+                reason="Different active grant",
+            )
+    async with school_client.session_maker() as session:  # type: ignore[attr-defined]
+        expired = await session.get(OrganizationTeamPerformanceGrant, first.id)
+        assert expired is not None
+        expired.effective_from = dt.datetime.now(dt.UTC) - dt.timedelta(days=2)
+        expired.effective_until = dt.datetime.now(dt.UTC) - dt.timedelta(days=1)
+        await session.commit()
+    renewed, created = await _grant_async(
+        school_client,
+        organization["id"],
+        operator,
+        reason="Renewal after expiry",
+    )
+    assert created and renewed.id != first.id
+
+
+@pytest.mark.asyncio
+async def test_concurrent_grant_and_revoke_retries_are_serialized(school_client) -> None:
+    if school_client.session_maker.kw["bind"].dialect.name != "postgresql":  # type: ignore[attr-defined]
+        pytest.skip("Concurrent row-lock behavior is verified by the PostgreSQL gate")
+    operator = register_user(school_client, "concurrent-grant@example.com")
+    organization = create_school(school_client, operator, "Concurrent grant pilot")
+
+    async def grant_once():
+        async with school_client.session_maker() as session:  # type: ignore[attr-defined]
+            grant, created = await grant_organization_team_performance(
+                session,
+                organization_id=organization["id"],
+                operator_user_id=operator.id,
+                reason="Concurrent approved request",
+            )
+            await session.commit()
+            return grant.id, created
+
+    grant_results = await asyncio.gather(grant_once(), grant_once())
+    assert len({grant_id for grant_id, _ in grant_results}) == 1
+    assert sorted(created for _, created in grant_results) == [False, True]
+    grant_id = grant_results[0][0]
+
+    async def revoke_once():
+        async with school_client.session_maker() as session:  # type: ignore[attr-defined]
+            grant, changed = await revoke_organization_team_performance(
+                session,
+                organization_id=organization["id"],
+                grant_id=grant_id,
+                operator_user_id=operator.id,
+                reason="Concurrent close",
+            )
+            await session.commit()
+            return grant.id, changed
+
+    revoke_results = await asyncio.gather(revoke_once(), revoke_once())
+    assert {grant_id for grant_id, _ in revoke_results} == {grant_id}
+    assert sorted(changed for _, changed in revoke_results) == [False, True]

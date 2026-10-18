@@ -15,7 +15,7 @@ from backend.domain.constants import (
 )
 from backend.services import school_statistics_service
 from backend.sql_app import models
-from sqlalchemy import Select, String, and_, cast, func, or_, select
+from sqlalchemy import Select, String, and_, case, cast, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -108,6 +108,7 @@ class TeamAnalyticsResult:
     source_game_ids: tuple[str, ...]
     innings_attribution: tuple[InningsAttribution, ...]
     exclusions: tuple[AnalyticsExclusion, ...]
+    cohort_exclusion_counts: dict[str, int]
     batting: BattingTotals
     bowling: BowlingTotals
 
@@ -180,21 +181,77 @@ def _team_scope_clause(request: TeamAnalyticsRequest):
     )
 
 
+def _cohort_exclusion_expression(request: TeamAnalyticsRequest):
+    return case(
+        (
+            or_(
+                models.Game.match_purpose != "official",
+                models.Game.match_purpose.is_(None),
+            ),
+            "non_official_match",
+        ),
+        (
+            or_(
+                models.Game.status != models.GameStatus.completed,
+                models.Game.status.is_(None),
+            ),
+            "not_completed",
+        ),
+        (
+            or_(models.Game.match_type != "limited", models.Game.match_type.is_(None)),
+            "unsupported_match_type",
+        ),
+        (
+            or_(
+                models.Game.overs_limit != request.overs_limit,
+                models.Game.overs_limit.is_(None),
+            ),
+            "overs_limit_mismatch",
+        ),
+        (models.Game.days_limit.is_not(None), "multi_day_match"),
+        (
+            and_(
+                models.Game.match_rules.is_not(None),
+                cast(models.Game.match_rules, String) != "null",
+            ),
+            "unsupported_match_rules",
+        ),
+        else_=None,
+    )
+
+
+def _eligible_team_game_clause(request: TeamAnalyticsRequest):
+    return and_(
+        models.Game.match_purpose == "official",
+        models.Game.status == models.GameStatus.completed,
+        models.Game.match_type == "limited",
+        models.Game.overs_limit == request.overs_limit,
+        models.Game.days_limit.is_(None),
+        or_(
+            models.Game.match_rules.is_(None),
+            cast(models.Game.match_rules, String) == "null",
+        ),
+    )
+
+
 def _team_metadata_stmt(request: TeamAnalyticsRequest):
     return (
         select(
             models.Game.id,
-            models.Game.match_purpose,
-            models.Game.status,
-            models.Game.match_type,
-            models.Game.overs_limit,
-            models.Game.days_limit,
-            models.Game.match_rules,
             func.length(cast(models.Game.deliveries, String)),
         )
-        .where(_team_scope_clause(request))
+        .where(_team_scope_clause(request), _eligible_team_game_clause(request))
         .order_by(models.Game.id)
         .limit(MAX_CANDIDATE_GAMES + 1)
+    )
+
+
+def _cohort_exclusion_counts_stmt(request: TeamAnalyticsRequest):
+    reason = _cohort_exclusion_expression(request)
+    return (
+        select(reason, func.count(models.Game.id))
+        .where(_team_scope_clause(request), reason.is_not(None))
+        .group_by(reason)
     )
 
 
@@ -210,31 +267,6 @@ def _team_games_stmt(
         )
         .order_by(models.Game.id)
     )
-
-
-def _cohort_exclusion(
-    *,
-    match_purpose: str,
-    status: models.GameStatus,
-    match_type: str,
-    overs_limit: int | None,
-    days_limit: int | None,
-    match_rules: object,
-    requested_overs_limit: int,
-) -> str | None:
-    if match_purpose != "official":
-        return "non_official_match"
-    if status != models.GameStatus.completed:
-        return "not_completed"
-    if match_type != "limited":
-        return "unsupported_match_type"
-    if overs_limit != requested_overs_limit:
-        return "overs_limit_mismatch"
-    if days_limit is not None:
-        return "multi_day_match"
-    if match_rules is not None:
-        return "unsupported_match_rules"
-    return None
 
 
 def _frozen_side_ids(side: dict, *, require_canonical: bool) -> set[str] | None:
@@ -464,36 +496,19 @@ async def calculate_team_limited_overs_analytics(
 
     metadata_rows = (await db.execute(_team_metadata_stmt(request))).all()
     if len(metadata_rows) > MAX_CANDIDATE_GAMES:
-        raise TeamAnalyticsScopeTooLargeError("Team Performance candidate-game limit exceeded")
-    eligible_game_ids: set[str] = set()
+        raise TeamAnalyticsScopeTooLargeError("Team Performance eligible-game limit exceeded")
+    eligible_game_ids = {game_id for game_id, _ in metadata_rows}
+    cohort_exclusion_counts = {
+        reason: count
+        for reason, count in (await db.execute(_cohort_exclusion_counts_stmt(request))).all()
+        if reason is not None
+    }
     exclusions: list[AnalyticsExclusion] = []
     eligible_delivery_payload_bytes = 0
-    for (
-        game_id,
-        match_purpose,
-        status,
-        match_type,
-        overs_limit,
-        days_limit,
-        match_rules,
-        delivery_payload_chars,
-    ) in metadata_rows:
-        reason = _cohort_exclusion(
-            match_purpose=match_purpose,
-            status=status,
-            match_type=match_type,
-            overs_limit=overs_limit,
-            days_limit=days_limit,
-            match_rules=match_rules,
-            requested_overs_limit=request.overs_limit,
-        )
-        if reason is None:
-            eligible_game_ids.add(game_id)
-            eligible_delivery_payload_bytes += (
-                delivery_payload_chars or 0
-            ) * MAX_JSON_BYTES_PER_CHARACTER
-        else:
-            exclusions.append(AnalyticsExclusion(game_id, reason))
+    for _, delivery_payload_chars in metadata_rows:
+        eligible_delivery_payload_bytes += (
+            delivery_payload_chars or 0
+        ) * MAX_JSON_BYTES_PER_CHARACTER
     if eligible_delivery_payload_bytes > MAX_DELIVERY_PAYLOAD_BYTES:
         raise TeamAnalyticsScopeTooLargeError(
             "Team Performance recorded-delivery payload limit exceeded"
@@ -655,6 +670,7 @@ async def calculate_team_limited_overs_analytics(
         source_game_ids=tuple(sorted(source_game_ids)),
         innings_attribution=tuple(attributions),
         exclusions=tuple(exclusions),
+        cohort_exclusion_counts=cohort_exclusion_counts,
         batting=_finish_batting(batting),
         bowling=_finish_bowling(bowling),
     )

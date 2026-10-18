@@ -3,10 +3,7 @@ import { onBeforeUnmount, ref, watch } from 'vue';
 
 import { useSchoolContext } from '@/composables/useSchoolContext';
 import { getErrorMessage } from '@/services/api';
-import {
-  getOrganizationTeamPerformance,
-  listSchoolTeams,
-} from '@/services/schoolAdminApi';
+import { getOrganizationTeamPerformance, listSchoolTeams } from '@/services/schoolAdminApi';
 import type { OrganizationTeamPerformance, SchoolTeam } from '@/types/schoolAdmin';
 
 type ViewState =
@@ -72,10 +69,17 @@ watch(
       }
       teams.value = result;
       teamsOrganizationId.value = requestedOrganizationId;
-      selectedTeamId.value = result.find((team) => team.status === 'active')?.id ?? result[0]?.id ?? '';
+      selectedTeamId.value =
+        result.find((team) => team.status === 'active')?.id ?? result[0]?.id ?? '';
       if (!result.length) state.value = 'no_team';
     } catch (reason) {
-      if (teamsRequestGeneration !== teamGeneration) return;
+      if (
+        teamsRequestGeneration !== teamGeneration ||
+        requestedOrganizationId !== organizationId.value ||
+        !canManageTeams.value
+      ) {
+        return;
+      }
       state.value = failureStatus(reason);
       if (state.value === 'request_failure') error.value = getErrorMessage(reason);
     }
@@ -127,7 +131,9 @@ watch(
       if (
         analyticsRequestGeneration !== requestGeneration ||
         requestedOrganizationId !== organizationId.value ||
-        requestedTeamId !== selectedTeamId.value
+        requestedTeamId !== selectedTeamId.value ||
+        requestedOvers !== oversLimit.value ||
+        !canManageTeams.value
       ) {
         return;
       }
@@ -206,38 +212,62 @@ onBeforeUnmount(() => {
         v-if="state === 'usable_with_exclusions' || state === 'usable_recorded_data'"
         class="cards"
       >
-        <section class="metric-card" aria-labelledby="batting-heading">
+        <section
+          v-if="data.coverage.usable_batting_innings > 0"
+          class="metric-card"
+          aria-labelledby="batting-heading"
+        >
           <h3 id="batting-heading">Team batting</h3>
           <dl>
-            <dt>Team runs</dt><dd>{{ data.batting.team_runs }}</dd>
-            <dt>Bat runs</dt><dd>{{ data.batting.bat_runs }}</dd>
-            <dt>Wickets lost</dt><dd>{{ data.batting.wickets_lost }}</dd>
+            <dt>Team runs</dt>
+            <dd>{{ data.batting.team_runs }}</dd>
+            <dt>Bat runs</dt>
+            <dd>{{ data.batting.bat_runs }}</dd>
+            <dt>Wickets lost</dt>
+            <dd>{{ data.batting.wickets_lost }}</dd>
             <dt>Legal balls (overs)</dt>
             <dd>{{ data.batting.legal_balls }} ({{ formatOvers(data.batting.legal_balls) }})</dd>
-            <dt>Run rate</dt><dd>{{ data.batting.run_rate ?? '—' }}</dd>
-            <dt>Legal dots</dt><dd>{{ data.batting.legal_dots }}</dd>
+            <dt>Run rate</dt>
+            <dd>{{ data.batting.run_rate ?? '—' }}</dd>
+            <dt>Legal dots</dt>
+            <dd>{{ data.batting.legal_dots }}</dd>
             <dt>Wides / no-ball penalties</dt>
             <dd>{{ data.batting.wides }} / {{ data.batting.no_ball_penalties }}</dd>
-            <dt>Byes / leg-byes</dt><dd>{{ data.batting.byes }} / {{ data.batting.leg_byes }}</dd>
-            <dt>Recorded fours / sixes</dt><dd>{{ data.batting.fours }} / {{ data.batting.sixes }}</dd>
-            <dt>Team runs per wicket</dt><dd>{{ data.batting.runs_per_wicket ?? '—' }}</dd>
+            <dt>Byes / leg-byes</dt>
+            <dd>{{ data.batting.byes }} / {{ data.batting.leg_byes }}</dd>
+            <dt>Recorded fours / sixes</dt>
+            <dd>{{ data.batting.fours }} / {{ data.batting.sixes }}</dd>
+            <dt>Team runs per wicket</dt>
+            <dd>{{ data.batting.runs_per_wicket ?? '—' }}</dd>
           </dl>
         </section>
-        <section class="metric-card" aria-labelledby="bowling-heading">
+        <section
+          v-if="data.coverage.usable_bowling_innings > 0"
+          class="metric-card"
+          aria-labelledby="bowling-heading"
+        >
           <h3 id="bowling-heading">Team bowling</h3>
           <dl>
-            <dt>Opposition team runs conceded</dt><dd>{{ data.bowling.opposition_team_runs }}</dd>
-            <dt>Bowler-charged runs</dt><dd>{{ data.bowling.bowler_charged_runs }}</dd>
+            <dt>Opposition team runs conceded</dt>
+            <dd>{{ data.bowling.opposition_team_runs }}</dd>
+            <dt>Bowler-charged runs</dt>
+            <dd>{{ data.bowling.bowler_charged_runs }}</dd>
             <dt>Legal balls (overs)</dt>
             <dd>{{ data.bowling.legal_balls }} ({{ formatOvers(data.bowling.legal_balls) }})</dd>
-            <dt>Team concession rate</dt><dd>{{ data.bowling.team_concession_rate ?? '—' }}</dd>
-            <dt>Bowling economy</dt><dd>{{ data.bowling.bowling_economy ?? '—' }}</dd>
-            <dt>Team wickets</dt><dd>{{ data.bowling.team_wickets }}</dd>
-            <dt>Bowler-credited wickets</dt><dd>{{ data.bowling.bowler_credited_wickets }}</dd>
-            <dt>Legal dots</dt><dd>{{ data.bowling.legal_dots }}</dd>
+            <dt>Team concession rate</dt>
+            <dd>{{ data.bowling.team_concession_rate ?? '—' }}</dd>
+            <dt>Bowling economy</dt>
+            <dd>{{ data.bowling.bowling_economy ?? '—' }}</dd>
+            <dt>Team wickets</dt>
+            <dd>{{ data.bowling.team_wickets }}</dd>
+            <dt>Bowler-credited wickets</dt>
+            <dd>{{ data.bowling.bowler_credited_wickets }}</dd>
+            <dt>Legal dots</dt>
+            <dd>{{ data.bowling.legal_dots }}</dd>
             <dt>Wides / no-ball penalties</dt>
             <dd>{{ data.bowling.wides }} / {{ data.bowling.no_ball_penalties }}</dd>
-            <dt>Byes / leg-byes</dt><dd>{{ data.bowling.byes }} / {{ data.bowling.leg_byes }}</dd>
+            <dt>Byes / leg-byes</dt>
+            <dd>{{ data.bowling.byes }} / {{ data.bowling.leg_byes }}</dd>
           </dl>
         </section>
       </div>
@@ -247,14 +277,20 @@ onBeforeUnmount(() => {
         <dl>
           <dt>Eligible / included games</dt>
           <dd>{{ data.coverage.eligible_games }} / {{ data.coverage.included_games }}</dd>
-          <dt>Usable batting innings</dt><dd>{{ data.coverage.usable_batting_innings }}</dd>
-          <dt>Usable bowling innings</dt><dd>{{ data.coverage.usable_bowling_innings }}</dd>
+          <dt>Usable batting innings</dt>
+          <dd>{{ data.coverage.usable_batting_innings }}</dd>
+          <dt>Usable bowling innings</dt>
+          <dd>{{ data.coverage.usable_bowling_innings }}</dd>
           <dt>Used / observed delivery rows</dt>
-          <dd>{{ data.coverage.used_delivery_rows }} / {{ data.coverage.observed_delivery_rows }}</dd>
+          <dd>
+            {{ data.coverage.used_delivery_rows }} / {{ data.coverage.observed_delivery_rows }}
+          </dd>
           <dt>Excluded games / innings</dt>
           <dd>{{ data.coverage.excluded_games }} / {{ data.coverage.excluded_innings }}</dd>
-          <dt>Ordinary cohort exclusions</dt><dd>{{ data.coverage.cohort_excluded_games }}</dd>
-          <dt>No-ledger games</dt><dd>{{ data.coverage.no_ledger_games }}</dd>
+          <dt>Ordinary cohort exclusions</dt>
+          <dd>{{ data.coverage.cohort_excluded_games }}</dd>
+          <dt>No-ledger games</dt>
+          <dd>{{ data.coverage.no_ledger_games }}</dd>
           <dt>Invalid/missing-data games / innings</dt>
           <dd>{{ data.coverage.invalid_data_games }} / {{ data.coverage.invalid_data_innings }}</dd>
         </dl>
@@ -267,13 +303,34 @@ onBeforeUnmount(() => {
             {{ code.replace(/_/g, ' ') }}: {{ count }}
           </li>
         </ul>
-        <ul v-if="Object.keys(data.coverage.warning_counts).length" class="warnings">
+        <ul
+          v-if="Object.keys(data.coverage.warning_counts).length"
+          class="warnings"
+          aria-label="Recorded-data validation warnings"
+        >
           <li v-for="(count, code) in data.coverage.warning_counts" :key="code">
             {{ code.replace(/_/g, ' ') }}: {{ count }}
           </li>
         </ul>
-        <p v-if="state === 'usable_with_exclusions'" class="notice">
-          Usable recorded data is shown with exclusions and validation warnings.
+        <p v-if="data.coverage.cohort_excluded_games" class="notice">
+          Games outside the selected format or cohort are counted separately.
+        </p>
+        <p v-if="Object.keys(data.coverage.warning_counts).length" class="notice">
+          Usable recorded data is shown with validation warnings.
+        </p>
+        <p
+          v-if="data.coverage.eligible_games > 0 && data.coverage.usable_batting_innings === 0"
+          class="notice"
+          role="status"
+        >
+          No usable batting data.
+        </p>
+        <p
+          v-if="data.coverage.eligible_games > 0 && data.coverage.usable_bowling_innings === 0"
+          class="notice"
+          role="status"
+        >
+          No usable bowling data.
         </p>
       </section>
     </template>
