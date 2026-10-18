@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import asyncio
 import datetime as dt
+import json
+import threading
 
 import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
-from sqlalchemy import event, select
+from sqlalchemy import create_engine, event, inspect, select
 from sqlalchemy.exc import IntegrityError
 
 from backend.services.organization_team_performance_access import (
@@ -999,6 +1001,157 @@ async def test_readiness_refreshes_corrected_date_in_reused_session(
         corrected = await evaluate_team_match_readiness(session, request)
         assert corrected.usable_prior_match_count == 4
         assert corrected.state == "not_ready"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("case_name", "game_count", "bytes_per_game", "candidate_limit"),
+    [
+        ("single", 1, 5 * 1024 * 1024 + 1024, None),
+        ("cumulative", 2, 3 * 1024 * 1024, None),
+        ("candidate_count", 2, 2 * 1024 * 1024, 1),
+    ],
+)
+async def test_readiness_oversize_query_does_not_hydrate_delivery_payloads(
+    school_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    case_name: str,
+    game_count: int,
+    bytes_per_game: int,
+    candidate_limit: int | None,
+) -> None:
+    owner = register_user(school_client, f"history-bounded-{case_name}@example.com")
+    organization = create_school(school_client, owner, f"History Bounded {case_name}")
+    team = None
+    games: list[Game] = []
+    for index in range(game_count):
+        team, game = await _add_history_game(
+            school_client,
+            organization_id=organization["id"],
+            owner_id=owner.id,
+            played_date=dt.date(2026, 8, index + 1),
+            reuse_team=team,
+        )
+        games.append(game)
+    assert team is not None
+    padding = "x" * bytes_per_game
+    async with school_client.session_maker() as session:  # type: ignore[attr-defined]
+        for game in games:
+            stored = await session.get(Game, game.id)
+            assert stored is not None
+            stored.deliveries = [{"payload_padding": padding}]
+        await session.commit()
+    await _grant(school_client, organization["id"], owner.id)
+
+    import backend.services.school_team_readiness_service as readiness_service
+
+    if candidate_limit is not None:
+        monkeypatch.setattr(readiness_service, "MAX_CANDIDATE_GAMES", candidate_limit)
+    request = TeamReadinessRequest(
+        actor_user_id=owner.id,
+        organization_id=organization["id"],
+        team_id=team.id,
+        as_of_date=dt.date(2026, 9, 1),
+    )
+    async with school_client.session_maker() as session:  # type: ignore[attr-defined]
+        tracked = [await session.get(Game, game.id) for game in games]
+        assert all(game is not None for game in tracked)
+        for game in tracked:
+            session.expire(game, ["deliveries"])
+        rows = (
+            await session.execute(
+                readiness_service._readiness_candidates_stmt(
+                    request,
+                    session.get_bind().dialect.name,
+                )
+            )
+        ).all()
+        assert len(rows) == game_count
+        assert all(row[1] is None for row in rows)
+        assert all("deliveries" in inspect(row[0]).unloaded for row in rows)
+        assert rows[0][2] == game_count
+        if candidate_limit is not None:
+            assert rows[0][2] > candidate_limit
+            assert rows[0][3] < readiness_service.MAX_DELIVERY_PAYLOAD_BYTES
+        else:
+            assert rows[0][3] > readiness_service.MAX_DELIVERY_PAYLOAD_BYTES
+
+        result = await evaluate_team_match_readiness(session, request)
+        assert result.state == "data_unavailable"
+        assert result.exclusion_counts["scope_too_large"] == 1
+        assert all("deliveries" in inspect(game).unloaded for game in tracked)
+
+
+@pytest.mark.asyncio
+async def test_readiness_payload_growth_before_candidate_snapshot_is_rejected(
+    school_client: TestClient,
+) -> None:
+    owner = register_user(school_client, "history-concurrent-payload-owner@example.com")
+    organization = create_school(school_client, owner, "History Concurrent Payload Growth")
+    team, game = await _add_history_game(
+        school_client,
+        organization_id=organization["id"],
+        owner_id=owner.id,
+        played_date=dt.date(2026, 8, 1),
+    )
+    await _grant(school_client, organization["id"], owner.id)
+    writer_started = threading.Event()
+    writer_finished = threading.Event()
+    update_errors: list[BaseException] = []
+    large_ledger = [{"payload_padding": "x" * (5 * 1024 * 1024 + 1024)}]
+
+    async with school_client.session_maker() as session:  # type: ignore[attr-defined]
+        if session.get_bind().dialect.name != "postgresql":
+            pytest.skip("Concurrent payload snapshot is covered in migrated PostgreSQL tests")
+        sync_url = session.get_bind().url.set(drivername="postgresql+psycopg2")
+
+        def update_ledger() -> None:
+            try:
+                writer_started.wait(timeout=10)
+                writer_engine = create_engine(sync_url)
+                with writer_engine.begin() as connection:
+                    connection.exec_driver_sql(
+                        "UPDATE games SET deliveries = CAST(%s AS JSONB) WHERE id = %s",
+                        (
+                            json.dumps(large_ledger),
+                            game.id,
+                        ),
+                    )
+                writer_engine.dispose()
+            except BaseException as error:
+                update_errors.append(error)
+            finally:
+                writer_finished.set()
+
+        writer = threading.Thread(target=update_ledger, daemon=True)
+        writer.start()
+        candidate_queries = 0
+
+        def grow_before_snapshot(conn, cursor, statement, parameters, context, executemany):
+            nonlocal candidate_queries
+            if "readiness_candidate_metrics" in statement:
+                candidate_queries += 1
+                writer_started.set()
+                assert writer_finished.wait(timeout=15)
+
+        event.listen(session.sync_session.bind, "before_cursor_execute", grow_before_snapshot)
+        try:
+            result = await evaluate_team_match_readiness(
+                session,
+                TeamReadinessRequest(
+                    actor_user_id=owner.id,
+                    organization_id=organization["id"],
+                    team_id=team.id,
+                    as_of_date=dt.date(2026, 9, 1),
+                ),
+            )
+        finally:
+            event.remove(session.sync_session.bind, "before_cursor_execute", grow_before_snapshot)
+            writer.join(timeout=10)
+        assert not update_errors
+        assert candidate_queries == 1
+        assert result.state == "data_unavailable"
+        assert result.exclusion_counts["scope_too_large"] == 1
 
 
 @pytest.mark.asyncio

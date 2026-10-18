@@ -8,8 +8,9 @@ import json
 from dataclasses import dataclass
 from typing import Literal
 
-from sqlalchemy import select
+from sqlalchemy import and_, case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import defer
 
 from backend.services.organization_team_performance_access import (
     TeamPerformanceAccessError,
@@ -128,8 +129,47 @@ def _candidate_clause(request: TeamReadinessRequest):
     )
 
 
+def _readiness_candidates_stmt(request: TeamReadinessRequest, dialect_name: str):
+    byte_length = _delivery_payload_byte_length(dialect_name)
+    candidate_metrics = (
+        select(
+            models.Game.id.label("game_id"),
+            byte_length.label("payload_bytes"),
+        )
+        .where(_candidate_clause(request))
+        .order_by(models.Game.id)
+        .limit(MAX_CANDIDATE_GAMES + 1)
+        .cte("readiness_candidate_metrics")
+    )
+    bounded_metrics = select(
+        candidate_metrics.c.game_id,
+        candidate_metrics.c.payload_bytes,
+        func.count().over().label("candidate_count"),
+        func.sum(func.coalesce(candidate_metrics.c.payload_bytes, 0))
+        .over()
+        .label("candidate_payload_bytes"),
+    ).cte("bounded_readiness_metrics")
+    within_limits = and_(
+        bounded_metrics.c.candidate_count <= MAX_CANDIDATE_GAMES,
+        bounded_metrics.c.candidate_payload_bytes <= MAX_DELIVERY_PAYLOAD_BYTES,
+    )
+    return (
+        select(
+            models.Game,
+            case((within_limits, models.Game.deliveries), else_=None).label("bounded_deliveries"),
+            bounded_metrics.c.candidate_count,
+            bounded_metrics.c.candidate_payload_bytes,
+        )
+        .join(bounded_metrics, bounded_metrics.c.game_id == models.Game.id)
+        .order_by(models.Game.id)
+        .options(defer(models.Game.deliveries))
+        .execution_options(populate_existing=True)
+    )
+
+
 async def _validate_game_ledger(
     game: models.Game,
+    raw_deliveries: object,
     *,
     organization_id: str,
     team_id: str,
@@ -170,7 +210,6 @@ async def _validate_game_ledger(
         "team_b": ids_b,
     }
 
-    raw_deliveries = game.deliveries
     if not isinstance(raw_deliveries, list) or not raw_deliveries:
         return "missing_ledger", None
     grouped: dict[int, list[dict]] = {}
@@ -251,27 +290,20 @@ async def evaluate_team_match_readiness(
         actor_user_id=request.actor_user_id,
     )
 
-    candidate_clause = _candidate_clause(request)
-    byte_length = _delivery_payload_byte_length(db.get_bind().dialect.name)
     candidates = (
-        await db.execute(
-            select(models.Game, byte_length)
-            .where(candidate_clause)
-            .order_by(models.Game.id)
-            .limit(MAX_CANDIDATE_GAMES + 1)
-            .execution_options(populate_existing=True)
-        )
+        await db.execute(_readiness_candidates_stmt(request, db.get_bind().dialect.name))
     ).all()
     counts = _empty_counts()
-    if len(candidates) > MAX_CANDIDATE_GAMES or sum(row[1] or 0 for row in candidates) > (
-        MAX_DELIVERY_PAYLOAD_BYTES
+    if candidates and (
+        candidates[0][2] > MAX_CANDIDATE_GAMES or candidates[0][3] > MAX_DELIVERY_PAYLOAD_BYTES
     ):
         counts["scope_too_large"] = 1
         return _summary(request, state="data_unavailable", counts=counts)
-    games = [row[0] for row in candidates]
+    games_and_deliveries = [(row[0], row[1]) for row in candidates]
+    games = [game for game, _ in games_and_deliveries]
     by_id = {game.id: game for game in games}
     candidate_team_ids: set[str] = set()
-    for game in games:
+    for game, _raw_deliveries in games_and_deliveries:
         for side in (game.team_a, game.team_b):
             if not isinstance(side, dict) or "school_source" not in side:
                 continue
@@ -313,6 +345,7 @@ async def evaluate_team_match_readiness(
             return _summary(request, state="data_unavailable", counts=counts)
 
     eligible: list[tuple[models.Game, str]] = []
+    delivery_payloads = {game.id: payload for game, payload in games_and_deliveries}
     for game in games:
         if game.id == request.reference_game_id:
             counts["reference_game"] += 1
@@ -347,6 +380,7 @@ async def evaluate_team_match_readiness(
         if reason is None:
             reason, digest = await _validate_game_ledger(
                 game,
+                delivery_payloads[game.id],
                 organization_id=request.organization_id,
                 team_id=request.team_id,
                 existing_team_ids=existing_team_ids,
