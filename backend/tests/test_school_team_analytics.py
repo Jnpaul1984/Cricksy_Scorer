@@ -400,6 +400,7 @@ async def test_team_analytics_excludes_missing_unknown_and_ambiguous_delivery_da
         "ambiguous_player",
         "missing_tag",
         "ambiguous_side",
+        "retired_hurt",
     ):
         team, game, target, opponent = await _seed_team_game(
             school_client, organization["id"], owner.id, deliveries=[]
@@ -413,6 +414,14 @@ async def test_team_analytics_excludes_missing_unknown_and_ambiguous_delivery_da
             record["striker_id"] = str(uuid.uuid4())
         elif failure == "ambiguous_side":
             record = _hand_calculated_deliveries(target, opponent)[0]
+        elif failure == "retired_hurt":
+            record.update(
+                {
+                    "is_wicket": True,
+                    "dismissal_type": "retired_hurt",
+                    "dismissed_player_id": target[0].player_id,
+                }
+            )
         else:
             record.pop("inning")
         async with school_client.session_maker() as session:  # type: ignore[attr-defined]
@@ -441,6 +450,7 @@ async def test_team_analytics_excludes_missing_unknown_and_ambiguous_delivery_da
         "ambiguous_innings_side",
         "ambiguous_team_side",
         "invalid_innings_tag",
+        "invalid_dismissal_record",
     } <= reason_codes
 
 

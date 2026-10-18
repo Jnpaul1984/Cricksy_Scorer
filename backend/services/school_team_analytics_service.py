@@ -307,6 +307,8 @@ def _delivery_error(
         if not isinstance(dismissed_id, str) or dismissed_id not in side_ids[batting_side]:
             return "ambiguous_dismissed_player_identity"
         normalized_dismissal = dismissal.strip().lower()
+        if normalized_dismissal == "retired_hurt":
+            return "invalid_dismissal_record"
         if extra == "nb" and normalized_dismissal in INVALID_ON_NO_BALL:
             return "invalid_dismissal_record"
         if extra == "wd" and normalized_dismissal in INVALID_ON_WIDE:
