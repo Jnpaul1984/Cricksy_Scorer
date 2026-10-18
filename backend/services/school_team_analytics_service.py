@@ -2,10 +2,17 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Literal, TypedDict
 
-from backend.domain.constants import CREDIT_BOWLER, INVALID_ON_NO_BALL, INVALID_ON_WIDE, norm_extra
+from backend.domain.constants import (
+    CREDIT_BOWLER,
+    CREDIT_TEAM,
+    INVALID_ON_NO_BALL,
+    INVALID_ON_WIDE,
+    norm_extra,
+)
 from backend.services import school_statistics_service
 from backend.sql_app import models
 from sqlalchemy import Select, and_, or_, select
@@ -51,6 +58,8 @@ CoverageStatus = Literal[
     "invalid_or_ambiguous_records",
     "usable_recorded_data",
 ]
+_SUPPORTED_INNINGS: frozenset[int] = frozenset({1, 2})
+_SUPPORTED_DISMISSALS = CREDIT_BOWLER | CREDIT_TEAM
 
 
 @dataclass(frozen=True)
@@ -252,6 +261,14 @@ def _integer_field(delivery: dict, field: str) -> int | None:
     return value
 
 
+def _normalize_dismissal_type(value: str) -> str:
+    normalized = re.sub(r"[\s-]+", "_", value.strip().lower())
+    return {
+        "handled_the_ball": "handled_ball",
+        "hit_the_ball_twice": "hit_ball_twice",
+    }.get(normalized, normalized)
+
+
 def _delivery_error(
     delivery: dict,
     *,
@@ -261,6 +278,8 @@ def _delivery_error(
     inning = delivery.get("inning")
     if type(inning) is not int or inning < 1:
         return "invalid_innings_tag"
+    if inning not in _SUPPORTED_INNINGS:
+        return "unsupported_innings_tag"
     if any(
         _integer_field(delivery, key) is None
         for key in ("runs_off_bat", "extra_runs", "runs_scored")
@@ -312,9 +331,11 @@ def _delivery_error(
             return "invalid_dismissal_record"
         if not isinstance(dismissed_id, str) or dismissed_id not in side_ids[batting_side]:
             return "ambiguous_dismissed_player_identity"
-        normalized_dismissal = dismissal.strip().lower()
+        normalized_dismissal = _normalize_dismissal_type(dismissal)
         if normalized_dismissal == "retired_hurt":
             return "invalid_dismissal_record"
+        if normalized_dismissal not in _SUPPORTED_DISMISSALS:
+            return "unsupported_dismissal_type"
         if extra == "nb" and normalized_dismissal in INVALID_ON_NO_BALL:
             return "invalid_dismissal_record"
         if extra == "wd" and normalized_dismissal in INVALID_ON_WIDE:
@@ -344,7 +365,10 @@ def _add_delivery(
     else:
         totals["opposition_team_runs"] += team_runs
         totals["team_wickets"] += int(delivery["is_wicket"])
-        if delivery["is_wicket"] and delivery["dismissal_type"].strip().lower() in CREDIT_BOWLER:
+        if (
+            delivery["is_wicket"]
+            and _normalize_dismissal_type(delivery["dismissal_type"]) in CREDIT_BOWLER
+        ):
             totals["bowler_credited_wickets"] += 1
 
     if extra == "wd":
@@ -518,6 +542,11 @@ async def calculate_team_limited_overs_analytics(
             inning = record.get("inning")
             if type(inning) is not int or inning < 1:
                 exclusions.append(AnalyticsExclusion(game.id, "invalid_innings_tag"))
+                invalid_records = True
+                game_has_unattributed_record = True
+                continue
+            if inning not in _SUPPORTED_INNINGS:
+                exclusions.append(AnalyticsExclusion(game.id, "unsupported_innings_tag", inning))
                 invalid_records = True
                 game_has_unattributed_record = True
                 continue
