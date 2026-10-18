@@ -598,6 +598,83 @@ async def test_team_analytics_excludes_a_foreign_opposite_side_in_sql(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("target_side", ["team_a", "team_b"])
+@pytest.mark.parametrize("malformed_side", [[], "not-an-object"])
+async def test_team_analytics_excludes_malformed_opposite_side_snapshots(
+    school_client: TestClient,
+    target_side: str,
+    malformed_side: object,
+) -> None:
+    owner = register_user(
+        school_client,
+        f"team-analytics-malformed-side-{target_side}-{type(malformed_side).__name__}@example.com",
+    )
+    organization = create_school(school_client, owner, "Malformed Side Analytics Org")
+    team, game, target_players, opponent_players = await _seed_team_game(
+        school_client,
+        organization["id"],
+        owner.id,
+        deliveries=[],
+    )
+    async with school_client.session_maker() as session:  # type: ignore[attr-defined]
+        saved = await session.get(Game, game.id)
+        assert saved is not None
+        valid_target = _team_snapshot(organization["id"], team.id, target_players)
+        if target_side == "team_a":
+            saved.team_a = valid_target
+            saved.team_b = malformed_side
+        else:
+            saved.team_a = malformed_side
+            saved.team_b = valid_target
+        saved.deliveries = [
+            _delivery(
+                1,
+                target_players[0].player_id,
+                target_players[1].player_id,
+                opponent_players[0].player_id,
+                runs=4,
+            )
+        ]
+        await session.commit()
+    async with school_client.session_maker() as session:  # type: ignore[attr-defined]
+        result = await calculate_team_limited_overs_analytics(
+            session, TeamAnalyticsRequest(owner.id, organization["id"], team.id, 20)
+        )
+    assert result.coverage_status == "invalid_or_ambiguous_records"
+    assert result.source_game_ids == ()
+    assert result.observed_delivery_count == 1
+    assert result.included_innings_count == 0
+    assert [(row.game_id, row.reason_code) for row in result.exclusions] == [
+        (game.id, "invalid_frozen_side_identity")
+    ]
+
+
+@pytest.mark.asyncio
+async def test_team_analytics_excludes_non_list_deliveries_container(
+    school_client: TestClient,
+) -> None:
+    owner = register_user(school_client, "team-analytics-invalid-container@example.com")
+    organization = create_school(school_client, owner, "Invalid Container Analytics Org")
+    team, game, _, _ = await _seed_team_game(
+        school_client, organization["id"], owner.id, deliveries=[]
+    )
+    async with school_client.session_maker() as session:  # type: ignore[attr-defined]
+        saved = await session.get(Game, game.id)
+        assert saved is not None
+        saved.deliveries = {"not": "a list"}  # type: ignore[assignment]
+        await session.commit()
+    async with school_client.session_maker() as session:  # type: ignore[attr-defined]
+        result = await calculate_team_limited_overs_analytics(
+            session, TeamAnalyticsRequest(owner.id, organization["id"], team.id, 20)
+        )
+    assert result.coverage_status == "invalid_or_ambiguous_records"
+    assert result.observed_delivery_count == 0
+    assert [(row.game_id, row.reason_code) for row in result.exclusions] == [
+        (game.id, "invalid_ledger_shape")
+    ]
+
+
+@pytest.mark.asyncio
 async def test_team_analytics_denies_inactive_and_removed_membership(
     school_client: TestClient,
 ) -> None:

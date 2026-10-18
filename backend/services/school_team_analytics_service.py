@@ -466,6 +466,12 @@ async def calculate_team_limited_overs_analytics(
 
     for game in games:
         raw_deliveries = game.deliveries
+        if isinstance(raw_deliveries, list):
+            observed_deliveries += len(raw_deliveries)
+        if not isinstance(game.team_a, dict) or not isinstance(game.team_b, dict):
+            exclusions.append(AnalyticsExclusion(game.id, "invalid_frozen_side_identity"))
+            invalid_records = True
+            continue
         if raw_deliveries is None or raw_deliveries == []:
             exclusions.append(AnalyticsExclusion(game.id, "no_usable_ledger"))
             no_ledger = True
@@ -474,7 +480,6 @@ async def calculate_team_limited_overs_analytics(
             exclusions.append(AnalyticsExclusion(game.id, "invalid_ledger_shape"))
             invalid_records = True
             continue
-        observed_deliveries += len(raw_deliveries)
 
         team_a_org, team_a_id = _school_source(game.team_a)
         team_b_org, team_b_id = _school_source(game.team_b)
