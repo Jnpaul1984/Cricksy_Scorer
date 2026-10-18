@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import datetime as dt
 import uuid
 from dataclasses import dataclass
 
@@ -454,6 +455,16 @@ async def test_match_snapshot_and_canonical_identity_survive_roster_lifecycle_ch
     first_id = first.json()["game_id"]
     second_id = second.json()["game_id"]
     assert first.json()["team_a_player_profile_ids"] == second.json()["team_a_player_profile_ids"]
+    confirmed_date = school_client.patch(
+        f"/games/{first_id}/team-performance-metadata",
+        json={
+            "expected_revision": 1,
+            "reason": "Confirm test match played date",
+            "actual_played_date": "2026-02-01",
+        },
+        headers=actor.headers,
+    )
+    assert confirmed_date.status_code == 200, confirmed_date.text
 
     session_maker = school_client.session_maker  # type: ignore[attr-defined]
     is_postgres = False
@@ -463,6 +474,18 @@ async def test_match_snapshot_and_canonical_identity_survive_roster_lifecycle_ch
         assert game is not None
         is_postgres = session.bind is not None and session.bind.dialect.name == "postgresql"
         frozen_team_a = game.team_a.copy()
+        assert game.actual_played_date == dt.date(2026, 2, 1)
+        assert game.original_overs_limit == 20
+        assert game.team_performance_metadata_revision == 2
+        expected_provenance = (
+            game.actual_played_date,
+            game.played_date_trust_state,
+            game.played_date_source,
+            game.original_overs_limit,
+            game.original_format_trust_state,
+            game.original_format_source,
+            game.team_performance_metadata_revision,
+        )
 
     if is_postgres:
         scored = school_client.post(
@@ -479,6 +502,18 @@ async def test_match_snapshot_and_canonical_identity_survive_roster_lifecycle_ch
         )
         assert scored.status_code == 200, scored.text
         assert scored.json()["score"]["runs"] == 4
+        async with session_maker() as session:
+            scored_game = await session.get(Game, first_id)
+            assert scored_game is not None
+            assert (
+                scored_game.actual_played_date,
+                scored_game.played_date_trust_state,
+                scored_game.played_date_source,
+                scored_game.original_overs_limit,
+                scored_game.original_format_trust_state,
+                scored_game.original_format_source,
+                scored_game.team_performance_metadata_revision,
+            ) == expected_provenance
 
     async with session_maker() as session:
         roster_member = await session.get(SchoolTeamPlayerMembership, team_a.membership_ids[0])
@@ -515,7 +550,6 @@ async def test_match_snapshot_and_canonical_identity_survive_roster_lifecycle_ch
     assert [player["id"] for player in snapshot.json()["players"]["batting"]] == list(
         team_a.profile_ids
     )
-
     result = school_client.post(
         f"/games/{first_id}/results",
         json={
@@ -530,6 +564,20 @@ async def test_match_snapshot_and_canonical_identity_survive_roster_lifecycle_ch
     persisted_result = school_client.get(f"/games/{first_id}/results", headers=actor.headers)
     assert persisted_result.status_code == 200
     assert persisted_result.json()["winner_team_name"] == frozen_team_a["name"]
+    undone = school_client.post(f"/games/{first_id}/undo-last", headers=actor.headers)
+    assert undone.status_code == 200, undone.text
+    async with session_maker() as session:
+        undone_game = await session.get(Game, first_id)
+        assert undone_game is not None
+        assert (
+            undone_game.actual_played_date,
+            undone_game.played_date_trust_state,
+            undone_game.played_date_source,
+            undone_game.original_overs_limit,
+            undone_game.original_format_trust_state,
+            undone_game.original_format_source,
+            undone_game.team_performance_metadata_revision,
+        ) == expected_provenance
 
     async with session_maker() as session:
         game = await session.get(Game, first_id)
