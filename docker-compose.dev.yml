@@ -59,7 +59,7 @@ services:
       - ./backend:/app/backend
       - ${USERPROFILE}/.aws:/root/.aws:ro
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:8000/health || exit 1"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health').read()"]
       <<: *health
 
   analysis_worker:
