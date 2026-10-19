@@ -42,7 +42,8 @@ while :; do
   if [ -n "$next_token" ]; then args+=(--next-token "$next_token"); fi
   page_json="$("$aws_bin" "${args[@]}")"
   page_findings="$(jq -ce '.imageScanFindings.findings | if type == "array" then . else error("missing findings array") end' <<<"$page_json")" || { echo "::error::Unable to parse ECR findings page" >&2; exit 1; }
-  all_findings="$(jq -ce --argjson page "$page_findings" '. + $page' <<<"$all_findings")" || exit 1
+  # Keep pages out of argv: valid ECR pages can exceed the OS argument limit.
+  all_findings="$(jq -ce -s '.[0] + .[1]' <(printf '%s\n' "$all_findings") <(printf '%s\n' "$page_findings"))" || exit 1
   if [ "$(printf '%s' "$all_findings" | wc -c)" -gt "$max_findings_bytes" ]; then echo "::error::ECR findings exceeded size limit" >&2; exit 1; fi
   next_token="$(jq -er 'if .nextToken == null then "" elif (.nextToken | type) == "string" and (.nextToken | length) > 0 then .nextToken else error("invalid nextToken") end' <<<"$page_json")" || { echo "::error::Unable to parse ECR findings pagination token" >&2; exit 1; }
   [ -n "$next_token" ] || break
