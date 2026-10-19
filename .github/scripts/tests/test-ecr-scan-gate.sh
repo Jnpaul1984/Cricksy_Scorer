@@ -24,4 +24,13 @@ if ECR_REPOSITORY=test AWS_REGION=us-east-1 IMAGE_TAG=test SCAN_POLL_SECONDS=0 A
   exit 1
 fi
 test "$(cat "$state_file")" = 3
+for mode in repeat-token page-cap byte-cap; do
+  : > "$state_file"
+  extra=""
+  [ "$mode" = page-cap ] && extra="MAX_SCAN_PAGES=1"
+  [ "$mode" = byte-cap ] && extra="MAX_FINDINGS_BYTES=1"
+  if env $extra ECR_REPOSITORY=test AWS_REGION=us-east-1 IMAGE_TAG=test SCAN_POLL_SECONDS=0 AWS_BIN="$root/tests/fake-aws-ecr.sh" FAKE_AWS_MODE="$mode" FAKE_AWS_STATE_FILE="$state_file" "$root/verify-ecr-image-scan.sh"; then
+    echo "expected $mode verifier guard to block" >&2; exit 1
+  fi
+done
 echo "ECR scan gate fixtures and workflow integration passed"
