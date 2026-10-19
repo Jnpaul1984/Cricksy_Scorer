@@ -10,9 +10,12 @@ expect_block critical.json
 expect_pass clean.json
 expect_pass kernel-only.json
 expect_block malformed.json
+expect_block missing-package-name.json
+expect_block duplicate-package-name.json
 workflow="$root/../workflows/deploy-backend.yml"
 grep -Fq 'bash .github/scripts/verify-ecr-image-scan.sh' "$workflow"
 ! grep -Fq '2>/dev/null || echo 0' "$workflow"
+grep -Fq 'bash .github/scripts/tests/test-ecr-scan-gate.sh' "$root/../workflows/ecr-scan-gate.yml"
 bash -n "$root/check-ecr-scan-findings.sh" "$root/verify-ecr-image-scan.sh"
 state_file="$(mktemp)"
 trap 'rm -f "$state_file"' EXIT

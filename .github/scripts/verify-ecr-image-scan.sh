@@ -6,6 +6,8 @@ set -euo pipefail
 : "${IMAGE_TAG:?IMAGE_TAG is required}"
 aws_bin="${AWS_BIN:-aws}"
 poll_seconds="${SCAN_POLL_SECONDS:-10}"
+max_pages="${MAX_SCAN_PAGES:-100}"
+max_findings_bytes="${MAX_FINDINGS_BYTES:-10485760}"
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
 for attempt in $(seq 1 30); do
@@ -24,8 +26,11 @@ done
 
 all_findings='[]'
 next_token=''
+page_count=0
 declare -A seen_tokens=()
 while :; do
+  page_count=$((page_count + 1))
+  if [ "$page_count" -gt "$max_pages" ]; then echo "::error::ECR findings exceeded page limit" >&2; exit 1; fi
   if [ -n "$next_token" ]; then
     if [[ -v "seen_tokens[$next_token]" ]]; then
       echo "::error::ECR findings pagination repeated a nextToken" >&2
@@ -38,6 +43,7 @@ while :; do
   page_json="$("$aws_bin" "${args[@]}")"
   page_findings="$(jq -ce '.imageScanFindings.findings | if type == "array" then . else error("missing findings array") end' <<<"$page_json")" || { echo "::error::Unable to parse ECR findings page" >&2; exit 1; }
   all_findings="$(jq -ce --argjson page "$page_findings" '. + $page' <<<"$all_findings")" || exit 1
+  if [ "$(printf '%s' "$all_findings" | wc -c)" -gt "$max_findings_bytes" ]; then echo "::error::ECR findings exceeded size limit" >&2; exit 1; fi
   next_token="$(jq -er 'if .nextToken == null then "" elif (.nextToken | type) == "string" and (.nextToken | length) > 0 then .nextToken else error("invalid nextToken") end' <<<"$page_json")" || { echo "::error::Unable to parse ECR findings pagination token" >&2; exit 1; }
   [ -n "$next_token" ] || break
 done
