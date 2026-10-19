@@ -131,10 +131,15 @@ def _candidate_clause(request: TeamReadinessRequest):
 
 def _readiness_candidates_stmt(request: TeamReadinessRequest, dialect_name: str):
     byte_length = _delivery_payload_byte_length(dialect_name)
+    payload_bytes = (
+        case((models.Game.id == request.reference_game_id, 0), else_=byte_length)
+        if request.reference_game_id is not None
+        else byte_length
+    )
     candidate_metrics = (
         select(
             models.Game.id.label("game_id"),
-            byte_length.label("payload_bytes"),
+            payload_bytes.label("payload_bytes"),
         )
         .where(_candidate_clause(request))
         .order_by(models.Game.id)
@@ -153,10 +158,17 @@ def _readiness_candidates_stmt(request: TeamReadinessRequest, dialect_name: str)
         bounded_metrics.c.candidate_count <= MAX_CANDIDATE_GAMES,
         bounded_metrics.c.candidate_payload_bytes <= MAX_DELIVERY_PAYLOAD_BYTES,
     )
+    delivery_is_needed = (
+        and_(within_limits, models.Game.id != request.reference_game_id)
+        if request.reference_game_id is not None
+        else within_limits
+    )
     return (
         select(
             models.Game,
-            case((within_limits, models.Game.deliveries), else_=None).label("bounded_deliveries"),
+            case((delivery_is_needed, models.Game.deliveries), else_=None).label(
+                "bounded_deliveries"
+            ),
             bounded_metrics.c.candidate_count,
             bounded_metrics.c.candidate_payload_bytes,
         )
@@ -164,6 +176,42 @@ def _readiness_candidates_stmt(request: TeamReadinessRequest, dialect_name: str)
         .order_by(models.Game.id)
         .options(defer(models.Game.deliveries))
         .execution_options(populate_existing=True)
+    )
+
+
+def _valid_reference_scope(
+    game: models.Game,
+    *,
+    organization_id: str,
+    team_id: str,
+    existing_team_ids: set[str],
+) -> bool:
+    if not isinstance(game.team_a, dict) or not isinstance(game.team_b, dict):
+        return False
+    sides = (game.team_a, game.team_b)
+    sources = (_source(game.team_a), _source(game.team_b))
+    target_sides = [
+        side
+        for side, (source_organization_id, source_team_id) in zip(sides, sources, strict=True)
+        if source_organization_id == organization_id and source_team_id == team_id
+    ]
+    if len(target_sides) != 1:
+        return False
+    for side, (_source_organization_id, source_team_id) in zip(sides, sources, strict=True):
+        if "school_source" not in side:
+            continue
+        if (
+            not _valid_opponent_boundary(side, organization_id)
+            or source_team_id is None
+            or source_team_id not in existing_team_ids
+        ):
+            return False
+    return (
+        game.match_type == "limited"
+        and game.days_limit is None
+        and game.original_format_trust_state in {"setup_capture", "staff_corrected"}
+        and game.original_overs_limit == SUPPORTED_ORIGINAL_OVERS
+        and game.original_format_source in {"school_match_setup", "staff_correction"}
     )
 
 
@@ -332,15 +380,14 @@ async def evaluate_team_match_readiness(
             reference.played_date_trust_state != "confirmed"
             or reference.actual_played_date is None
             or reference.actual_played_date != request.as_of_date
+            or reference.played_date_source != "staff_confirmed"
+            or not _valid_reference_scope(
+                reference,
+                organization_id=request.organization_id,
+                team_id=request.team_id,
+                existing_team_ids=existing_team_ids,
+            )
         ):
-            counts["reference_date_unavailable"] = 1
-            return _summary(request, state="data_unavailable", counts=counts)
-        reference_sides = [
-            (org_id, saved_team_id)
-            for org_id, saved_team_id in (_source(reference.team_a), _source(reference.team_b))
-            if org_id == request.organization_id and saved_team_id == request.team_id
-        ]
-        if len(reference_sides) != 1:
             counts["reference_date_unavailable"] = 1
             return _summary(request, state="data_unavailable", counts=counts)
 

@@ -154,7 +154,7 @@ async def test_metadata_update_is_audited_atomic_revision_safe_and_preserves_ori
             session,
             game_id=game.id,
             actor_user_id=owner.id,
-            expected_revision=1,
+            expected_revision=2,
             reason="Confirm match record",
             played_date_supplied=True,
             played_date=dt.date(2026, 2, 1),
@@ -183,6 +183,20 @@ async def test_metadata_update_is_audited_atomic_revision_safe_and_preserves_ori
                 reason="Conflicting correction",
                 played_date_supplied=True,
                 played_date=dt.date(2026, 2, 3),
+                original_overs_supplied=False,
+                original_overs_limit=None,
+            )
+
+    async with school_client.session_maker() as session:  # type: ignore[attr-defined]
+        with pytest.raises(GamePerformanceMetadataError, match="stale"):
+            await update_game_performance_metadata(
+                session,
+                game_id=game.id,
+                actor_user_id=owner.id,
+                expected_revision=1,
+                reason="Stale no-op",
+                played_date_supplied=True,
+                played_date=dt.date(2026, 2, 1),
                 original_overs_supplied=False,
                 original_overs_limit=None,
             )
@@ -957,6 +971,130 @@ async def test_conflicting_postgres_metadata_writers_cannot_both_commit(
 
 
 @pytest.mark.asyncio
+async def test_same_value_postgres_metadata_writers_still_conflict_on_stale_revision(
+    school_client: TestClient,
+) -> None:
+    async with school_client.session_maker() as probe:  # type: ignore[attr-defined]
+        if probe.get_bind().dialect.name != "postgresql":
+            pytest.skip("row-lock concurrency is exercised in the migrated PostgreSQL CI gate")
+
+    owner = register_user(school_client, "history-concurrent-same-value@example.com")
+    organization = create_school(school_client, owner, "History Concurrent Same Value")
+    _, game = await _add_history_game(
+        school_client,
+        organization_id=organization["id"],
+        owner_id=owner.id,
+        played_date=dt.date(2026, 8, 1),
+    )
+    barrier = asyncio.Barrier(2)
+
+    async def update_same_date():
+        async with school_client.session_maker() as session:  # type: ignore[attr-defined]
+            await barrier.wait()
+            try:
+                await update_game_performance_metadata(
+                    session,
+                    game_id=game.id,
+                    actor_user_id=owner.id,
+                    expected_revision=1,
+                    reason="Concurrent same-value correction",
+                    played_date_supplied=True,
+                    played_date=dt.date(2026, 8, 2),
+                    original_overs_supplied=False,
+                    original_overs_limit=None,
+                )
+                return "committed"
+            except GamePerformanceMetadataError as error:
+                return error.status_code
+
+    outcomes = await asyncio.gather(update_same_date(), update_same_date())
+    assert outcomes.count("committed") == 1
+    assert outcomes.count(409) == 1
+    async with school_client.session_maker() as session:  # type: ignore[attr-defined]
+        saved = await session.get(Game, game.id)
+        audits = list(
+            (
+                await session.scalars(
+                    select(GamePerformanceMetadataAudit)
+                    .where(GamePerformanceMetadataAudit.game_id == game.id)
+                    .order_by(GamePerformanceMetadataAudit.metadata_revision)
+                )
+            ).all()
+        )
+        assert saved is not None
+        assert saved.actual_played_date == dt.date(2026, 8, 2)
+        assert saved.team_performance_metadata_revision == 2
+        assert len(audits) == 1
+        assert (
+            audits[0].metadata_revision,
+            audits[0].old_value,
+            audits[0].new_value,
+        ) == (2, "2026-08-01", "2026-08-02")
+
+
+@pytest.mark.asyncio
+async def test_metadata_update_refreshes_strongly_retained_game_before_auditing(
+    school_client: TestClient,
+) -> None:
+    owner = register_user(school_client, "history-retained-game-owner@example.com")
+    organization = create_school(school_client, owner, "History Retained Game")
+    _, game = await _add_history_game(
+        school_client,
+        organization_id=organization["id"],
+        owner_id=owner.id,
+        played_date=dt.date(2026, 8, 1),
+    )
+    async with school_client.session_maker() as retained_session:  # type: ignore[attr-defined]
+        retained = await retained_session.get(Game, game.id)
+        assert retained is not None
+        assert retained.actual_played_date == dt.date(2026, 8, 1)
+
+        async with school_client.session_maker() as correcting_session:  # type: ignore[attr-defined]
+            corrected = await update_game_performance_metadata(
+                correcting_session,
+                game_id=game.id,
+                actor_user_id=owner.id,
+                expected_revision=1,
+                reason="First correction",
+                played_date_supplied=True,
+                played_date=dt.date(2026, 8, 2),
+                original_overs_supplied=False,
+                original_overs_limit=None,
+            )
+            assert corrected.actual_played_date == dt.date(2026, 8, 2)
+
+        saved = await update_game_performance_metadata(
+            retained_session,
+            game_id=game.id,
+            actor_user_id=owner.id,
+            expected_revision=2,
+            reason="Second correction",
+            played_date_supplied=True,
+            played_date=dt.date(2026, 8, 3),
+            original_overs_supplied=False,
+            original_overs_limit=None,
+        )
+        assert saved is retained
+        assert retained.actual_played_date == dt.date(2026, 8, 3)
+        assert retained.team_performance_metadata_revision == 3
+        audits = list(
+            (
+                await retained_session.scalars(
+                    select(GamePerformanceMetadataAudit)
+                    .where(GamePerformanceMetadataAudit.game_id == game.id)
+                    .order_by(GamePerformanceMetadataAudit.metadata_revision)
+                )
+            ).all()
+        )
+        assert [
+            (audit.metadata_revision, audit.old_value, audit.new_value) for audit in audits
+        ] == [
+            (2, "2026-08-01", "2026-08-02"),
+            (3, "2026-08-02", "2026-08-03"),
+        ]
+
+
+@pytest.mark.asyncio
 async def test_readiness_refreshes_corrected_date_in_reused_session(
     school_client: TestClient,
 ) -> None:
@@ -1198,6 +1336,220 @@ async def test_readiness_excludes_same_day_groups_future_reference_and_invalid_g
     assert result.exclusion_counts["same_date_ambiguous"] == 2
     assert result.exclusion_counts["unsupported_innings"] == 1
     assert result.state == "not_ready"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("external_opponent", [False, True])
+async def test_readiness_reference_uses_validated_scope_without_history_ledger_requirements(
+    school_client: TestClient,
+    external_opponent: bool,
+) -> None:
+    owner = register_user(school_client, f"history-reference-valid-{external_opponent}@example.com")
+    organization = create_school(school_client, owner, "History Valid Reference")
+    team: Team | None = None
+    for day in range(1, 6):
+        team, _ = await _add_history_game(
+            school_client,
+            organization_id=organization["id"],
+            owner_id=owner.id,
+            played_date=dt.date(2026, 8, day),
+            reuse_team=team,
+        )
+    assert team is not None
+    _, reference = await _add_history_game(
+        school_client,
+        organization_id=organization["id"],
+        owner_id=owner.id,
+        played_date=dt.date(2026, 8, 6),
+        reuse_team=team,
+        current_overs=18,
+        deliveries=[{"invalid": "history ledger must not be inspected"}],
+    )
+    async with school_client.session_maker() as session:  # type: ignore[attr-defined]
+        stored = await session.get(Game, reference.id)
+        assert stored is not None
+        stored.status = GameStatus.in_progress
+        if external_opponent:
+            side = dict(stored.team_b)
+            side.pop("school_source")
+            stored.team_b = side
+        await session.commit()
+    await _grant(school_client, organization["id"], owner.id)
+    request = TeamReadinessRequest(
+        actor_user_id=owner.id,
+        organization_id=organization["id"],
+        team_id=team.id,
+        as_of_date=dt.date(2026, 8, 6),
+        reference_game_id=reference.id,
+    )
+
+    from backend.services.school_team_readiness_service import _readiness_candidates_stmt
+
+    async with school_client.session_maker() as session:  # type: ignore[attr-defined]
+        candidate_rows = (
+            await session.execute(
+                _readiness_candidates_stmt(request, session.get_bind().dialect.name)
+            )
+        ).all()
+        reference_row = next(row for row in candidate_rows if row[0].id == reference.id)
+        assert reference_row[1] is None
+        assert "deliveries" in inspect(reference_row[0]).unloaded
+        result = await evaluate_team_match_readiness(session, request)
+
+    assert result.state == "ready"
+    assert result.usable_prior_match_count == 5
+    assert result.exclusion_counts["reference_game"] == 1
+
+    response = school_client.get(
+        f"/api/organizations/{organization['id']}/team-performance/teams/{team.id}/readiness",
+        params={"as_of_date": "2026-08-06", "reference_game_id": reference.id},
+        headers=owner.headers,
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["state"] == "ready"
+    assert response.json()["usable_prior_match_count"] == 5
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "invalid_reference",
+    [
+        "null-source",
+        "malformed-source",
+        "nonexistent-opponent",
+        "duplicate-target",
+        "unknown-format",
+        "wrong-format",
+        "unsupported-match-type",
+    ],
+)
+async def test_readiness_reference_rejects_unresolved_team_scope_and_format(
+    school_client: TestClient,
+    invalid_reference: str,
+) -> None:
+    owner = register_user(
+        school_client, f"history-reference-invalid-{invalid_reference}@example.com"
+    )
+    organization = create_school(school_client, owner, "History Invalid Reference")
+    team, reference = await _add_history_game(
+        school_client,
+        organization_id=organization["id"],
+        owner_id=owner.id,
+        played_date=dt.date(2026, 8, 6),
+        current_overs=18,
+    )
+    async with school_client.session_maker() as session:  # type: ignore[attr-defined]
+        stored = await session.get(Game, reference.id)
+        assert stored is not None
+        if invalid_reference in {
+            "null-source",
+            "malformed-source",
+            "nonexistent-opponent",
+            "duplicate-target",
+        }:
+            side = dict(stored.team_b)
+            if invalid_reference == "null-source":
+                side["school_source"] = None
+            elif invalid_reference == "malformed-source":
+                side["school_source"] = "not-a-source"
+            elif invalid_reference == "nonexistent-opponent":
+                side["school_source"] = {
+                    "organization_id": organization["id"],
+                    "team_id": "missing-opponent-team",
+                }
+            else:
+                side["school_source"] = {
+                    "organization_id": organization["id"],
+                    "team_id": team.id,
+                }
+            stored.team_b = side
+        elif invalid_reference == "unknown-format":
+            stored.original_overs_limit = None
+            stored.original_format_trust_state = "unknown"
+            stored.original_format_source = None
+        elif invalid_reference == "wrong-format":
+            stored.original_overs_limit = 18
+        else:
+            stored.match_type = "multi_day"
+        await session.commit()
+    await _grant(school_client, organization["id"], owner.id)
+    request = TeamReadinessRequest(
+        actor_user_id=owner.id,
+        organization_id=organization["id"],
+        team_id=team.id,
+        as_of_date=dt.date(2026, 8, 6),
+        reference_game_id=reference.id,
+    )
+
+    async with school_client.session_maker() as session:  # type: ignore[attr-defined]
+        result = await evaluate_team_match_readiness(session, request)
+    assert result.state == "data_unavailable"
+    assert result.usable_prior_match_count == 0
+    assert result.exclusion_counts["reference_date_unavailable"] == 1
+
+    response = school_client.get(
+        f"/api/organizations/{organization['id']}/team-performance/teams/{team.id}/readiness",
+        params={"as_of_date": "2026-08-06", "reference_game_id": reference.id},
+        headers=owner.headers,
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["state"] == "data_unavailable"
+    assert response.json()["usable_prior_match_count"] == 0
+    assert "missing-opponent-team" not in response.text
+
+
+@pytest.mark.asyncio
+async def test_readiness_reference_rejects_cross_organization_opponent_without_leakage(
+    school_client: TestClient,
+) -> None:
+    owner = register_user(school_client, "history-reference-foreign-owner@example.com")
+    organization = create_school(school_client, owner, "History Reference Foreign")
+    team, reference = await _add_history_game(
+        school_client,
+        organization_id=organization["id"],
+        owner_id=owner.id,
+        played_date=dt.date(2026, 8, 6),
+    )
+    foreign_owner = register_user(school_client, "history-reference-foreign-team-owner@example.com")
+    foreign_organization = create_school(school_client, foreign_owner, "History Foreign Reference")
+    foreign_team, _ = await _add_history_game(
+        school_client,
+        organization_id=foreign_organization["id"],
+        owner_id=foreign_owner.id,
+        played_date=dt.date(2026, 8, 6),
+    )
+    async with school_client.session_maker() as session:  # type: ignore[attr-defined]
+        stored = await session.get(Game, reference.id)
+        assert stored is not None
+        side = dict(stored.team_b)
+        side["school_source"] = {
+            "organization_id": foreign_organization["id"],
+            "team_id": foreign_team.id,
+        }
+        stored.team_b = side
+        await session.commit()
+    await _grant(school_client, organization["id"], owner.id)
+    request = TeamReadinessRequest(
+        actor_user_id=owner.id,
+        organization_id=organization["id"],
+        team_id=team.id,
+        as_of_date=dt.date(2026, 8, 6),
+        reference_game_id=reference.id,
+    )
+
+    async with school_client.session_maker() as session:  # type: ignore[attr-defined]
+        with pytest.raises(TeamPerformanceAccessError) as error:
+            await evaluate_team_match_readiness(session, request)
+    assert error.value.status_code == 404
+
+    response = school_client.get(
+        f"/api/organizations/{organization['id']}/team-performance/teams/{team.id}/readiness",
+        params={"as_of_date": "2026-08-06", "reference_game_id": reference.id},
+        headers=owner.headers,
+    )
+    assert response.status_code == 404
+    assert foreign_team.id not in response.text
+    assert "usable_prior_match_count" not in response.text
 
 
 @pytest.mark.asyncio

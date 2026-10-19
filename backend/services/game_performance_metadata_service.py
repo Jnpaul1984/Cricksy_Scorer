@@ -66,7 +66,7 @@ async def _authorized_saved_team_game(
         raise GamePerformanceMetadataError(404, "Game not found")
     statement = select(models.Game).where(models.Game.id == game_id)
     if lock_for_update:
-        statement = statement.with_for_update()
+        statement = statement.with_for_update().execution_options(populate_existing=True)
     game = await db.scalar(statement)
     if game is None:
         raise GamePerformanceMetadataError(404, "Game not found")
@@ -153,6 +153,10 @@ async def update_game_performance_metadata(
         actor_user_id=actor_user_id,
         lock_for_update=True,
     )
+    if game.team_performance_metadata_revision != expected_revision:
+        await db.rollback()
+        raise GamePerformanceMetadataError(409, "Game metadata revision is stale")
+
     changes: list[tuple[str, object | None, object | None, str]] = []
     values: dict[str, object] = {}
     if played_date_supplied:
@@ -202,8 +206,6 @@ async def update_game_performance_metadata(
 
     if not changes:
         return game
-    if game.team_performance_metadata_revision != expected_revision:
-        raise GamePerformanceMetadataError(409, "Game metadata revision is stale")
 
     next_revision = expected_revision + 1
     result = await db.execute(
