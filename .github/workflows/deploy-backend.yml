@@ -323,7 +323,7 @@ jobs:
             exit 1
           fi
 
-          echo "� Migrations completed successfully"
+          echo "✓ Migrations completed successfully"
 
       - name: Verify production DB migration state (post-upgrade)
         env:
@@ -392,7 +392,7 @@ jobs:
           MAX_ATTEMPTS=60
           ATTEMPT=0
 
-          echo "Waiting for ECS service to stabilize (max ${MAX_ATTEMPTS} x 15s)..."
+          echo "Waiting for ECS service to stabilize (max ${MAX_ATTEMPTS} × 15s)..."
 
           while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
             ATTEMPT=$((ATTEMPT + 1))
@@ -419,7 +419,7 @@ jobs:
 
             # Service is stable when running equals desired and deployment is PRIMARY
             if [ "$RUNNING" -eq "$DESIRED" ] && [ "$DEPLOYMENT_STATUS" = "PRIMARY" ]; then
-              echo "� Service is stable!"
+              echo "✓ Service is stable!"
               exit 0
             fi
 
@@ -447,7 +447,7 @@ jobs:
             sleep 15
           done
 
-          echo "? Service failed to stabilize after ${MAX_ATTEMPTS} attempts"
+          echo "✗ Service failed to stabilize after ${MAX_ATTEMPTS} attempts"
           echo ""
           echo "=== Service Status ==="
           aws ecs describe-services \
@@ -538,7 +538,7 @@ jobs:
 
           echo "Waiting for worker service to stabilize..."
           aws ecs wait services-stable --cluster "$CLUSTER" --services "$SERVICE" --region "$REGION"
-          echo "� Worker service deployed and stable"
+          echo "✓ Worker service deployed and stable"
 
       - name: Dump ECS events and stopped tasks
         if: failure()
