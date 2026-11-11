@@ -189,6 +189,57 @@ jobs:
           python scripts/check_alembic_single_head.py
           alembic -c alembic.ini upgrade head
 
+  backend-container-build:
+    name: Backend (runtime image build)
+    needs: [changes]
+    if: ${{ needs.changes.outputs.docs_only != 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build the deployment runtime image
+        id: runtime_image_build
+        run: docker build --pull -f backend/Dockerfile -t cricksy-backend:ci .
+
+      - name: Diagnose package DNS after a failed image build
+        if: ${{ failure() && steps.runtime_image_build.outcome == 'failure' }}
+        timeout-minutes: 3
+        run: |
+          # Diagnostic failures must not hide the original failed image build.
+          set +e
+          echo '=== Hosted runner resolver ==='
+          cat /etc/resolv.conf
+          timeout 30s getent ahostsv4 archive.ubuntu.com security.ubuntu.com
+          echo "Host lookup exit code: $?"
+          echo '=== Existing Ubuntu image, default container network ==='
+          if docker image inspect ubuntu:24.04 >/dev/null 2>&1; then
+            timeout 60s docker run --rm --pull=never \
+              --name cricksy-ci-dns-diagnostic \
+              --cap-drop ALL --security-opt no-new-privileges \
+              --entrypoint sh ubuntu:24.04 -c '
+                cat /etc/resolv.conf
+                timeout 30s getent ahostsv4 archive.ubuntu.com security.ubuntu.com
+                status=$?
+                echo "Container lookup exit code: $status"
+                exit "$status"
+              '
+            echo "Container diagnostic exit code: $?"
+            docker rm -f cricksy-ci-dns-diagnostic >/dev/null 2>&1 || true
+          else
+            echo 'Ubuntu image is absent; container DNS was not tested.'
+          fi
+          exit 0
+
+      - name: Smoke-test runtime dependencies without network access
+        run: |
+          docker run --rm --network none --cap-drop ALL \
+            --security-opt no-new-privileges --entrypoint sh cricksy-backend:ci \
+            -lc 'python -m pip check && python -m alembic --version && python -c "import cv2, mediapipe, numpy, asyncpg, uvicorn"'
+
   backend-deploy-validation:
     name: Backend (deploy validation parity)
     needs: [changes]
