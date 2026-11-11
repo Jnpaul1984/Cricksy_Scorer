@@ -20,7 +20,7 @@ permissions:
 jobs:
   changes:
     name: Changes (docs-only detector)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       docs_only: ${{ steps.docs_only.outputs.value }}
     steps:
@@ -46,7 +46,7 @@ jobs:
     name: Pre-commit (all files)
     needs: [changes]
     if: ${{ needs.changes.outputs.docs_only != 'true' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -75,7 +75,7 @@ jobs:
     name: Lint (ruff + ruff format + mypy)
     needs: [changes]
     if: ${{ needs.changes.outputs.docs_only != 'true' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -111,7 +111,7 @@ jobs:
     name: Security (bandit + pip-audit)
     needs: [changes]
     if: ${{ needs.changes.outputs.docs_only != 'true' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -147,7 +147,7 @@ jobs:
     name: Backend (Alembic migration graph)
     needs: [changes]
     if: ${{ needs.changes.outputs.docs_only != 'true' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     services:
       postgres:
         image: postgres:14
@@ -193,7 +193,7 @@ jobs:
     name: Backend (deploy validation parity)
     needs: [changes]
     if: ${{ needs.changes.outputs.docs_only != 'true' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     services:
       postgres:
         image: postgres:14
@@ -283,7 +283,7 @@ jobs:
     name: Backend (fast tests)
     needs: [changes]
     if: ${{ needs.changes.outputs.docs_only != 'true' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -315,7 +315,7 @@ jobs:
     name: Backend (integration tests)
     needs: [changes]
     if: ${{ needs.changes.outputs.docs_only != 'true' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -356,7 +356,7 @@ jobs:
     name: Backend (DLS calculation tests)
     needs: [changes]
     if: ${{ needs.changes.outputs.docs_only != 'true' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -388,7 +388,7 @@ jobs:
     name: Backend (School Free PostgreSQL gate)
     needs: [changes]
     if: ${{ needs.changes.outputs.docs_only != 'true' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     services:
       postgres:
         image: postgres:14
@@ -440,7 +440,7 @@ jobs:
     name: Frontend (build + type-check)
     needs: [changes]
     if: ${{ needs.changes.outputs.docs_only != 'true' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -489,7 +489,7 @@ jobs:
     name: Frontend (analyst workspace E2E)
     needs: [changes]
     if: ${{ needs.changes.outputs.docs_only != 'true' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -521,7 +521,7 @@ jobs:
     name: Frontend (coach workspace E2E)
     needs: [changes]
     if: ${{ needs.changes.outputs.docs_only != 'true' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -553,7 +553,7 @@ jobs:
     name: Frontend (School Free E2E gate)
     needs: [changes]
     if: ${{ needs.changes.outputs.docs_only != 'true' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4
