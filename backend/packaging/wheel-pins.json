@@ -1,0 +1,29 @@
+[
+  {
+    "distribution": "mediapipe",
+    "version": "0.10.31",
+    "filename": "mediapipe-0.10.31-py3-none-manylinux_2_28_x86_64.whl",
+    "url": "https://files.pythonhosted.org/packages/07/ce/fe29a74c6af4dae88b0146b4a8c4a79b4ca3cf400ae08dd401a13f52305a/mediapipe-0.10.31-py3-none-manylinux_2_28_x86_64.whl",
+    "sha256": "360de896205822419b14d7574c2812e08946769228f7548c31dd871b150d9bcc",
+    "size": 10316058,
+    "original_wheel": "Wheel-Version: 1.0\nGenerator: setuptools (80.9.0)\nRoot-Is-Purelib: false\nTag: cp39-cp39-linux_x86_64\n\n",
+    "platform": "linux_x86_64",
+    "tags": [
+      "py3-none-linux_x86_64"
+    ]
+  },
+  {
+    "distribution": "xgboost",
+    "version": "1.7.6",
+    "filename": "xgboost-1.7.6-py3-none-manylinux2014_x86_64.whl",
+    "url": "https://files.pythonhosted.org/packages/8c/3a/c9c5d4d5c49b132ef15ac7b5ccf56ef1c82efe36cd19414771762e97c00e/xgboost-1.7.6-py3-none-manylinux2014_x86_64.whl",
+    "sha256": "b1d5db49b199152d62bd9217c98760207d3de86d2b9d243260c573ffe638f80a",
+    "size": 200320323,
+    "original_wheel": "Wheel-Version: 1.0\nGenerator: bdist_wheel (0.38.4)\nRoot-Is-Purelib: false\nTag: cp310-cp310-manylinux_2_17_x86_64\nTag: cp310-cp310-manylinux2014_x86_64\n\n",
+    "platform": "manylinux_2_17_x86_64.manylinux2014_x86_64",
+    "tags": [
+      "py3-none-manylinux_2_17_x86_64",
+      "py3-none-manylinux2014_x86_64"
+    ]
+  }
+]
