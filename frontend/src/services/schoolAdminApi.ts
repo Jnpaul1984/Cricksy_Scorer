@@ -55,6 +55,7 @@ import type {
   OrganizationEventNotificationResult,
   OrganizationSelectionNotificationResult,
   OrganizationTeamPerformance,
+  OrganizationTeamRecentForm,
   OrganizationCommunitySettings,
   OrganizationCommunityCompetitionSettings,
   OrganizationFixtureYoutubeVideo,
@@ -517,6 +518,17 @@ export const getOrganizationTeamPerformance = (
     orgPath(
       organizationId,
       `/team-performance/teams/${encodeURIComponent(teamId)}?overs_limit=${oversLimit}`,
+    ),
+  );
+export const getOrganizationTeamRecentForm = (
+  organizationId: string,
+  teamId: string,
+  asOfDate: string,
+) =>
+  apiRequest<OrganizationTeamRecentForm>(
+    orgPath(
+      organizationId,
+      `/team-performance/teams/${encodeURIComponent(teamId)}/recent-form?as_of_date=${encodeURIComponent(asOfDate)}`,
     ),
   );
 export const getSchoolTeam = (organizationId: string, teamId: string) =>

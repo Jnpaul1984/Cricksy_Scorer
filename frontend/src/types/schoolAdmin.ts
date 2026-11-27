@@ -67,6 +67,33 @@ export interface OrganizationTeamPerformance {
   coverage: TeamPerformanceCoverage;
 }
 
+export interface OrganizationTeamRecentForm {
+  readiness: {
+    organization_id: string;
+    team_id: string;
+    as_of_date: string;
+    required_history: 5;
+    usable_prior_match_count: number;
+    remaining_match_count: number;
+    state: 'ready' | 'not_ready' | 'data_unavailable';
+    usable_batting_match_count: number;
+    usable_bowling_match_count: number;
+    exclusion_counts: Record<string, number>;
+  };
+  sample_size: number;
+  completeness: 'unknown';
+  recorded_delivery_rows: number;
+  batting: TeamPerformanceBatting | null;
+  bowling: TeamPerformanceBowling | null;
+  matches: {
+    ordinal: number;
+    played_date: string;
+    batting: TeamPerformanceBatting;
+    bowling: TeamPerformanceBowling;
+    recorded_delivery_rows: number;
+  }[];
+}
+
 export interface SchoolOrganization {
   id: string;
   name: string;

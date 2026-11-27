@@ -5,10 +5,12 @@ import { useSchoolContext } from '@/composables/useSchoolContext';
 import { getErrorMessage } from '@/services/api';
 import {
   getOrganizationTeamPerformance,
+  getOrganizationTeamRecentForm,
   listOrganizationTeamPerformanceTeams,
 } from '@/services/schoolAdminApi';
 import type {
   OrganizationTeamPerformance,
+  OrganizationTeamRecentForm,
   OrganizationTeamPerformanceTeamOption,
 } from '@/types/schoolAdmin';
 
@@ -28,11 +30,25 @@ const teams = ref<OrganizationTeamPerformanceTeamOption[]>([]);
 const selectedTeamId = ref('');
 const oversLimit = ref(20);
 const data = ref<OrganizationTeamPerformance | null>(null);
+const asOfDate = ref('');
+const recentForm = ref<OrganizationTeamRecentForm | null>(null);
+const recentFormState = ref<
+  | 'idle'
+  | 'loading'
+  | 'ready'
+  | 'not_ready'
+  | 'data_unavailable'
+  | 'unavailable_access'
+  | 'scope_too_large'
+  | 'request_failure'
+>('idle');
+const recentFormError = ref('');
 const state = ref<ViewState>('loading');
 const error = ref('');
 const teamsOrganizationId = ref('');
 let teamGeneration = 0;
 let requestGeneration = 0;
+let formGeneration = 0;
 
 function clearData() {
   data.value = null;
@@ -43,7 +59,9 @@ function formatOvers(balls: number): string {
   return `${Math.floor(balls / 6)}.${balls % 6}`;
 }
 
-function failureStatus(reason: unknown): ViewState {
+function failureStatus(
+  reason: unknown,
+): 'unavailable_access' | 'scope_too_large' | 'request_failure' {
   const httpStatus = (reason as { status?: number } | null)?.status;
   if (httpStatus === 403 || httpStatus === 404) return 'unavailable_access';
   if (httpStatus === 413) return 'scope_too_large';
@@ -150,10 +168,68 @@ watch(
   { immediate: true },
 );
 
+watch(
+  [organizationId, canManageTeams, selectedTeamId, asOfDate],
+  async ([requestedOrganizationId, allowed, requestedTeamId, requestedDate]) => {
+    const generation = ++formGeneration;
+    recentForm.value = null;
+    recentFormError.value = '';
+    if (!allowed || !requestedOrganizationId) {
+      recentFormState.value = 'unavailable_access';
+      return;
+    }
+    if (
+      !requestedTeamId ||
+      !requestedDate ||
+      teamsOrganizationId.value !== requestedOrganizationId
+    ) {
+      recentFormState.value = 'idle';
+      return;
+    }
+    recentFormState.value = 'loading';
+    try {
+      const result = await getOrganizationTeamRecentForm(
+        requestedOrganizationId,
+        requestedTeamId,
+        requestedDate,
+      );
+      if (
+        generation !== formGeneration ||
+        requestedOrganizationId !== organizationId.value ||
+        requestedTeamId !== selectedTeamId.value ||
+        requestedDate !== asOfDate.value ||
+        !canManageTeams.value
+      )
+        return;
+      recentForm.value = result;
+      recentFormState.value =
+        result.readiness.state === 'data_unavailable' &&
+        result.readiness.exclusion_counts.scope_too_large
+          ? 'scope_too_large'
+          : result.readiness.state;
+    } catch (reason) {
+      if (
+        generation !== formGeneration ||
+        requestedOrganizationId !== organizationId.value ||
+        requestedTeamId !== selectedTeamId.value ||
+        requestedDate !== asOfDate.value ||
+        !canManageTeams.value
+      )
+        return;
+      recentFormState.value = failureStatus(reason);
+      if (recentFormState.value === 'request_failure')
+        recentFormError.value = getErrorMessage(reason);
+    }
+  },
+  { immediate: true },
+);
+
 onBeforeUnmount(() => {
   teamGeneration += 1;
   requestGeneration += 1;
+  formGeneration += 1;
   clearData();
+  recentForm.value = null;
   teams.value = [];
 });
 </script>
@@ -342,6 +418,118 @@ onBeforeUnmount(() => {
       </section>
     </template>
 
+    <section
+      v-if="canManageTeams && teamsOrganizationId === organizationId"
+      class="coverage"
+      aria-labelledby="recent-form-heading"
+    >
+      <h3 id="recent-form-heading">Recent 25-over Team form</h3>
+      <p>
+        Choose an exclusive venue-local as-of date. Only five prior, verified original 25-over
+        matches can form a trend.
+      </p>
+      <label
+        >As-of date <input v-model="asOfDate" type="date" aria-label="Recent form as-of date"
+      /></label>
+      <p v-if="recentFormState === 'idle'" role="status">
+        Choose an as-of date to check five-match readiness.
+      </p>
+      <p v-else-if="recentFormState === 'loading'" role="status">Loading recent form…</p>
+      <p v-else-if="recentFormState === 'unavailable_access'" role="alert">
+        Recent form is unavailable for your current access.
+      </p>
+      <p v-else-if="recentFormState === 'scope_too_large'" role="alert">
+        Recent form scope exceeds the safe workload limit; no trend is shown.
+      </p>
+      <p v-else-if="recentFormState === 'request_failure'" role="alert">{{ recentFormError }}</p>
+      <template v-if="recentForm">
+        <p>
+          Usable prior matches: {{ recentForm.readiness.usable_prior_match_count }} /
+          {{ recentForm.readiness.required_history }}. Sample size: {{ recentForm.sample_size }}.
+          Historical completeness: unknown.
+        </p>
+        <p v-if="recentFormState === 'not_ready'" role="status">
+          Insufficient history: {{ recentForm.readiness.remaining_match_count }} more usable prior
+          matches needed.
+        </p>
+        <p v-else-if="recentFormState === 'data_unavailable'" role="status">
+          Chronology or evidence is unavailable; no five-match trend can be shown.
+        </p>
+        <ul class="warnings" aria-label="Recent form coverage">
+          <li
+            v-for="(count, code) in recentForm.readiness.exclusion_counts"
+            v-show="count > 0"
+            :key="code"
+          >
+            {{ code.replace(/_/g, ' ') }}: {{ count }}
+          </li>
+        </ul>
+        <template v-if="recentFormState === 'ready' && recentForm.batting && recentForm.bowling">
+          <p>
+            Five matches, oldest to newest. Rates use summed runs and legal balls. Based on recorded
+            delivery data; historical completeness has not been verified.
+          </p>
+          <div class="trend-scroll">
+            <table aria-label="Recent Team form trend">
+              <thead>
+                <tr>
+                  <th>Match</th>
+                  <th>Played date</th>
+                  <th>Recorded rows</th>
+                  <th>Batting runs</th>
+                  <th>Wickets lost</th>
+                  <th>Batting balls</th>
+                  <th>Run rate</th>
+                  <th>Batting dot %</th>
+                  <th>Recorded 4s / 6s</th>
+                  <th>Runs conceded</th>
+                  <th>Team wickets</th>
+                  <th>Bowling balls</th>
+                  <th>Economy</th>
+                  <th>Bowling dot %</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="match in recentForm.matches" :key="match.ordinal">
+                  <th>{{ match.ordinal }}</th>
+                  <td>{{ match.played_date }}</td>
+                  <td>{{ match.recorded_delivery_rows }}</td>
+                  <td>{{ match.batting.team_runs }}</td>
+                  <td>{{ match.batting.wickets_lost }}</td>
+                  <td>{{ match.batting.legal_balls }}</td>
+                  <td>{{ match.batting.run_rate ?? '—' }}</td>
+                  <td>{{ match.batting.legal_dot_percentage ?? '—' }}</td>
+                  <td>{{ match.batting.fours }} / {{ match.batting.sixes }}</td>
+                  <td>{{ match.bowling.opposition_team_runs }}</td>
+                  <td>{{ match.bowling.team_wickets }}</td>
+                  <td>{{ match.bowling.legal_balls }}</td>
+                  <td>{{ match.bowling.bowling_economy ?? '—' }}</td>
+                  <td>{{ match.bowling.legal_dot_percentage ?? '—' }}</td>
+                </tr>
+              </tbody>
+              <tfoot>
+                <tr>
+                  <th colspan="2">Five-match aggregate</th>
+                  <td>{{ recentForm.recorded_delivery_rows }}</td>
+                  <td>{{ recentForm.batting.team_runs }}</td>
+                  <td>{{ recentForm.batting.wickets_lost }}</td>
+                  <td>{{ recentForm.batting.legal_balls }}</td>
+                  <td>{{ recentForm.batting.run_rate ?? '—' }}</td>
+                  <td>{{ recentForm.batting.legal_dot_percentage ?? '—' }}</td>
+                  <td>{{ recentForm.batting.fours }} / {{ recentForm.batting.sixes }}</td>
+                  <td>{{ recentForm.bowling.opposition_team_runs }}</td>
+                  <td>{{ recentForm.bowling.team_wickets }}</td>
+                  <td>{{ recentForm.bowling.legal_balls }}</td>
+                  <td>{{ recentForm.bowling.bowling_economy ?? '—' }}</td>
+                  <td>{{ recentForm.bowling.legal_dot_percentage ?? '—' }}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </template>
+      </template>
+    </section>
+
     <RouterLink
       v-if="canManageTeams"
       class="back-link"
@@ -413,5 +601,18 @@ dd {
 .back-link {
   display: inline-block;
   margin-top: 1rem;
+}
+.trend-scroll {
+  overflow-x: auto;
+}
+table {
+  border-collapse: collapse;
+  min-width: 70rem;
+}
+th,
+td {
+  padding: 0.5rem;
+  border: 1px solid #53617c;
+  text-align: right;
 }
 </style>

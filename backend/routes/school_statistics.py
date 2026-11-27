@@ -10,10 +10,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.api.schemas.organization_team_performance import (
+    OrganizationTeamRecentForm,
     OrganizationTeamPerformanceReadiness,
     OrganizationTeamPerformanceResponse,
     OrganizationTeamPerformanceTeamOption,
     TeamPerformanceCoverage,
+    TeamRecentFormMatch,
 )
 from backend.api.schemas.school_statistics import (
     SchoolFixtureSummary,
@@ -37,6 +39,7 @@ from backend.services.school_team_analytics_service import (
 )
 from backend.services.school_team_readiness_service import (
     TeamReadinessRequest,
+    calculate_team_recent_form,
     evaluate_team_match_readiness,
 )
 from backend.sql_app import models
@@ -322,9 +325,11 @@ async def get_organization_team_performance(
         )
         raise HTTPException(
             status_code=response_status,
-            detail="Organization or Team not found"
-            if response_status == status.HTTP_404_NOT_FOUND
-            else "Team Performance is unavailable",
+            detail=(
+                "Organization or Team not found"
+                if response_status == status.HTTP_404_NOT_FOUND
+                else "Team Performance is unavailable"
+            ),
         ) from exc
     return _safe_team_performance_response(result)
 
@@ -371,4 +376,64 @@ async def get_organization_team_performance_readiness(
         usable_batting_match_count=result.usable_batting_match_count,
         usable_bowling_match_count=result.usable_bowling_match_count,
         exclusion_counts=result.exclusion_counts,
+    )
+
+
+@router.get(
+    "/api/organizations/{organization_id}/team-performance/teams/{team_id}/recent-form",
+    response_model=OrganizationTeamRecentForm,
+)
+async def get_organization_team_recent_form(
+    organization_id: str,
+    team_id: str,
+    as_of_date: Annotated[str, Query(pattern=r"^\d{4}-\d{2}-\d{2}$")],
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> OrganizationTeamRecentForm:
+    try:
+        boundary = dt.date.fromisoformat(as_of_date)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=422, detail="as_of_date must be an ISO calendar date"
+        ) from exc
+    try:
+        result = await calculate_team_recent_form(
+            db,
+            TeamReadinessRequest(
+                actor_user_id=current_user.id,
+                organization_id=organization_id,
+                team_id=team_id,
+                as_of_date=boundary,
+            ),
+        )
+    except TeamPerformanceAccessError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    readiness = OrganizationTeamPerformanceReadiness(
+        organization_id=result.readiness.organization_id,
+        team_id=result.readiness.team_id,
+        as_of_date=result.readiness.as_of_date,
+        required_history=result.readiness.required_history,
+        usable_prior_match_count=result.readiness.usable_prior_match_count,
+        remaining_match_count=result.readiness.remaining_match_count,
+        state=result.readiness.state,
+        usable_batting_match_count=result.readiness.usable_batting_match_count,
+        usable_bowling_match_count=result.readiness.usable_bowling_match_count,
+        exclusion_counts=result.readiness.exclusion_counts,
+    )
+    return OrganizationTeamRecentForm(
+        readiness=readiness,
+        sample_size=len(result.matches),
+        recorded_delivery_rows=result.recorded_delivery_rows,
+        batting=result.batting,
+        bowling=result.bowling,
+        matches=[
+            TeamRecentFormMatch(
+                ordinal=index,
+                played_date=match.played_date,
+                batting=match.batting,
+                bowling=match.bowling,
+                recorded_delivery_rows=match.recorded_delivery_rows,
+            )
+            for index, match in enumerate(result.matches, start=1)
+        ],
     )

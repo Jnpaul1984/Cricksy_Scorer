@@ -2,6 +2,14 @@
 
 This document records the delivered aggregate pilot from issue #626 and locks the additive, bounded history/readiness foundation for issue #628. It authorizes a private, read-only School/Club Team Performance pilot surface only. It does not authorize enabling access for any real organization, changing existing permissions or Free entitlements, billing, credential creation, deployment, or any later product expansion.
 
+## Issue #635 — bounded five-match recent form
+
+The existing readiness selector is the sole authority for the exact five prior original 25-over matches. The staff workspace requires an explicit exclusive venue-local as-of date and shows no trend unless readiness is `ready`. The selected five are displayed oldest to newest with safe ordinal and confirmed played-date labels. Same-date ambiguity and all existing provenance, ledger, access and workload exclusions retain the #628 behavior. Corrections and undo are reflected on each read; a changed selected ledger or metadata between selection and calculation returns `data_unavailable` without a trend.
+
+For each selected match, the recorded-ledger batting and bowling counters reuse the validated analytics arithmetic. The response contains per-match and summed batting/bowling counters and rates, including runs, wickets, legal balls, dots, recorded batting boundaries, run rate, team concession rate and bowler-charged economy. Aggregate rates are recalculated from summed counters; zero legal balls yields null rates. Each match needs both roles under the conservative readiness rule. The response exposes only ordinal, confirmed date, typed counters, aggregate counters, sample size, recorded row count, and the safe readiness coverage/reason counts. It contains no Game IDs, participant identities, raw deliveries or provenance actor/source IDs. Historical scorecard completeness remains unknown, including for shortened innings. No causation or completion claim is made.
+
+This additive read uses the current default-off grant, contextual staff role, active organization/membership and exact Team ownership on every request. It adds no migration, grant, trial or Free-statistics behavior. The existing 250-game and 5 MiB bounds apply before selecting the five. No phase analysis, reports or three-further-game offer lifecycle is delivered here.
+
 ## Product contract
 
 - Add one private Team Performance view inside the existing organization workspace. It applies equally to School and Club organizations.

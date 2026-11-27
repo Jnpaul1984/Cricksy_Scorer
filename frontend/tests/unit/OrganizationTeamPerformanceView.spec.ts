@@ -11,6 +11,7 @@ import * as schoolApi from '@/services/schoolAdminApi';
 import type {
   FreeOrganizationType,
   OrganizationTeamPerformance,
+  OrganizationTeamRecentForm,
   OrganizationTeamPerformanceTeamOption,
   SchoolMembershipRole,
 } from '@/types/schoolAdmin';
@@ -94,6 +95,41 @@ function performance(
   };
 }
 
+function form(
+  state: 'ready' | 'not_ready' | 'data_unavailable' = 'ready',
+): OrganizationTeamRecentForm {
+  const sample = performance('school-a', 'team-a');
+  return {
+    readiness: {
+      organization_id: 'school-a',
+      team_id: 'team-a',
+      as_of_date: '2026-05-01',
+      required_history: 5,
+      usable_prior_match_count: state === 'ready' ? 5 : 4,
+      remaining_match_count: state === 'ready' ? 0 : 1,
+      state,
+      usable_batting_match_count: 5,
+      usable_bowling_match_count: 5,
+      exclusion_counts: { same_date_ambiguous: state === 'data_unavailable' ? 2 : 0 },
+    },
+    sample_size: state === 'ready' ? 5 : 0,
+    completeness: 'unknown',
+    recorded_delivery_rows: state === 'ready' ? 55 : 0,
+    batting: state === 'ready' ? sample.batting : null,
+    bowling: state === 'ready' ? sample.bowling : null,
+    matches:
+      state === 'ready'
+        ? Array.from({ length: 5 }, (_, index) => ({
+            ordinal: index + 1,
+            played_date: `2026-04-0${index + 1}`,
+            batting: sample.batting,
+            bowling: sample.bowling,
+            recorded_delivery_rows: 11,
+          }))
+        : [],
+  };
+}
+
 function schoolContext(
   organizationId: Ref<string>,
   role: Ref<SchoolMembershipRole>,
@@ -150,6 +186,53 @@ describe('organization Team Performance pilot view', () => {
     vi.mocked(schoolApi.getOrganizationTeamPerformance).mockImplementation(
       async (organizationId, teamId) => performance(organizationId, teamId),
     );
+  });
+
+  it('shows the five-match trend and suppresses stale form after a Team switch', async () => {
+    let resolveOld: (value: OrganizationTeamRecentForm) => void = () => undefined;
+    const oldRequest = new Promise<OrganizationTeamRecentForm>((resolve) => {
+      resolveOld = resolve;
+    });
+    vi.mocked(schoolApi.getOrganizationTeamRecentForm)
+      .mockReturnValueOnce(oldRequest)
+      .mockResolvedValue(form());
+    vi.mocked(schoolApi.listOrganizationTeamPerformanceTeams).mockResolvedValue([
+      team('team-a', 'school-a'),
+      team('team-b', 'school-a'),
+    ]);
+    const wrapper = mountView(ref('school-a'));
+    await flushPromises();
+    await wrapper.get('input[aria-label="Recent form as-of date"]').setValue('2026-05-01');
+    await flushPromises();
+    expect(wrapper.text()).toContain('Loading recent form');
+    await wrapper.get('select[aria-label="Team"]').setValue('team-b');
+    await flushPromises();
+    expect(wrapper.find('table[aria-label="Recent Team form trend"]').exists()).toBe(true);
+    resolveOld(form('not_ready'));
+    await flushPromises();
+    expect(wrapper.text()).toContain('Sample size: 5');
+    expect(wrapper.text()).not.toContain('Insufficient history');
+  });
+
+  it('shows insufficient, unavailable, and denied form states without a trend', async () => {
+    vi.mocked(schoolApi.getOrganizationTeamRecentForm)
+      .mockResolvedValueOnce(form('not_ready'))
+      .mockResolvedValueOnce(form('data_unavailable'))
+      .mockRejectedValueOnce(Object.assign(new Error('denied'), { status: 403 }));
+    const wrapper = mountView(ref('school-a'));
+    await flushPromises();
+    const date = wrapper.get('input[aria-label="Recent form as-of date"]');
+    await date.setValue('2026-05-01');
+    await flushPromises();
+    expect(wrapper.text()).toContain('Insufficient history');
+    expect(wrapper.find('table[aria-label="Recent Team form trend"]').exists()).toBe(false);
+    await date.setValue('2026-05-02');
+    await flushPromises();
+    expect(wrapper.text()).toContain('Chronology or evidence is unavailable');
+    await date.setValue('2026-05-03');
+    await flushPromises();
+    expect(wrapper.text()).toContain('Recent form is unavailable');
+    expect(wrapper.find('table[aria-label="Recent Team form trend"]').exists()).toBe(false);
   });
 
   it('shows archived Team scope, recorded metrics, and coverage without player averages', async () => {

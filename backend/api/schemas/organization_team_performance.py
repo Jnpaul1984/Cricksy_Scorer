@@ -91,3 +91,21 @@ class OrganizationTeamPerformanceReadiness(BaseModel):
     usable_batting_match_count: int
     usable_bowling_match_count: int
     exclusion_counts: dict[str, int]
+
+
+class TeamRecentFormMatch(BaseModel):
+    ordinal: int
+    played_date: dt.date
+    batting: TeamPerformanceBatting
+    bowling: TeamPerformanceBowling
+    recorded_delivery_rows: int
+
+
+class OrganizationTeamRecentForm(BaseModel):
+    readiness: OrganizationTeamPerformanceReadiness
+    sample_size: int
+    completeness: Literal["unknown"] = "unknown"
+    recorded_delivery_rows: int
+    batting: TeamPerformanceBatting | None
+    bowling: TeamPerformanceBowling | None
+    matches: list[TeamRecentFormMatch]
