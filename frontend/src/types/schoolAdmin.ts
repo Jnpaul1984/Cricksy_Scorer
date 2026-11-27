@@ -94,6 +94,26 @@ export interface OrganizationTeamRecentForm {
   }[];
 }
 
+export interface OrganizationTeamPhaseAnalysis {
+  readiness: OrganizationTeamRecentForm['readiness'];
+  sample_size: number;
+  completeness: 'unknown';
+  phase_unavailable_matches: number;
+  phases: {
+    name: 'opening' | 'middle' | 'closing';
+    start_over: number;
+    end_over: number;
+    batting_observed_matches: number;
+    bowling_observed_matches: number;
+    batting_unavailable_matches: number;
+    bowling_unavailable_matches: number;
+    batting_recorded_rows: number;
+    bowling_recorded_rows: number;
+    batting: TeamPerformanceBatting | null;
+    bowling: TeamPerformanceBowling | null;
+  }[];
+}
+
 export interface SchoolOrganization {
   id: string;
   name: string;

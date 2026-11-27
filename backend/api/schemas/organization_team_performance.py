@@ -109,3 +109,25 @@ class OrganizationTeamRecentForm(BaseModel):
     batting: TeamPerformanceBatting | None
     bowling: TeamPerformanceBowling | None
     matches: list[TeamRecentFormMatch]
+
+
+class TeamPhaseBandResponse(BaseModel):
+    name: Literal["opening", "middle", "closing"]
+    start_over: int
+    end_over: int
+    batting_observed_matches: int
+    bowling_observed_matches: int
+    batting_unavailable_matches: int
+    bowling_unavailable_matches: int
+    batting_recorded_rows: int
+    bowling_recorded_rows: int
+    batting: TeamPerformanceBatting | None
+    bowling: TeamPerformanceBowling | None
+
+
+class OrganizationTeamPhaseAnalysis(BaseModel):
+    readiness: OrganizationTeamPerformanceReadiness
+    sample_size: int
+    completeness: Literal["unknown"] = "unknown"
+    phase_unavailable_matches: int
+    phases: list[TeamPhaseBandResponse]

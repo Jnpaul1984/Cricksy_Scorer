@@ -6,11 +6,13 @@ import { getErrorMessage } from '@/services/api';
 import {
   getOrganizationTeamPerformance,
   getOrganizationTeamRecentForm,
+  getOrganizationTeamPhaseAnalysis,
   listOrganizationTeamPerformanceTeams,
 } from '@/services/schoolAdminApi';
 import type {
   OrganizationTeamPerformance,
   OrganizationTeamRecentForm,
+  OrganizationTeamPhaseAnalysis,
   OrganizationTeamPerformanceTeamOption,
 } from '@/types/schoolAdmin';
 
@@ -32,6 +34,18 @@ const oversLimit = ref(20);
 const data = ref<OrganizationTeamPerformance | null>(null);
 const asOfDate = ref('');
 const recentForm = ref<OrganizationTeamRecentForm | null>(null);
+const phaseAnalysis = ref<OrganizationTeamPhaseAnalysis | null>(null);
+const phaseState = ref<
+  | 'idle'
+  | 'loading'
+  | 'ready'
+  | 'not_ready'
+  | 'data_unavailable'
+  | 'unavailable_access'
+  | 'scope_too_large'
+  | 'request_failure'
+>('idle');
+const phaseError = ref('');
 const recentFormState = ref<
   | 'idle'
   | 'loading'
@@ -49,6 +63,7 @@ const teamsOrganizationId = ref('');
 let teamGeneration = 0;
 let requestGeneration = 0;
 let formGeneration = 0;
+let phaseGeneration = 0;
 
 function clearData() {
   data.value = null;
@@ -224,12 +239,69 @@ watch(
   { immediate: true },
 );
 
+watch(
+  [organizationId, canManageTeams, selectedTeamId, asOfDate],
+  async ([requestedOrganizationId, allowed, requestedTeamId, requestedDate]) => {
+    const generation = ++phaseGeneration;
+    phaseAnalysis.value = null;
+    phaseError.value = '';
+    if (!allowed || !requestedOrganizationId) {
+      phaseState.value = 'unavailable_access';
+      return;
+    }
+    if (
+      !requestedTeamId ||
+      !requestedDate ||
+      teamsOrganizationId.value !== requestedOrganizationId
+    ) {
+      phaseState.value = 'idle';
+      return;
+    }
+    phaseState.value = 'loading';
+    try {
+      const result = await getOrganizationTeamPhaseAnalysis(
+        requestedOrganizationId,
+        requestedTeamId,
+        requestedDate,
+      );
+      if (
+        generation !== phaseGeneration ||
+        requestedOrganizationId !== organizationId.value ||
+        requestedTeamId !== selectedTeamId.value ||
+        requestedDate !== asOfDate.value ||
+        !canManageTeams.value
+      )
+        return;
+      phaseAnalysis.value = result;
+      phaseState.value =
+        result.readiness.state === 'data_unavailable' &&
+        result.readiness.exclusion_counts.scope_too_large
+          ? 'scope_too_large'
+          : result.readiness.state;
+    } catch (reason) {
+      if (
+        generation !== phaseGeneration ||
+        requestedOrganizationId !== organizationId.value ||
+        requestedTeamId !== selectedTeamId.value ||
+        requestedDate !== asOfDate.value ||
+        !canManageTeams.value
+      )
+        return;
+      phaseState.value = failureStatus(reason);
+      if (phaseState.value === 'request_failure') phaseError.value = getErrorMessage(reason);
+    }
+  },
+  { immediate: true },
+);
+
 onBeforeUnmount(() => {
   teamGeneration += 1;
   requestGeneration += 1;
   formGeneration += 1;
+  phaseGeneration += 1;
   clearData();
   recentForm.value = null;
+  phaseAnalysis.value = null;
   teams.value = [];
 });
 </script>
@@ -524,6 +596,120 @@ onBeforeUnmount(() => {
                   <td>{{ recentForm.bowling.legal_dot_percentage ?? '—' }}</td>
                 </tr>
               </tfoot>
+            </table>
+          </div>
+        </template>
+      </template>
+    </section>
+
+    <section
+      v-if="canManageTeams && teamsOrganizationId === organizationId"
+      class="coverage"
+      aria-labelledby="phase-heading"
+    >
+      <h3 id="phase-heading">25-over Team phase analysis</h3>
+      <p>
+        Analytical bands: opening 1–5, middle 6–20, closing 21–25. These are not official powerplay
+        rules. Only explicitly positioned recorded deliveries are attributed.
+      </p>
+      <p v-if="phaseState === 'idle'" role="status">
+        Choose the as-of date above to check phase evidence.
+      </p>
+      <p v-else-if="phaseState === 'loading'" role="status">Loading phase analysis…</p>
+      <p v-else-if="phaseState === 'unavailable_access'" role="alert">
+        Phase analysis is unavailable for your current access.
+      </p>
+      <p v-else-if="phaseState === 'scope_too_large'" role="alert">
+        Phase analysis scope exceeds the safe workload limit.
+      </p>
+      <p v-else-if="phaseState === 'request_failure'" role="alert">{{ phaseError }}</p>
+      <template v-if="phaseAnalysis">
+        <p>
+          Usable prior matches: {{ phaseAnalysis.readiness.usable_prior_match_count }} /
+          {{ phaseAnalysis.readiness.required_history }}. Five-match sample:
+          {{ phaseAnalysis.sample_size }}. Historical completeness: unknown.
+        </p>
+        <p v-if="phaseState === 'not_ready'" role="status">
+          Insufficient history for phase analysis:
+          {{ phaseAnalysis.readiness.remaining_match_count }} more usable matches needed.
+        </p>
+        <p v-else-if="phaseState === 'data_unavailable'" role="status">
+          Chronology or evidence is unavailable; no phase analysis is shown.
+        </p>
+        <template v-if="phaseState === 'ready'">
+          <p>
+            Matches with unavailable phase positions: {{ phaseAnalysis.phase_unavailable_matches }}.
+            A blank phase means unavailable evidence; observed zero is shown as 0. Unplayed overs
+            are not inferred.
+          </p>
+          <div class="trend-scroll">
+            <table aria-label="Team batting phase analysis">
+              <thead>
+                <tr>
+                  <th>Batting band</th>
+                  <th>Observed matches</th>
+                  <th>Unavailable matches</th>
+                  <th>Recorded rows</th>
+                  <th>Runs</th>
+                  <th>Wickets</th>
+                  <th>Legal balls</th>
+                  <th>Run rate</th>
+                  <th>Dot %</th>
+                  <th>Recorded 4s / 6s</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="phase in phaseAnalysis.phases" :key="phase.name">
+                  <th>{{ phase.name }} ({{ phase.start_over }}–{{ phase.end_over }})</th>
+                  <td>{{ phase.batting_observed_matches }}</td>
+                  <td>{{ phase.batting_unavailable_matches }}</td>
+                  <td>{{ phase.batting_recorded_rows }}</td>
+                  <td>{{ phase.batting?.team_runs ?? 'Unavailable' }}</td>
+                  <td>{{ phase.batting?.wickets_lost ?? '—' }}</td>
+                  <td>{{ phase.batting?.legal_balls ?? '—' }}</td>
+                  <td>{{ phase.batting?.run_rate ?? '—' }}</td>
+                  <td>{{ phase.batting?.legal_dot_percentage ?? '—' }}</td>
+                  <td>
+                    {{ phase.batting ? `${phase.batting.fours} / ${phase.batting.sixes}` : '—' }}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+            <table aria-label="Team bowling phase analysis">
+              <thead>
+                <tr>
+                  <th>Bowling band</th>
+                  <th>Observed matches</th>
+                  <th>Unavailable matches</th>
+                  <th>Recorded rows</th>
+                  <th>Opposition runs</th>
+                  <th>Bowler-charged runs</th>
+                  <th>Team / bowler wickets</th>
+                  <th>Legal balls</th>
+                  <th>Economy</th>
+                  <th>Dot %</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="phase in phaseAnalysis.phases" :key="phase.name">
+                  <th>{{ phase.name }} ({{ phase.start_over }}–{{ phase.end_over }})</th>
+                  <td>{{ phase.bowling_observed_matches }}</td>
+                  <td>{{ phase.bowling_unavailable_matches }}</td>
+                  <td>{{ phase.bowling_recorded_rows }}</td>
+                  <td>{{ phase.bowling?.opposition_team_runs ?? 'Unavailable' }}</td>
+                  <td>{{ phase.bowling?.bowler_charged_runs ?? '—' }}</td>
+                  <td>
+                    {{
+                      phase.bowling
+                        ? `${phase.bowling.team_wickets} / ${phase.bowling.bowler_credited_wickets}`
+                        : '—'
+                    }}
+                  </td>
+                  <td>{{ phase.bowling?.legal_balls ?? '—' }}</td>
+                  <td>{{ phase.bowling?.bowling_economy ?? '—' }}</td>
+                  <td>{{ phase.bowling?.legal_dot_percentage ?? '—' }}</td>
+                </tr>
+              </tbody>
             </table>
           </div>
         </template>

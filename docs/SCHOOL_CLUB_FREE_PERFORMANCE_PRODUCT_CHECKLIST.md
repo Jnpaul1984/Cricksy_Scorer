@@ -315,7 +315,7 @@ Performance is one shared School/Club bundle architecture. Access must resolve a
 | PERF-AN-004 | Current form | Performance | ADAPT | LOW | E-PLAYER form-analysis/PlayerForm tests; #635 adds private, bounded five-match Team recorded-ledger form only. | Player and organization-season scope remain. | Org query scope | No | C-DB |
 | PERF-AN-005 | Career trends | Performance | ADAPT | LOW | E-PLAYER career/year/form endpoints. | Separate global cricket truth from private org views. | History policy | No | C-DATA |
 | PERF-AN-006 | Season trends | Performance | ADAPT | LOW | E-PLAYER year stats; E-STATS. | Define org season semantics. | Season model | No | C-DATA |
-| PERF-AN-007 | Phase analysis | Performance | ADAPT | USAGE-SENSITIVE | E-ANALYTICS phase routes/services/tests. | Tenant-scope queries. | Org query scope | No | C-DATA |
+| PERF-AN-007 | Phase analysis | Performance | ADAPT | USAGE-SENSITIVE | E-ANALYTICS phase routes/services/tests; #637 adds private five-match Team batting/bowling recorded-ledger bands with explicit phase coverage only. | Broader player, season and organization scope remains. | Org query scope | No | C-DATA |
 | PERF-AN-008 | Pressure analysis | Performance | ADAPT | USAGE-SENSITIVE | E-ANALYTICS pressure models/routes/tests. | Tenant scope and provenance. | Org query scope | No | C-DATA |
 | PERF-AN-009 | Dismissal analysis | Performance | ADAPT | LOW | E-PLAYER dismissal endpoint/recommendations. | Tenant/season filters; deterministic evidence. | Org query scope | No | C-DATA |
 | PERF-AN-010 | Heatmaps | Performance | ADAPT | USAGE-SENSITIVE | E-ANALYTICS heatmap routes/components/tests. | Tenant scope and query limits. | Org query scope | No | C-DATA |
