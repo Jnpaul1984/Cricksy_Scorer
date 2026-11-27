@@ -22,8 +22,10 @@ from backend.services.game_performance_metadata_service import (
 )
 from backend.services.school_team_readiness_service import (
     TeamReadinessRequest,
+    calculate_team_recent_form,
     evaluate_team_match_readiness,
 )
+
 from backend.sql_app.models import (
     Game,
     GamePerformanceMetadataAudit,
@@ -1734,3 +1736,167 @@ def test_metadata_update_service_rejects_missing_game(school_client: TestClient)
                 )
 
     asyncio.run(update())
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("organization_type", ["school", "club"])
+async def test_recent_form_uses_exact_latest_five_and_weighted_rates(
+    school_client: TestClient, organization_type: str
+) -> None:
+    owner = register_user(school_client, f"form-{organization_type}@example.com")
+    create = create_school if organization_type == "school" else create_club
+    organization = create(school_client, owner, f"Recent form {organization_type}")
+    team = None
+    games = []
+    for day in range(1, 7):
+        team, game = await _add_history_game(
+            school_client,
+            organization_id=organization["id"],
+            owner_id=owner.id,
+            played_date=dt.date(2026, 4, day),
+            reuse_team=team,
+            current_overs=18 if day == 6 else 25,
+        )
+        games.append(game)
+    assert team is not None
+    await _grant(school_client, organization["id"], owner.id)
+    async with school_client.session_maker() as session:  # type: ignore[attr-defined]
+        result = await calculate_team_recent_form(
+            session,
+            TeamReadinessRequest(owner.id, organization["id"], team.id, dt.date(2026, 5, 1)),
+        )
+    assert result.readiness.state == "ready"
+    assert [match.played_date.day for match in result.matches] == [2, 3, 4, 5, 6]
+    assert result.recorded_delivery_rows == sum(
+        match.recorded_delivery_rows for match in result.matches
+    )
+    assert result.batting is not None and result.bowling is not None
+    assert result.batting["team_runs"] == sum(
+        match.batting["team_runs"] for match in result.matches
+    )
+    assert result.batting["run_rate"] == round(
+        result.batting["team_runs"] * 6 / result.batting["legal_balls"], 2
+    )
+    assert result.bowling["bowling_economy"] == round(
+        result.bowling["bowler_charged_runs"] * 6 / result.bowling["legal_balls"], 2
+    )
+    response = school_client.get(
+        f"/api/organizations/{organization['id']}/team-performance/teams/{team.id}/recent-form",
+        params={"as_of_date": "2026-05-01"},
+        headers=owner.headers,
+    )
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["sample_size"] == 5
+    assert [item["ordinal"] for item in payload["matches"]] == [1, 2, 3, 4, 5]
+    assert all(game.id not in response.text for game in games)
+    assert owner.id not in response.text
+
+
+@pytest.mark.asyncio
+async def test_recent_form_no_trend_with_insufficient_or_ambiguous_history(
+    school_client: TestClient,
+) -> None:
+    owner = register_user(school_client, "form-insufficient@example.com")
+    organization = create_school(school_client, owner, "Recent form insufficient")
+    team = None
+    for day in (1, 2, 3, 4, 5):
+        team, _ = await _add_history_game(
+            school_client,
+            organization_id=organization["id"],
+            owner_id=owner.id,
+            played_date=dt.date(2026, 4, day),
+            reuse_team=team,
+        )
+    assert team is not None
+    await _grant(school_client, organization["id"], owner.id)
+    route = f"/api/organizations/{organization['id']}/team-performance/teams/{team.id}/recent-form"
+    response = school_client.get(route, params={"as_of_date": "2026-04-05"}, headers=owner.headers)
+    assert response.status_code == 200
+    assert response.json()["readiness"]["state"] == "not_ready"
+    assert response.json()["matches"] == []
+
+    _, _ = await _add_history_game(
+        school_client,
+        organization_id=organization["id"],
+        owner_id=owner.id,
+        played_date=dt.date(2026, 4, 5),
+        reuse_team=team,
+    )
+    response = school_client.get(route, params={"as_of_date": "2026-05-01"}, headers=owner.headers)
+    assert response.status_code == 200
+    assert response.json()["readiness"]["state"] == "not_ready"
+    assert response.json()["readiness"]["exclusion_counts"]["same_date_ambiguous"] == 2
+    assert response.json()["matches"] == []
+
+
+@pytest.mark.asyncio
+async def test_recent_form_zero_denominators_and_ledger_correction(
+    school_client: TestClient,
+) -> None:
+    owner = register_user(school_client, "form-correction@example.com")
+    organization = create_school(school_client, owner, "Recent form correction")
+    team = None
+    games = []
+    for day in range(1, 6):
+        team, game = await _add_history_game(
+            school_client,
+            organization_id=organization["id"],
+            owner_id=owner.id,
+            played_date=dt.date(2026, 4, day),
+            reuse_team=team,
+        )
+        games.append(game)
+    assert team is not None
+    await _grant(school_client, organization["id"], owner.id)
+    async with school_client.session_maker() as session:  # type: ignore[attr-defined]
+        for game in games:
+            stored = await session.get(Game, game.id)
+            assert stored is not None
+            stored.deliveries = [stored.deliveries[3], stored.deliveries[12]]
+        await session.commit()
+    route = f"/api/organizations/{organization['id']}/team-performance/teams/{team.id}/recent-form"
+    first = school_client.get(route, params={"as_of_date": "2026-05-01"}, headers=owner.headers)
+    assert first.status_code == 200, first.text
+    assert first.json()["sample_size"] == 5
+    assert first.json()["batting"]["legal_balls"] == 0
+    assert first.json()["batting"]["run_rate"] is None
+    assert first.json()["bowling"]["bowling_economy"] is None
+    async with school_client.session_maker() as session:  # type: ignore[attr-defined]
+        stored = await session.get(Game, games[-1].id)
+        assert stored is not None
+        rows = list(stored.deliveries)
+        rows.append(dict(rows[0], extra_type=None, extra_runs=0, runs_scored=0))
+        stored.deliveries = rows
+        await session.commit()
+    corrected = school_client.get(route, params={"as_of_date": "2026-05-01"}, headers=owner.headers)
+    assert corrected.status_code == 200, corrected.text
+    assert corrected.json()["batting"]["legal_balls"] == 1
+    assert corrected.json()["batting"]["run_rate"] is not None
+
+
+@pytest.mark.asyncio
+async def test_recent_form_preserves_grant_role_and_exact_team_boundary(
+    school_client: TestClient,
+) -> None:
+    owner = register_user(school_client, "form-access-owner@example.com")
+    scorer = register_user(school_client, "form-access-scorer@example.com")
+    organization = create_school(school_client, owner, "Recent form access")
+    other = create_school(school_client, owner, "Other form organization")
+    add_membership(school_client, owner, organization["id"], scorer.id, "scorer")
+    team, _ = await _add_history_game(
+        school_client,
+        organization_id=organization["id"],
+        owner_id=owner.id,
+        played_date=dt.date(2026, 4, 1),
+    )
+    route = f"/api/organizations/{organization['id']}/team-performance/teams/{team.id}/recent-form"
+    params = {"as_of_date": "2026-05-01"}
+    assert school_client.get(route, params=params, headers=owner.headers).status_code == 403
+    await _grant(school_client, organization["id"], owner.id)
+    assert school_client.get(route, params=params, headers=scorer.headers).status_code in {403, 404}
+    foreign_route = f"/api/organizations/{other['id']}/team-performance/teams/{team.id}/recent-form"
+    assert school_client.get(foreign_route, params=params, headers=owner.headers).status_code in {
+        403,
+        404,
+    }

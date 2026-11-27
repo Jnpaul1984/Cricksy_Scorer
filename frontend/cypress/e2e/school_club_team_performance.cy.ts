@@ -134,6 +134,46 @@ describe('School/Club Team Performance staff pilot', () => {
         .should('include', '/team-performance/teams/team-archived?overs_limit=20');
     });
 
+    it(`shows a bounded ${kind} five-match recorded form trend`, () => {
+      stubOrganization(kind, id);
+      cy.intercept(
+        'GET',
+        `**/api/organizations/${id}/team-performance/teams/team-active/recent-form?as_of_date=*`,
+        {
+          readiness: {
+            organization_id: id,
+            team_id: 'team-active',
+            as_of_date: '2026-05-01',
+            required_history: 5,
+            usable_prior_match_count: 5,
+            remaining_match_count: 0,
+            state: 'ready',
+            usable_batting_match_count: 5,
+            usable_bowling_match_count: 5,
+            exclusion_counts: { invalid_ledger: 1 },
+          },
+          sample_size: 5,
+          completeness: 'unknown',
+          recorded_delivery_rows: 85,
+          batting: performance(id, 'team-active').batting,
+          bowling: performance(id, 'team-active').bowling,
+          matches: Array.from({ length: 5 }, (_, index) => ({
+            ordinal: index + 1,
+            played_date: `2026-04-0${index + 1}`,
+            recorded_delivery_rows: 17,
+            batting: performance(id, 'team-active').batting,
+            bowling: performance(id, 'team-active').bowling,
+          })),
+        },
+      ).as('recentForm');
+      cy.get('input[aria-label="Recent form as-of date"]').type('2026-05-01');
+      cy.wait('@recentForm');
+      cy.contains('Sample size: 5').should('be.visible');
+      cy.contains('invalid ledger: 1').should('be.visible');
+      cy.get('table[aria-label="Recent Team form trend"] tbody tr').should('have.length', 5);
+      cy.contains('Five-match aggregate').should('be.visible');
+    });
+
     it(`shows unavailable access when the ${kind} pilot team listing is denied`, () => {
       cy.intercept('GET', `**/api/organizations/${id}`, {
         id,

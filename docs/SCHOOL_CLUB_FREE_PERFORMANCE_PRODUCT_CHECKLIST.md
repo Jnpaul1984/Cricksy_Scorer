@@ -312,7 +312,7 @@ Performance is one shared School/Club bundle architecture. Access must resolve a
 | PERF-AN-001 | Advanced batting analytics | Performance | ADAPT | USAGE-SENSITIVE | E-ANALYTICS player/phase/heatmap services/tests. | Organization filters, seat and privacy. | Performance authority | No | C-DATA |
 | PERF-AN-002 | Advanced bowling analytics | Performance | ADAPT | USAGE-SENSITIVE | E-ANALYTICS phase/pressure/dismissal services/tests. | Organization filters and evidence labels. | Performance authority | No | C-DATA |
 | PERF-AN-003 | Fielding analytics | Performance | OWNER DECISION | UNKNOWN | Current School UI states fielder identity is incomplete; V2 video fielding is separate. | Approve only evidence-backed metrics. | Scoring evidence audit | Yes — truth boundary | C-DATA |
-| PERF-AN-004 | Current form | Performance | ADAPT | LOW | E-PLAYER form-analysis/PlayerForm tests. | Organization-season scope. | Org query scope | No | C-DB |
+| PERF-AN-004 | Current form | Performance | ADAPT | LOW | E-PLAYER form-analysis/PlayerForm tests; #635 adds private, bounded five-match Team recorded-ledger form only. | Player and organization-season scope remain. | Org query scope | No | C-DB |
 | PERF-AN-005 | Career trends | Performance | ADAPT | LOW | E-PLAYER career/year/form endpoints. | Separate global cricket truth from private org views. | History policy | No | C-DATA |
 | PERF-AN-006 | Season trends | Performance | ADAPT | LOW | E-PLAYER year stats; E-STATS. | Define org season semantics. | Season model | No | C-DATA |
 | PERF-AN-007 | Phase analysis | Performance | ADAPT | USAGE-SENSITIVE | E-ANALYTICS phase routes/services/tests. | Tenant-scope queries. | Org query scope | No | C-DATA |
@@ -393,7 +393,7 @@ The aggregate Team Performance pilot above is the delivered scope of issue #626.
 | PERF-DASH-007 | Attendance trends | Performance | NEW | USAGE-SENSITIVE | E-ABSENT | Build deterministic trends. | Attendance | No | C-DATA |
 | PERF-DASH-008 | Availability trends | Performance | NEW | USAGE-SENSITIVE | E-ABSENT | Build deterministic trends. | Availability | No | C-DATA |
 | PERF-DASH-009 | Selection/playing-opportunity trends | Performance | NEW | USAGE-SENSITIVE | Final XI snapshots exist; selection history does not. | Define opportunity metrics and fairness caveats. | Selection history | No | C-DATA |
-| PERF-DASH-010 | Performance trends | Performance | ADAPT | USAGE-SENSITIVE | E-ANALYTICS/E-DEV longitudinal services. | Organization/season scope. | Analytics adaptation | No | C-DATA |
+| PERF-DASH-010 | Performance trends | Performance | ADAPT | USAGE-SENSITIVE | E-ANALYTICS/E-DEV longitudinal services; #635 adds a private five-match Team trend with explicit coverage only. | Broader organization/season trends remain. | Analytics adaptation | No | C-DATA |
 | PERF-DASH-011 | Multi-Team overview | Performance | NEW | USAGE-SENSITIVE | Team list/basic stats exist, no combined performance view. | Aggregate safely across organization Teams. | Team dashboards | No | C-DATA |
 | PERF-DASH-012 | School age-group overview | Performance | NEW | LOW | `year_group` exists on roster, no dashboard. | Privacy-safe grouping and terminology. | School policy | No | C-DATA |
 | PERF-DASH-013 | Club squad overview | Performance | NEW | LOW | Shared Teams exist, no squad overview. | Shared dashboard with Club terminology. | Team dashboard | No | C-DATA |

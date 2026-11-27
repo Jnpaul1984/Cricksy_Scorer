@@ -5,7 +5,7 @@ from __future__ import annotations
 import datetime as dt
 import hashlib
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Literal
 
 from sqlalchemy import and_, case, func, select
@@ -17,9 +17,16 @@ from backend.services.organization_team_performance_access import (
     require_team_performance_access,
 )
 from backend.services.school_team_analytics_service import (
+    BattingTotals,
+    BowlingTotals,
     TeamAnalyticsRequest,
+    _add_delivery,
     _delivery_error,
     _delivery_payload_byte_length,
+    _empty_batting,
+    _empty_bowling,
+    _finish_batting,
+    _finish_bowling,
     _frozen_side_ids,
     _team_scope_clause,
 )
@@ -82,6 +89,23 @@ class TeamReadinessResult:
     usable_bowling_match_count: int
     exclusion_counts: dict[str, int]
     selected_sources: tuple[SelectedReadinessSource, ...]
+
+
+@dataclass(frozen=True)
+class RecentFormMatch:
+    played_date: dt.date
+    batting: BattingTotals
+    bowling: BowlingTotals
+    recorded_delivery_rows: int
+
+
+@dataclass(frozen=True)
+class TeamRecentFormResult:
+    readiness: TeamReadinessResult
+    matches: tuple[RecentFormMatch, ...]
+    batting: BattingTotals | None
+    bowling: BowlingTotals | None
+    recorded_delivery_rows: int
 
 
 def _empty_counts() -> dict[str, int]:
@@ -488,4 +512,87 @@ async def evaluate_team_match_readiness(
         usable_count=usable_count,
         batting_count=usable_count,
         bowling_count=usable_count,
+    )
+
+
+async def calculate_team_recent_form(
+    db: AsyncSession, request: TeamReadinessRequest
+) -> TeamRecentFormResult:
+    """Analyze exactly the readiness-selected five; never substitute a different cohort."""
+    readiness = await evaluate_team_match_readiness(db, request)
+    if readiness.state != "ready":
+        return TeamRecentFormResult(readiness, (), None, None, 0)
+
+    sources = {source.game_id: source for source in readiness.selected_sources}
+    games = (
+        await db.scalars(
+            select(models.Game)
+            .where(models.Game.id.in_(sources), _candidate_clause(request))
+            .execution_options(populate_existing=True)
+        )
+    ).all()
+    # The selection and the ledger read may straddle a correction. Fail closed.
+    if len(games) != REQUIRED_PRIOR_MATCHES:
+        return TeamRecentFormResult(
+            replace(readiness, state="data_unavailable", selected_sources=()), (), None, None, 0
+        )
+    game_by_id = {game.id: game for game in games}
+    matches: list[RecentFormMatch] = []
+    aggregate_batting = {k: v for k, v in _empty_batting().items() if isinstance(v, int)}
+    aggregate_bowling = {k: v for k, v in _empty_bowling().items() if isinstance(v, int)}
+    for source in reversed(readiness.selected_sources):
+        game = game_by_id[source.game_id]
+        deliveries = game.deliveries
+        if (
+            game.actual_played_date != source.played_date
+            or game.team_performance_metadata_revision != source.metadata_revision
+            or not isinstance(deliveries, list)
+            or hashlib.sha256(
+                json.dumps(deliveries, sort_keys=True, separators=(",", ":")).encode("utf-8")
+            ).hexdigest()
+            != source.ledger_digest
+        ):
+            return TeamRecentFormResult(
+                replace(readiness, state="data_unavailable", selected_sources=()), (), None, None, 0
+            )
+        target_sides = [
+            side
+            for side, payload in (("team_a", game.team_a), ("team_b", game.team_b))
+            if _source(payload) == (request.organization_id, request.team_id)
+        ]
+        if len(target_sides) != 1:
+            return TeamRecentFormResult(
+                replace(readiness, state="data_unavailable", selected_sources=()), (), None, None, 0
+            )
+        target = target_sides[0]
+        target_ids = _frozen_side_ids(
+            game.team_a if target == "team_a" else game.team_b, require_canonical=True
+        )
+        if not target_ids:
+            return TeamRecentFormResult(
+                replace(readiness, state="data_unavailable", selected_sources=()), (), None, None, 0
+            )
+        batting = {k: v for k, v in _empty_batting().items() if isinstance(v, int)}
+        bowling = {k: v for k, v in _empty_bowling().items() if isinstance(v, int)}
+        for row in deliveries:
+            into_batting = row["striker_id"] in target_ids
+            _add_delivery(batting if into_batting else bowling, row, into_batting=into_batting)
+        for key, value in batting.items():
+            aggregate_batting[key] += value
+        for key, value in bowling.items():
+            aggregate_bowling[key] += value
+        matches.append(
+            RecentFormMatch(
+                source.played_date,
+                _finish_batting(batting),
+                _finish_bowling(bowling),
+                len(deliveries),
+            )
+        )
+    return TeamRecentFormResult(
+        readiness,
+        tuple(matches),
+        _finish_batting(aggregate_batting),
+        _finish_bowling(aggregate_bowling),
+        sum(match.recorded_delivery_rows for match in matches),
     )
