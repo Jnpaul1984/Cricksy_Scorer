@@ -103,10 +103,49 @@ function stubOrganization(kind: 'school' | 'club', id: string) {
       status: 'archived',
     },
   ]);
-  cy.intercept('GET', `**/api/organizations/${id}/team-performance/teams/**`, (req) => {
-    const teamId = req.url.includes('team-archived') ? 'team-archived' : 'team-active';
-    req.reply(performance(id, teamId));
-  }).as(`teamPerformance-${id}`);
+  cy.intercept(
+    {
+      method: 'GET',
+      pathname: `**/api/organizations/${id}/team-performance/teams/*`,
+      query: { overs_limit: '*' },
+    },
+    (req) => {
+      const teamId = req.url.includes('team-archived') ? 'team-archived' : 'team-active';
+      req.reply(performance(id, teamId));
+    },
+  ).as(`teamPerformance-${id}`);
+  const readiness = {
+    organization_id: id,
+    team_id: 'team-active',
+    as_of_date: '2026-05-01',
+    required_history: 5,
+    usable_prior_match_count: 0,
+    remaining_match_count: 5,
+    state: 'not_ready',
+    usable_batting_match_count: 0,
+    usable_bowling_match_count: 0,
+    exclusion_counts: {},
+  };
+  cy.intercept(
+    'GET',
+    `**/api/organizations/${id}/team-performance/teams/*/recent-form?as_of_date=*`,
+    {
+      readiness,
+      sample_size: 0,
+      completeness: 'unknown',
+      recorded_delivery_rows: 0,
+      batting: null,
+      bowling: null,
+      matches: [],
+    },
+  ).as('defaultRecentForm');
+  cy.intercept('GET', `**/api/organizations/${id}/team-performance/teams/*/phases?as_of_date=*`, {
+    readiness,
+    sample_size: 0,
+    completeness: 'unknown',
+    phase_unavailable_matches: 0,
+    phases: [],
+  }).as('defaultPhases');
   cy.visitWithAuth(`/${base}/${id}/team-performance`, 'free');
 }
 
@@ -168,7 +207,9 @@ describe('School/Club Team Performance staff pilot', () => {
       ).as('recentForm');
       cy.get('input[aria-label="Recent form as-of date"]').type('2026-05-01');
       cy.wait('@recentForm');
+      cy.wait('@defaultPhases');
       cy.contains('Sample size: 5').should('be.visible');
+      cy.contains('Insufficient history for phase analysis').should('be.visible');
       cy.contains('invalid ledger: 1').should('be.visible');
       cy.get('table[aria-label="Recent Team form trend"] tbody tr').should('have.length', 5);
       cy.contains('Five-match aggregate').should('be.visible');
@@ -240,7 +281,9 @@ describe('School/Club Team Performance staff pilot', () => {
       ).as('phaseAnalysis');
       cy.get('input[aria-label="Recent form as-of date"]').type('2026-05-01');
       cy.wait('@phaseAnalysis');
+      cy.wait('@defaultRecentForm');
       cy.contains('Analytical bands: opening 1–5, middle 6–20, closing 21–25').should('be.visible');
+      cy.contains('Insufficient history:').should('be.visible');
       cy.contains('Matches with unavailable phase positions: 1').should('be.visible');
       cy.get('table[aria-label="Team batting phase analysis"] tbody tr').should('have.length', 3);
     });
