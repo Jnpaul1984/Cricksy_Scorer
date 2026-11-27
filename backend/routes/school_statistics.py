@@ -10,12 +10,14 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.api.schemas.organization_team_performance import (
+    OrganizationTeamPhaseAnalysis,
     OrganizationTeamRecentForm,
     OrganizationTeamPerformanceReadiness,
     OrganizationTeamPerformanceResponse,
     OrganizationTeamPerformanceTeamOption,
     TeamPerformanceCoverage,
     TeamRecentFormMatch,
+    TeamPhaseBandResponse,
 )
 from backend.api.schemas.school_statistics import (
     SchoolFixtureSummary,
@@ -39,6 +41,7 @@ from backend.services.school_team_analytics_service import (
 )
 from backend.services.school_team_readiness_service import (
     TeamReadinessRequest,
+    calculate_team_phase_analysis,
     calculate_team_recent_form,
     evaluate_team_match_readiness,
 )
@@ -435,5 +438,69 @@ async def get_organization_team_recent_form(
                 recorded_delivery_rows=match.recorded_delivery_rows,
             )
             for index, match in enumerate(result.matches, start=1)
+        ],
+    )
+
+
+@router.get(
+    "/api/organizations/{organization_id}/team-performance/teams/{team_id}/phases",
+    response_model=OrganizationTeamPhaseAnalysis,
+)
+async def get_organization_team_phase_analysis(
+    organization_id: str,
+    team_id: str,
+    as_of_date: Annotated[str, Query(pattern=r"^\d{4}-\d{2}-\d{2}$")],
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> OrganizationTeamPhaseAnalysis:
+    try:
+        boundary = dt.date.fromisoformat(as_of_date)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=422, detail="as_of_date must be an ISO calendar date"
+        ) from exc
+    try:
+        result = await calculate_team_phase_analysis(
+            db,
+            TeamReadinessRequest(
+                actor_user_id=current_user.id,
+                organization_id=organization_id,
+                team_id=team_id,
+                as_of_date=boundary,
+            ),
+        )
+    except TeamPerformanceAccessError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    readiness = OrganizationTeamPerformanceReadiness(
+        organization_id=result.readiness.organization_id,
+        team_id=result.readiness.team_id,
+        as_of_date=result.readiness.as_of_date,
+        required_history=result.readiness.required_history,
+        usable_prior_match_count=result.readiness.usable_prior_match_count,
+        remaining_match_count=result.readiness.remaining_match_count,
+        state=result.readiness.state,
+        usable_batting_match_count=result.readiness.usable_batting_match_count,
+        usable_bowling_match_count=result.readiness.usable_bowling_match_count,
+        exclusion_counts=result.readiness.exclusion_counts,
+    )
+    return OrganizationTeamPhaseAnalysis(
+        readiness=readiness,
+        sample_size=result.sample_size,
+        phase_unavailable_matches=result.phase_unavailable_matches,
+        phases=[
+            TeamPhaseBandResponse(
+                name=phase.name,
+                start_over=phase.start_over,
+                end_over=phase.end_over,
+                batting_observed_matches=phase.batting_observed_matches,
+                bowling_observed_matches=phase.bowling_observed_matches,
+                batting_unavailable_matches=phase.batting_unavailable_matches,
+                bowling_unavailable_matches=phase.bowling_unavailable_matches,
+                batting_recorded_rows=phase.batting_recorded_rows,
+                bowling_recorded_rows=phase.bowling_recorded_rows,
+                batting=phase.batting,
+                bowling=phase.bowling,
+            )
+            for phase in result.phases
         ],
     )

@@ -12,6 +12,7 @@ import type {
   FreeOrganizationType,
   OrganizationTeamPerformance,
   OrganizationTeamRecentForm,
+  OrganizationTeamPhaseAnalysis,
   OrganizationTeamPerformanceTeamOption,
   SchoolMembershipRole,
 } from '@/types/schoolAdmin';
@@ -130,6 +131,62 @@ function form(
   };
 }
 
+function phase(
+  state: 'ready' | 'not_ready' | 'data_unavailable' = 'ready',
+): OrganizationTeamPhaseAnalysis {
+  const sample = performance('school-a', 'team-a');
+  return {
+    readiness: form(state).readiness,
+    sample_size: state === 'ready' ? 5 : 0,
+    completeness: 'unknown',
+    phase_unavailable_matches: 1,
+    phases:
+      state === 'ready'
+        ? [
+            {
+              name: 'opening',
+              start_over: 1,
+              end_over: 5,
+              batting_observed_matches: 4,
+              bowling_observed_matches: 4,
+              batting_unavailable_matches: 1,
+              bowling_unavailable_matches: 1,
+              batting_recorded_rows: 30,
+              bowling_recorded_rows: 30,
+              batting: sample.batting,
+              bowling: sample.bowling,
+            },
+            {
+              name: 'middle',
+              start_over: 6,
+              end_over: 20,
+              batting_observed_matches: 0,
+              bowling_observed_matches: 0,
+              batting_unavailable_matches: 5,
+              bowling_unavailable_matches: 5,
+              batting_recorded_rows: 0,
+              bowling_recorded_rows: 0,
+              batting: null,
+              bowling: null,
+            },
+            {
+              name: 'closing',
+              start_over: 21,
+              end_over: 25,
+              batting_observed_matches: 0,
+              bowling_observed_matches: 0,
+              batting_unavailable_matches: 5,
+              bowling_unavailable_matches: 5,
+              batting_recorded_rows: 0,
+              bowling_recorded_rows: 0,
+              batting: null,
+              bowling: null,
+            },
+          ]
+        : [],
+  };
+}
+
 function schoolContext(
   organizationId: Ref<string>,
   role: Ref<SchoolMembershipRole>,
@@ -186,6 +243,56 @@ describe('organization Team Performance pilot view', () => {
     vi.mocked(schoolApi.getOrganizationTeamPerformance).mockImplementation(
       async (organizationId, teamId) => performance(organizationId, teamId),
     );
+    vi.mocked(schoolApi.getOrganizationTeamPhaseAnalysis).mockResolvedValue(phase());
+  });
+
+  it('shows approved bands, recorded zero and unavailable phase evidence', async () => {
+    const wrapper = mountView(ref('school-a'));
+    await flushPromises();
+    await wrapper.get('input[aria-label="Recent form as-of date"]').setValue('2026-05-01');
+    await flushPromises();
+    expect(wrapper.text()).toContain('opening 1–5, middle 6–20, closing 21–25');
+    expect(wrapper.text()).toContain('Matches with unavailable phase positions: 1');
+    expect(wrapper.get('table[aria-label="Team batting phase analysis"]').text()).toContain(
+      'Unavailable',
+    );
+    expect(wrapper.get('table[aria-label="Team bowling phase analysis"]').text()).toContain(
+      'Economy',
+    );
+  });
+
+  it('clears stale phase responses and shows insufficient, error, and denied states', async () => {
+    let resolveOld: (value: OrganizationTeamPhaseAnalysis) => void = () => undefined;
+    const oldRequest = new Promise<OrganizationTeamPhaseAnalysis>((resolve) => {
+      resolveOld = resolve;
+    });
+    vi.mocked(schoolApi.getOrganizationTeamPhaseAnalysis)
+      .mockReturnValueOnce(oldRequest)
+      .mockResolvedValueOnce(phase('not_ready'))
+      .mockRejectedValueOnce(new Error('phase request failed'))
+      .mockRejectedValueOnce(Object.assign(new Error('denied'), { status: 403 }));
+    vi.mocked(schoolApi.listOrganizationTeamPerformanceTeams).mockResolvedValue([
+      team('team-a', 'school-a'),
+      team('team-b', 'school-a'),
+    ]);
+    const wrapper = mountView(ref('school-a'));
+    await flushPromises();
+    const date = wrapper.get('input[aria-label="Recent form as-of date"]');
+    await date.setValue('2026-05-01');
+    await flushPromises();
+    expect(wrapper.text()).toContain('Loading phase analysis');
+    await wrapper.get('select[aria-label="Team"]').setValue('team-b');
+    await flushPromises();
+    resolveOld(phase());
+    await flushPromises();
+    expect(wrapper.text()).toContain('Insufficient history for phase analysis');
+    expect(wrapper.find('table[aria-label="Team batting phase analysis"]').exists()).toBe(false);
+    await date.setValue('2026-05-02');
+    await flushPromises();
+    expect(wrapper.text()).toContain('phase request failed');
+    await date.setValue('2026-05-03');
+    await flushPromises();
+    expect(wrapper.text()).toContain('Phase analysis is unavailable');
   });
 
   it('shows the five-match trend and suppresses stale form after a Team switch', async () => {

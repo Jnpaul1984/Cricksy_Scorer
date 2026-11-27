@@ -10,6 +10,14 @@ For each selected match, the recorded-ledger batting and bowling counters reuse 
 
 This additive read uses the current default-off grant, contextual staff role, active organization/membership and exact Team ownership on every request. It adds no migration, grant, trial or Free-statistics behavior. The existing 250-game and 5 MiB bounds apply before selecting the five. No phase analysis, reports or three-further-game offer lifecycle is delivered here.
 
+## Issue #637 — approved analytical phase bands
+
+The owner confirmed analytical opening overs **1–5**, middle overs **6–20**, and closing overs **21–25** for this issue. These are not official powerplay or field-restriction rules. A phase is determined by a delivery's explicit zero-based live-scoring `over_number`, converted to a one-based display over. Its `ball_number` must agree with the legal-ball count immediately before that delivery; wides and no-balls repeat the pending legal-ball position. The persisted delivery list must be in contiguous innings order and start at the first legal-ball position. Historical-import rows and missing, contradictory, out-of-order or out-of-range positions are phase-unavailable for the whole selected match. No position is guessed from Game ID, date, index alone, effective overs limit or an incomplete ledger.
+
+The existing readiness selector and recent-form calculation enforce access, the exact five original 25-over matches, conservative match-level ledger validity, and 250-game/5 MiB workload bounds. The phase read then checks selected metadata and ledger digests again before attributing rows. It sums the same validated recorded-ledger batting and bowling counters by band and recalculates aggregate rates from summed numerators and legal balls. Null rates mean zero legal-ball denominator. Per-role observed and unavailable match counts and row counts accompany every phase. A recorded zero is shown only when matching rows exist; a band with no positioned rows is unavailable, because the current evidence cannot prove it was unplayed. Shortened innings contribute only their observed bands. Five-match readiness can be ready while phase positions remain unavailable; this distinction does not change recent-form readiness or its response.
+
+The private response contains only the safe readiness summary, three named band ranges, sample size, per-role coverage and bounded aggregate counters. It excludes Game/source IDs, player identities, raw deliveries and audit provenance. No migration, entitlement/grant, Free statistics, scoring, DLS, result, trial, billing or public behavior changes. Rollback is a code revert; no data migration is needed.
+
 ## Product contract
 
 - Add one private Team Performance view inside the existing organization workspace. It applies equally to School and Club organizations.

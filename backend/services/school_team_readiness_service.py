@@ -30,6 +30,7 @@ from backend.services.school_team_analytics_service import (
     _frozen_side_ids,
     _team_scope_clause,
 )
+from backend.domain.constants import norm_extra
 from backend.sql_app import models
 
 REQUIRED_PRIOR_MATCHES: Literal[5] = 5
@@ -106,6 +107,36 @@ class TeamRecentFormResult:
     batting: BattingTotals | None
     bowling: BowlingTotals | None
     recorded_delivery_rows: int
+
+
+PHASE_BANDS: tuple[tuple[str, int, int], ...] = (
+    ("opening", 1, 5),
+    ("middle", 6, 20),
+    ("closing", 21, 25),
+)
+
+
+@dataclass(frozen=True)
+class TeamPhaseBand:
+    name: str
+    start_over: int
+    end_over: int
+    batting_observed_matches: int
+    bowling_observed_matches: int
+    batting_unavailable_matches: int
+    bowling_unavailable_matches: int
+    batting: BattingTotals | None
+    bowling: BowlingTotals | None
+    batting_recorded_rows: int
+    bowling_recorded_rows: int
+
+
+@dataclass(frozen=True)
+class TeamPhaseResult:
+    readiness: TeamReadinessResult
+    sample_size: int
+    phases: tuple[TeamPhaseBand, ...]
+    phase_unavailable_matches: int
 
 
 def _empty_counts() -> dict[str, int]:
@@ -596,3 +627,135 @@ async def calculate_team_recent_form(
         _finish_bowling(aggregate_bowling),
         sum(match.recorded_delivery_rows for match in matches),
     )
+
+
+def _ordered_phase_rows(deliveries: list[dict]) -> list[tuple[dict, int]] | None:
+    """Accept only explicit live-scoring positions that agree with append order.
+
+    Live rows use zero-based over_number and a 1-based next legal ball number.
+    Historical imports use a different convention; do not guess their positions.
+    """
+    legal_by_innings = {1: 0, 2: 0}
+    current_innings = 1
+    positioned: list[tuple[dict, int]] = []
+    for row in deliveries:
+        inning = row["inning"]
+        if inning < current_innings or inning > current_innings + 1:
+            return None
+        current_innings = inning
+        legal = legal_by_innings[inning]
+        over = row.get("over_number")
+        ball = row.get("ball_number")
+        if (
+            type(over) is not int
+            or type(ball) is not int
+            or over != legal // 6
+            or ball != legal % 6 + 1
+            or over >= 25
+            or "_source" in row
+        ):
+            return None
+        positioned.append((row, over + 1))
+        if norm_extra(row.get("extra_type")) not in {"wd", "nb"}:
+            legal_by_innings[inning] += 1
+    return positioned
+
+
+async def calculate_team_phase_analysis(
+    db: AsyncSession, request: TeamReadinessRequest
+) -> TeamPhaseResult:
+    """Aggregate explicitly positioned recorded rows for the selected five games."""
+    recent = await calculate_team_recent_form(db, request)
+    if recent.readiness.state != "ready":
+        return TeamPhaseResult(recent.readiness, 0, (), 0)
+    sources = {source.game_id: source for source in recent.readiness.selected_sources}
+    games = (
+        await db.scalars(
+            select(models.Game)
+            .where(models.Game.id.in_(sources), _candidate_clause(request))
+            .execution_options(populate_existing=True)
+        )
+    ).all()
+    if len(games) != REQUIRED_PRIOR_MATCHES:
+        return TeamPhaseResult(
+            replace(recent.readiness, state="data_unavailable", selected_sources=()), 0, (), 0
+        )
+    totals = {
+        name: {
+            "batting": {k: v for k, v in _empty_batting().items() if isinstance(v, int)},
+            "bowling": {k: v for k, v in _empty_bowling().items() if isinstance(v, int)},
+            "batting_rows": 0,
+            "bowling_rows": 0,
+            "batting_games": 0,
+            "bowling_games": 0,
+        }
+        for name, _, _ in PHASE_BANDS
+    }
+    unavailable_games = 0
+    for game in games:
+        source = sources[game.id]
+        deliveries = game.deliveries
+        if (
+            game.actual_played_date != source.played_date
+            or game.team_performance_metadata_revision != source.metadata_revision
+            or not isinstance(deliveries, list)
+            or hashlib.sha256(
+                json.dumps(deliveries, sort_keys=True, separators=(",", ":")).encode("utf-8")
+            ).hexdigest()
+            != source.ledger_digest
+        ):
+            return TeamPhaseResult(
+                replace(recent.readiness, state="data_unavailable", selected_sources=()), 0, (), 0
+            )
+        positioned = _ordered_phase_rows(deliveries)
+        target_sides = [
+            side
+            for side, payload in (("team_a", game.team_a), ("team_b", game.team_b))
+            if _source(payload) == (request.organization_id, request.team_id)
+        ]
+        if len(target_sides) != 1:
+            return TeamPhaseResult(
+                replace(recent.readiness, state="data_unavailable", selected_sources=()), 0, (), 0
+            )
+        target_ids = _frozen_side_ids(
+            game.team_a if target_sides[0] == "team_a" else game.team_b,
+            require_canonical=True,
+        )
+        if not target_ids:
+            return TeamPhaseResult(
+                replace(recent.readiness, state="data_unavailable", selected_sources=()), 0, (), 0
+            )
+        if positioned is None:
+            unavailable_games += 1
+            continue
+        seen: set[tuple[str, str]] = set()
+        for row, over in positioned:
+            name = next(name for name, start, end in PHASE_BANDS if start <= over <= end)
+            bucket = totals[name]
+            role = "batting" if row["striker_id"] in target_ids else "bowling"
+            _add_delivery(bucket[role], row, into_batting=role == "batting")
+            bucket[f"{role}_rows"] += 1
+            seen.add((name, role))
+        for name, role in seen:
+            totals[name][f"{role}_games"] += 1
+    phases = tuple(
+        TeamPhaseBand(
+            name=name,
+            start_over=start,
+            end_over=end,
+            batting_observed_matches=totals[name]["batting_games"],
+            bowling_observed_matches=totals[name]["bowling_games"],
+            batting_unavailable_matches=REQUIRED_PRIOR_MATCHES - totals[name]["batting_games"],
+            bowling_unavailable_matches=REQUIRED_PRIOR_MATCHES - totals[name]["bowling_games"],
+            batting=(
+                _finish_batting(totals[name]["batting"]) if totals[name]["batting_rows"] else None
+            ),
+            bowling=(
+                _finish_bowling(totals[name]["bowling"]) if totals[name]["bowling_rows"] else None
+            ),
+            batting_recorded_rows=totals[name]["batting_rows"],
+            bowling_recorded_rows=totals[name]["bowling_rows"],
+        )
+        for name, start, end in PHASE_BANDS
+    )
+    return TeamPhaseResult(recent.readiness, REQUIRED_PRIOR_MATCHES, phases, unavailable_games)

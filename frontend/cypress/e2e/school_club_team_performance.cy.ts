@@ -174,6 +174,77 @@ describe('School/Club Team Performance staff pilot', () => {
       cy.contains('Five-match aggregate').should('be.visible');
     });
 
+    it(`shows the approved ${kind} analytical bands and unavailable coverage`, () => {
+      stubOrganization(kind, id);
+      cy.intercept(
+        'GET',
+        `**/api/organizations/${id}/team-performance/teams/team-active/phases?as_of_date=*`,
+        {
+          readiness: {
+            organization_id: id,
+            team_id: 'team-active',
+            as_of_date: '2026-05-01',
+            required_history: 5,
+            usable_prior_match_count: 5,
+            remaining_match_count: 0,
+            state: 'ready',
+            usable_batting_match_count: 5,
+            usable_bowling_match_count: 5,
+            exclusion_counts: {},
+          },
+          sample_size: 5,
+          completeness: 'unknown',
+          phase_unavailable_matches: 1,
+          phases: [
+            {
+              name: 'opening',
+              start_over: 1,
+              end_over: 5,
+              batting_observed_matches: 4,
+              bowling_observed_matches: 4,
+              batting_unavailable_matches: 1,
+              bowling_unavailable_matches: 1,
+              batting_recorded_rows: 20,
+              bowling_recorded_rows: 20,
+              batting: performance(id, 'team-active').batting,
+              bowling: performance(id, 'team-active').bowling,
+            },
+            {
+              name: 'middle',
+              start_over: 6,
+              end_over: 20,
+              batting_observed_matches: 0,
+              bowling_observed_matches: 0,
+              batting_unavailable_matches: 5,
+              bowling_unavailable_matches: 5,
+              batting_recorded_rows: 0,
+              bowling_recorded_rows: 0,
+              batting: null,
+              bowling: null,
+            },
+            {
+              name: 'closing',
+              start_over: 21,
+              end_over: 25,
+              batting_observed_matches: 0,
+              bowling_observed_matches: 0,
+              batting_unavailable_matches: 5,
+              bowling_unavailable_matches: 5,
+              batting_recorded_rows: 0,
+              bowling_recorded_rows: 0,
+              batting: null,
+              bowling: null,
+            },
+          ],
+        },
+      ).as('phaseAnalysis');
+      cy.get('input[aria-label="Recent form as-of date"]').type('2026-05-01');
+      cy.wait('@phaseAnalysis');
+      cy.contains('Analytical bands: opening 1–5, middle 6–20, closing 21–25').should('be.visible');
+      cy.contains('Matches with unavailable phase positions: 1').should('be.visible');
+      cy.get('table[aria-label="Team batting phase analysis"] tbody tr').should('have.length', 3);
+    });
+
     it(`shows unavailable access when the ${kind} pilot team listing is denied`, () => {
       cy.intercept('GET', `**/api/organizations/${id}`, {
         id,
