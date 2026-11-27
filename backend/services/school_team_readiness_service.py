@@ -6,12 +6,9 @@ import datetime as dt
 import hashlib
 import json
 from dataclasses import dataclass, replace
-from typing import Literal
+from typing import Literal, TypedDict
 
-from sqlalchemy import and_, case, func, select
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import defer
-
+from backend.domain.constants import norm_extra
 from backend.services.organization_team_performance_access import (
     TeamPerformanceAccessError,
     require_team_performance_access,
@@ -30,8 +27,10 @@ from backend.services.school_team_analytics_service import (
     _frozen_side_ids,
     _team_scope_clause,
 )
-from backend.domain.constants import norm_extra
 from backend.sql_app import models
+from sqlalchemy import and_, case, func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import defer
 
 REQUIRED_PRIOR_MATCHES: Literal[5] = 5
 SUPPORTED_ORIGINAL_OVERS = 25
@@ -114,6 +113,15 @@ PHASE_BANDS: tuple[tuple[str, int, int], ...] = (
     ("middle", 6, 20),
     ("closing", 21, 25),
 )
+
+
+class _PhaseTotals(TypedDict):
+    batting: dict[str, int]
+    bowling: dict[str, int]
+    batting_rows: int
+    bowling_rows: int
+    batting_games: int
+    bowling_games: int
 
 
 @dataclass(frozen=True)
@@ -680,7 +688,7 @@ async def calculate_team_phase_analysis(
         return TeamPhaseResult(
             replace(recent.readiness, state="data_unavailable", selected_sources=()), 0, (), 0
         )
-    totals = {
+    totals: dict[str, _PhaseTotals] = {
         name: {
             "batting": {k: v for k, v in _empty_batting().items() if isinstance(v, int)},
             "bowling": {k: v for k, v in _empty_bowling().items() if isinstance(v, int)},
@@ -732,12 +740,20 @@ async def calculate_team_phase_analysis(
         for row, over in positioned:
             name = next(name for name, start, end in PHASE_BANDS if start <= over <= end)
             bucket = totals[name]
-            role = "batting" if row["striker_id"] in target_ids else "bowling"
-            _add_delivery(bucket[role], row, into_batting=role == "batting")
-            bucket[f"{role}_rows"] += 1
+            if row["striker_id"] in target_ids:
+                role = "batting"
+                _add_delivery(bucket["batting"], row, into_batting=True)
+                bucket["batting_rows"] += 1
+            else:
+                role = "bowling"
+                _add_delivery(bucket["bowling"], row, into_batting=False)
+                bucket["bowling_rows"] += 1
             seen.add((name, role))
         for name, role in seen:
-            totals[name][f"{role}_games"] += 1
+            if role == "batting":
+                totals[name]["batting_games"] += 1
+            else:
+                totals[name]["bowling_games"] += 1
     phases = tuple(
         TeamPhaseBand(
             name=name,
