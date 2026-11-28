@@ -34,7 +34,7 @@ type ViewState =
   | 'request_failure'
   | 'scope_too_large';
 
-const { organizationId, organizationBasePath, terminology, canManageTeams, membership } = useSchoolContext();
+const { organizationId, organizationBasePath, terminology, canManageTeams, membership, organization } = useSchoolContext();
 const teams = ref<OrganizationTeamPerformanceTeamOption[]>([]);
 const selectedTeamId = ref('');
 const oversLimit = ref(20);
@@ -94,6 +94,8 @@ let requestGeneration = 0;
 let formGeneration = 0;
 let phaseGeneration = 0;
 let reportGeneration = 0;
+let retainedReportGeneration = 0;
+let retainedReportDisplayed = false;
 
 function clearData() {
   data.value = null;
@@ -356,6 +358,7 @@ watch(
   [organizationId, canManageTeams, selectedTeamId, asOfDate, reportRequested, reportRequestCount],
   async ([requestedOrganizationId, allowed, requestedTeamId, requestedDate, requested]) => {
     const generation = ++reportGeneration;
+    if (requested) retainedReportDisplayed = false;
     coachReport.value = null;
     reportError.value = '';
     if (!allowed || !requestedOrganizationId) {
@@ -439,6 +442,46 @@ watch(
   { immediate: true },
 );
 
+function canDisplayRetainedReport(requestedOrganizationId: string, requestedTeamId: string): boolean {
+  return (
+    requestedOrganizationId === organizationId.value &&
+    requestedTeamId === selectedTeamId.value &&
+    canManageTeams.value &&
+    membership.value?.organization_id === requestedOrganizationId &&
+    membership.value?.status === 'active' &&
+    ['owner', 'admin', 'coach'].includes(membership.value.role) &&
+    organization.value?.id === requestedOrganizationId &&
+    organization.value.status === 'active' &&
+    teams.value.some((team) => team.id === requestedTeamId && team.status === 'active') &&
+    !!trialStatus.value &&
+    trialStatus.value.games_used > 0 &&
+    ['active', 'exhausted'].includes(trialStatus.value.state)
+  );
+}
+
+watch(
+  [
+    organizationId, selectedTeamId, canManageTeams, membership, organization,
+    () => membership.value?.organization_id,
+    () => membership.value?.role,
+    () => membership.value?.status,
+    () => organization.value?.id,
+    () => organization.value?.status,
+    () => teams.value.find((team) => team.id === selectedTeamId.value)?.status,
+    () => trialStatus.value?.state,
+    () => trialStatus.value?.games_used,
+  ],
+  () => {
+    retainedReportGeneration += 1;
+    if (retainedReportDisplayed && !canDisplayRetainedReport(organizationId.value, selectedTeamId.value)) {
+      retainedReportDisplayed = false;
+      coachReport.value = null;
+      reportState.value = 'unavailable_access';
+    }
+  },
+  { flush: 'sync' },
+);
+
 async function activateSelectedTeamTrial() {
   if (!organizationId.value || !selectedTeamId.value || trialBusy.value) return;
   const organization = organizationId.value;
@@ -465,15 +508,18 @@ async function viewRetainedTrialReport() {
   if (!organizationId.value || !selectedTeamId.value) return;
   const organization = organizationId.value;
   const team = selectedTeamId.value;
+  if (!canDisplayRetainedReport(organization, team)) return;
+  const generation = ++retainedReportGeneration;
   trialError.value = '';
   try {
     const result = await getOrganizationTeamTrialReport(organization, team);
-    if (organization === organizationId.value && team === selectedTeamId.value) {
+    if (generation === retainedReportGeneration && canDisplayRetainedReport(organization, team)) {
       coachReport.value = result;
       reportState.value = result.readiness.state;
+      retainedReportDisplayed = true;
     }
   } catch (reason) {
-    if (organization === organizationId.value && team === selectedTeamId.value)
+    if (generation === retainedReportGeneration && canDisplayRetainedReport(organization, team))
       trialError.value = getErrorMessage(reason);
   }
 }
@@ -484,6 +530,8 @@ onBeforeUnmount(() => {
   formGeneration += 1;
   phaseGeneration += 1;
   reportGeneration += 1;
+  retainedReportGeneration += 1;
+  retainedReportDisplayed = false;
   trialGeneration += 1;
   trialStatus.value = null;
   clearData();
@@ -565,7 +613,7 @@ onBeforeUnmount(() => {
           <button type="submit" :disabled="trialBusy">Activate eligible Team trial</button>
         </form>
         <button
-          v-if="trialStatus.games_used > 0 && ['active', 'exhausted'].includes(trialStatus.state)"
+          v-if="canDisplayRetainedReport(organizationId, selectedTeamId)"
           type="button"
           @click="viewRetainedTrialReport"
         >View retained trial report</button>

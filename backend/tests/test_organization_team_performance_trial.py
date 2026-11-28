@@ -765,6 +765,129 @@ def test_expiry_continues_during_review_and_fault_extension_is_operator_only(
     asyncio.run(scenario())
 
 
+@pytest.mark.skipif(
+    __import__("os").getenv("PHASE7B_POSTGRES_MIGRATED_TESTS") != "1",
+    reason="Migrated PostgreSQL expiry and extension gate",
+)
+def test_expired_completions_are_never_captured_or_replayed_after_extension(
+    school_client, monkeypatch
+) -> None:
+    owner = register_user(school_client, "trial-expired-capture-owner@example.com")
+    operator = register_user(school_client, "trial-expired-capture-operator@example.com")
+    org_id = create_school(school_client, owner, "Expired capture")["id"]
+    started = dt.datetime(2026, 11, 28, 12, tzinfo=dt.UTC)
+    clock = {"now": started}
+    monkeypatch.setattr(trial_service, "_now", lambda: clock["now"])
+
+    async def scenario():
+        team = None
+        for day in range(18, 23):
+            team, _ = await _make_game(
+                school_client, org_id, owner.id, dt.date(2026, 11, day), team
+            )
+        assert team is not None
+        async with school_client.session_maker() as db:
+            user = await db.get(models.User, operator.id)
+            assert user is not None
+            user.is_superuser = True
+            await db.commit()
+            await trial_service.set_trial_availability(
+                db,
+                organization_id=org_id,
+                operator_user_id=operator.id,
+                enabled=True,
+                reason="Controlled expiry test",
+            )
+            await db.commit()
+            trial = await trial_service.activate_trial(
+                db,
+                organization_id=org_id,
+                team_id=team.id,
+                actor_user_id=owner.id,
+                venue_timezone="Etc/UTC",
+                reason="Ready",
+            )
+            await db.commit()
+
+        async def completed_game(at: dt.datetime):
+            clock["now"] = at
+            _, game = await _make_game(school_client, org_id, owner.id, at.date(), team)
+            return game
+
+        before = await completed_game(started + dt.timedelta(days=89))
+        async with school_client.session_maker() as db:
+            first = await trial_service.record_completion_event(db, game_id=before.id)
+            assert first is not None
+            await db.commit()
+            again = await trial_service.record_completion_event(db, game_id=before.id)
+            assert again is not None and again.id == first.id
+            await db.commit()
+            first_id = first.id
+
+        gap = await completed_game(started + dt.timedelta(days=90))
+        async with school_client.session_maker() as db:
+            for _ in range(2):
+                assert await trial_service.record_completion_event(db, game_id=gap.id) is None
+                await db.commit()
+            assert (
+                await trial_service.trial_status(
+                    db,
+                    organization_id=org_id,
+                    team_id=team.id,
+                    actor_user_id=owner.id,
+                )
+            )["state"] == "expired"
+
+        clock["now"] = started + dt.timedelta(days=91)
+        async with school_client.session_maker() as db:
+            await trial_service.extend_trial_for_system_fault(
+                db,
+                organization_id=org_id,
+                team_id=team.id,
+                operator_user_id=operator.id,
+                reason="Verified processor fault",
+                new_expires_at=started + dt.timedelta(days=120),
+            )
+            await db.commit()
+            for _ in range(2):
+                assert await trial_service.record_completion_event(db, game_id=gap.id) is None
+                await db.commit()
+            await trial_service.process_completion_event(db, completion_event_id=first_id)
+            await db.commit()
+            assert (
+                await trial_service.trial_status(
+                    db,
+                    organization_id=org_id,
+                    team_id=team.id,
+                    actor_user_id=owner.id,
+                )
+            )["games_used"] == 1
+
+        same_day = await completed_game(started + dt.timedelta(days=91, hours=1))
+        async with school_client.session_maker() as db:
+            assert await trial_service.record_completion_event(db, game_id=same_day.id) is None
+            await db.commit()
+
+        resumed = await completed_game(started + dt.timedelta(days=92))
+        async with school_client.session_maker() as db:
+            captured = await trial_service.record_completion_event(db, game_id=resumed.id)
+            assert captured is not None
+            await db.commit()
+            duplicate = await trial_service.record_completion_event(db, game_id=resumed.id)
+            assert duplicate is not None and duplicate.id == captured.id
+            await db.commit()
+            events = (
+                await db.scalars(
+                    select(models.TeamPerformanceTrialCompletion).where(
+                        models.TeamPerformanceTrialCompletion.trial_id == trial.id
+                    )
+                )
+            ).all()
+            assert {event.game_id for event in events} == {before.id, resumed.id}
+
+    asyncio.run(scenario())
+
+
 def test_ineligible_games_are_not_charged_and_original_25_shortened_game_qualifies(
     school_client,
     monkeypatch,

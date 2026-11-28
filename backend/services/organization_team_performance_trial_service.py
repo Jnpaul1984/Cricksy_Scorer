@@ -493,16 +493,17 @@ async def record_completion_events(
     from backend.services.school_team_readiness_service import _source
 
     scopes = {_source(side) for side in (game.team_a, game.team_b)}
+    now = _now()
     trials = (
         await db.scalars(
             select(models.TeamPerformanceTrial).where(
                 models.TeamPerformanceTrial.organization_id.in_({org for org, _ in scopes if org}),
                 models.TeamPerformanceTrial.team_id.in_({team for _, team in scopes if team}),
                 models.TeamPerformanceTrial.state == "active",
+                models.TeamPerformanceTrial.expires_at > now,
             )
         )
     ).all()
-    now = _now()
     result: list[models.TeamPerformanceTrialCompletion] = []
     for trial in trials:
         if (trial.organization_id, trial.team_id) not in scopes:
@@ -523,6 +524,25 @@ async def record_completion_events(
         if existing is not None:
             result.append(existing)
             continue
+        latest_extension = await db.scalar(
+            select(models.TeamPerformanceTrialEvent)
+            .where(
+                models.TeamPerformanceTrialEvent.trial_id == trial.id,
+                models.TeamPerformanceTrialEvent.kind == "extended",
+            )
+            .order_by(models.TeamPerformanceTrialEvent.recorded_at.desc())
+            .limit(1)
+        )
+        if latest_extension is not None:
+            extension_time = _utc(latest_extension.recorded_at)
+            if (
+                game.actual_played_date is None
+                or game.actual_played_date
+                <= extension_time.astimezone(ZoneInfo(trial.venue_timezone)).date()
+            ):
+                # No immutable Game completion timestamp survives a missed capture.
+                # Keep earlier and same-local-day Games out of a later extension.
+                continue
         event = models.TeamPerformanceTrialCompletion(
             trial_id=trial.id,
             game_id=game_id,

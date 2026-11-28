@@ -17,6 +17,7 @@ import type {
   OrganizationTeamPerformanceTeamOption,
   SchoolMembershipRole,
   SchoolMembership,
+  SchoolOrganization,
   OrganizationTeamTrialStatus,
 } from '@/types/schoolAdmin';
 import OrganizationTeamPerformanceView from '@/views/school/OrganizationTeamPerformanceView.vue';
@@ -205,6 +206,8 @@ function schoolContext(
   organizationId: Ref<string>,
   role: Ref<SchoolMembershipRole>,
   organizationType: Ref<FreeOrganizationType> = ref('school'),
+  membershipStatus: Ref<SchoolMembership['status']> = ref('active'),
+  organizationStatus: Ref<SchoolOrganization['status']> = ref('active'),
 ): SchoolContext {
   const staff = computed(() => ['owner', 'admin', 'coach'].includes(role.value));
   const always = computed(() => true);
@@ -213,8 +216,17 @@ function schoolContext(
     organizationType: computed(() => organizationType.value),
     organizationBasePath: computed(() => organizationBasePath(organizationType.value)),
     terminology: computed(() => organizationTerminology(organizationType.value)),
-    organization: ref(null),
-    membership: computed(() => ({ role: role.value } as SchoolMembership)),
+    organization: computed(() => ({
+      id: organizationId.value,
+      organization_type: organizationType.value,
+      status: organizationStatus.value,
+      membership_role: role.value,
+    } as SchoolOrganization)),
+    membership: computed(() => ({
+      organization_id: organizationId.value,
+      role: role.value,
+      status: membershipStatus.value,
+    } as SchoolMembership)),
     entitlement: ref(null),
     canManageTeams: staff,
     canManageRosterMetadata: staff,
@@ -237,11 +249,18 @@ function schoolContext(
   };
 }
 
-function mountView(organizationId: Ref<string>, role: Ref<SchoolMembershipRole> = ref('coach')) {
+function mountView(
+  organizationId: Ref<string>,
+  role: Ref<SchoolMembershipRole> = ref('coach'),
+  membershipStatus: Ref<SchoolMembership['status']> = ref('active'),
+  organizationStatus: Ref<SchoolOrganization['status']> = ref('active'),
+) {
   return mount(OrganizationTeamPerformanceView, {
     global: {
       provide: {
-        [schoolContextKey as symbol]: schoolContext(organizationId, role),
+        [schoolContextKey as symbol]: schoolContext(
+          organizationId, role, ref('school'), membershipStatus, organizationStatus,
+        ),
       },
       stubs: { RouterLink: true },
     },
@@ -792,6 +811,9 @@ describe('organization Team Performance pilot view', () => {
   });
 
   it('displays the retained report only after an explicit request and clears it on access loss', async () => {
+    vi.mocked(schoolApi.listOrganizationTeamPerformanceTeams).mockResolvedValue([
+      team('team-a', 'school-a', 'active'),
+    ]);
     vi.mocked(schoolApi.getOrganizationTeamTrialStatus).mockResolvedValue({
       state: 'exhausted', games_used: 3, games_remaining: 0,
       expires_at: '2027-02-26T12:00:00Z', report_access_until: '2026-12-14T12:00:00Z',
@@ -810,6 +832,65 @@ describe('organization Team Performance pilot view', () => {
     expect(wrapper.find('table[aria-labelledby="report-trend-heading"]').exists()).toBe(true);
     role.value = 'viewer';
     await flushPromises();
+    expect(wrapper.find('table[aria-labelledby="report-trend-heading"]').exists()).toBe(false);
+  });
+
+  it.each(['role', 'membership', 'organization', 'team', 'scope'] as const)(
+    'discards a delayed retained-report success after %s access changes',
+    async (change) => {
+      vi.mocked(schoolApi.listOrganizationTeamPerformanceTeams).mockResolvedValue([
+        team('team-a', 'school-a', 'active'), team('team-b', 'school-a', 'active'),
+      ]);
+      vi.mocked(schoolApi.getOrganizationTeamTrialStatus).mockResolvedValue({
+        state: 'exhausted', games_used: 3, games_remaining: 0,
+        expires_at: '2027-02-26T12:00:00Z', report_access_until: '2026-12-14T12:00:00Z',
+      });
+      let resolveReport!: (value: OrganizationTeamCoachReport) => void;
+      vi.mocked(schoolApi.getOrganizationTeamTrialReport).mockImplementation(
+        () => new Promise((resolve) => { resolveReport = resolve; }),
+      );
+      const organizationId = ref('school-a');
+      const role = ref<SchoolMembershipRole>('coach');
+      const membershipStatus = ref<SchoolMembership['status']>('active');
+      const organizationStatus = ref<SchoolOrganization['status']>('active');
+      const wrapper = mountView(organizationId, role, membershipStatus, organizationStatus);
+      await flushPromises();
+      await wrapper.findAll('button').find((item) => item.text().includes('View retained trial report'))!.trigger('click');
+      expect(schoolApi.getOrganizationTeamTrialReport).toHaveBeenCalledTimes(1);
+      if (change === 'role') role.value = 'viewer';
+      if (change === 'membership') membershipStatus.value = 'disabled';
+      if (change === 'organization') organizationStatus.value = 'suspended';
+      if (change === 'team') await wrapper.get('select[aria-label="Team"]').setValue('team-b');
+      if (change === 'scope') organizationId.value = 'school-b';
+      await flushPromises();
+      resolveReport(report());
+      await flushPromises();
+      expect(wrapper.find('table[aria-labelledby="report-trend-heading"]').exists()).toBe(false);
+      wrapper.unmount();
+    },
+  );
+
+  it('discards a delayed retained-report failure after role loss', async () => {
+    vi.mocked(schoolApi.listOrganizationTeamPerformanceTeams).mockResolvedValue([
+      team('team-a', 'school-a', 'active'),
+    ]);
+    vi.mocked(schoolApi.getOrganizationTeamTrialStatus).mockResolvedValue({
+      state: 'exhausted', games_used: 3, games_remaining: 0,
+      expires_at: '2027-02-26T12:00:00Z', report_access_until: '2026-12-14T12:00:00Z',
+    });
+    let rejectReport!: (reason: Error) => void;
+    vi.mocked(schoolApi.getOrganizationTeamTrialReport).mockImplementation(
+      () => new Promise((_resolve, reject) => { rejectReport = reject; }),
+    );
+    const role = ref<SchoolMembershipRole>('coach');
+    const wrapper = mountView(ref('school-a'), role);
+    await flushPromises();
+    await wrapper.findAll('button').find((item) => item.text().includes('View retained trial report'))!.trigger('click');
+    role.value = 'viewer';
+    await flushPromises();
+    rejectReport(new Error('late retained-report failure'));
+    await flushPromises();
+    expect(wrapper.text()).not.toContain('late retained-report failure');
     expect(wrapper.find('table[aria-labelledby="report-trend-heading"]').exists()).toBe(false);
   });
 });
