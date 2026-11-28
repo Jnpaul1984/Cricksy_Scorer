@@ -39,6 +39,7 @@ const recentForm = ref<OrganizationTeamRecentForm | null>(null);
 const phaseAnalysis = ref<OrganizationTeamPhaseAnalysis | null>(null);
 const coachReport = ref<OrganizationTeamCoachReport | null>(null);
 const reportRequested = ref(false);
+const reportRequestCount = ref(0);
 const reportState = ref<
   | 'idle'
   | 'loading'
@@ -313,13 +314,14 @@ watch(
 watch(
   [organizationId, canManageTeams, selectedTeamId, asOfDate],
   () => {
+    reportGeneration += 1;
     reportRequested.value = false;
   },
   { flush: 'sync' },
 );
 
 watch(
-  [organizationId, canManageTeams, selectedTeamId, asOfDate, reportRequested],
+  [organizationId, canManageTeams, selectedTeamId, asOfDate, reportRequested, reportRequestCount],
   async ([requestedOrganizationId, allowed, requestedTeamId, requestedDate, requested]) => {
     const generation = ++reportGeneration;
     coachReport.value = null;
@@ -813,7 +815,10 @@ onBeforeUnmount(() => {
       <button
         type="button"
         :disabled="!selectedTeamId || !asOfDate || reportState === 'loading'"
-        @click="reportRequested = true"
+        @click="
+          reportRequested = true;
+          reportRequestCount += 1;
+        "
       >
         View report
       </button>
