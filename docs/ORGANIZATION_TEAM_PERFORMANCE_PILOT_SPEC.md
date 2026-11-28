@@ -2,6 +2,8 @@
 
 This document records the delivered aggregate pilot from issue #626 and locks the additive, bounded history/readiness foundation for issue #628. It authorizes a private, read-only School/Club Team Performance pilot surface only. It does not authorize enabling access for any real organization, changing existing permissions or Free entitlements, billing, credential creation, deployment, or any later product expansion.
 
+Issue #641's [Team Performance trial policy decision gate](ORGANIZATION_TEAM_PERFORMANCE_TRIAL_POLICY_DECISIONS.md) audits the approved five-match prerequisite and three-further-game offer. Trial scope, activation, consumption, correction, access, expiry, repeat and grant-precedence rules remain open for owner approval. No trial lifecycle is delivered by that document; the current default-off pilot and Free contracts remain in force.
+
 ## Issue #635 — bounded five-match recent form
 
 The existing readiness selector is the sole authority for the exact five prior original 25-over matches. The staff workspace requires an explicit exclusive venue-local as-of date and shows no trend unless readiness is `ready`. The selected five are displayed oldest to newest with safe ordinal and confirmed played-date labels. Same-date ambiguity and all existing provenance, ledger, access and workload exclusions retain the #628 behavior. Corrections and undo are reflected on each read; a changed selected ledger or metadata between selection and calculation returns `data_unavailable` without a trend.
