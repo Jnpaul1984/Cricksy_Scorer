@@ -44,8 +44,9 @@ class TeamCoachReportResult:
 def _observations(phases: TeamPhaseResult) -> tuple[ReportObservation, ...]:
     """Only compare adjacent bands with equal observed match coverage and defined rates."""
     results: list[ReportObservation] = []
+    subjects: tuple[Literal["batting", "bowling"], ...] = ("batting", "bowling")
     for earlier, later in zip(phases.phases, phases.phases[1:], strict=False):
-        for subject in ("batting", "bowling"):
+        for subject in subjects:
             before = getattr(earlier, subject)
             after = getattr(later, subject)
             count_before = getattr(earlier, f"{subject}_observed_matches")
