@@ -88,6 +88,7 @@ const recentFormError = ref('');
 const state = ref<ViewState>('loading');
 const error = ref('');
 const teamsOrganizationId = ref('');
+const pilotUnavailable = ref(false);
 let teamGeneration = 0;
 let requestGeneration = 0;
 let formGeneration = 0;
@@ -120,6 +121,7 @@ watch(
     teams.value = [];
     selectedTeamId.value = '';
     teamsOrganizationId.value = '';
+    pilotUnavailable.value = false;
     clearData();
     if (!allowed || !requestedOrganizationId) {
       state.value = 'unavailable_access';
@@ -153,8 +155,8 @@ watch(
           const freeTeams = await listSchoolTeams(requestedOrganizationId);
           if (teamsRequestGeneration !== teamGeneration || requestedOrganizationId !== organizationId.value)
             return;
+          pilotUnavailable.value = true;
           teams.value = freeTeams.map((team) => ({ id: team.id, name: team.name, status: team.status }));
-          teamsOrganizationId.value = requestedOrganizationId;
           selectedTeamId.value = teams.value.find((team) => team.status === 'active')?.id ?? '';
           state.value = 'unavailable_access';
           return;
@@ -175,6 +177,10 @@ watch(
     const analyticsRequestGeneration = ++requestGeneration;
     clearData();
     if (!allowed || !requestedOrganizationId) {
+      state.value = 'unavailable_access';
+      return;
+    }
+    if (pilotUnavailable.value) {
       state.value = 'unavailable_access';
       return;
     }
