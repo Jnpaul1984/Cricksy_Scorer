@@ -5,19 +5,16 @@ from __future__ import annotations
 import datetime as dt
 from typing import Annotated, Never
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from backend.api.schemas.organization_team_performance import (
-    OrganizationTeamPhaseAnalysis,
-    OrganizationTeamRecentForm,
+    OrganizationTeamCoachReport,
     OrganizationTeamPerformanceReadiness,
     OrganizationTeamPerformanceResponse,
     OrganizationTeamPerformanceTeamOption,
+    OrganizationTeamPhaseAnalysis,
+    OrganizationTeamRecentForm,
     TeamPerformanceCoverage,
-    TeamRecentFormMatch,
     TeamPhaseBandResponse,
+    TeamRecentFormMatch,
 )
 from backend.api.schemas.school_statistics import (
     SchoolFixtureSummary,
@@ -45,9 +42,13 @@ from backend.services.school_team_readiness_service import (
     calculate_team_recent_form,
     evaluate_team_match_readiness,
 )
+from backend.services.school_team_report_service import compose_team_coach_report
 from backend.sql_app import models
 from backend.sql_app.database import get_db
 from backend.sql_app.models import User
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(tags=["school-statistics"])
 
@@ -503,4 +504,82 @@ async def get_organization_team_phase_analysis(
             )
             for phase in result.phases
         ],
+    )
+
+
+@router.get(
+    "/api/organizations/{organization_id}/team-performance/teams/{team_id}/coach-report",
+    response_model=OrganizationTeamCoachReport,
+)
+async def get_organization_team_coach_report(
+    organization_id: str,
+    team_id: str,
+    as_of_date: Annotated[str, Query(pattern=r"^\d{4}-\d{2}-\d{2}$")],
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> OrganizationTeamCoachReport:
+    try:
+        boundary = dt.date.fromisoformat(as_of_date)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=422, detail="as_of_date must be an ISO calendar date"
+        ) from exc
+    try:
+        report = await compose_team_coach_report(
+            db,
+            TeamReadinessRequest(current_user.id, organization_id, team_id, boundary),
+        )
+    except TeamPerformanceAccessError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    readiness = OrganizationTeamPerformanceReadiness(
+        organization_id=report.readiness.organization_id,
+        team_id=report.readiness.team_id,
+        as_of_date=report.readiness.as_of_date,
+        required_history=report.readiness.required_history,
+        usable_prior_match_count=report.readiness.usable_prior_match_count,
+        remaining_match_count=report.readiness.remaining_match_count,
+        state=report.readiness.state,
+        usable_batting_match_count=report.readiness.usable_batting_match_count,
+        usable_bowling_match_count=report.readiness.usable_bowling_match_count,
+        exclusion_counts=report.readiness.exclusion_counts,
+    )
+    form, phases = report.form, report.phases
+    return OrganizationTeamCoachReport(
+        readiness=readiness,
+        sample_size=len(form.matches) if form else 0,
+        recorded_delivery_rows=form.recorded_delivery_rows if form else 0,
+        batting=form.batting if form else None,
+        bowling=form.bowling if form else None,
+        matches=[
+            TeamRecentFormMatch(
+                ordinal=index,
+                played_date=match.played_date,
+                batting=match.batting,
+                bowling=match.bowling,
+                recorded_delivery_rows=match.recorded_delivery_rows,
+            )
+            for index, match in enumerate(form.matches, start=1)
+        ]
+        if form
+        else [],
+        phase_unavailable_matches=phases.phase_unavailable_matches if phases else 0,
+        phases=[
+            TeamPhaseBandResponse(
+                name=phase.name,
+                start_over=phase.start_over,
+                end_over=phase.end_over,
+                batting_observed_matches=phase.batting_observed_matches,
+                bowling_observed_matches=phase.bowling_observed_matches,
+                batting_recorded_rows=phase.batting_recorded_rows,
+                bowling_recorded_rows=phase.bowling_recorded_rows,
+                batting=phase.batting,
+                bowling=phase.bowling,
+                batting_unavailable_matches=phase.batting_unavailable_matches,
+                bowling_unavailable_matches=phase.bowling_unavailable_matches,
+            )
+            for phase in phases.phases
+        ]
+        if phases
+        else [],
+        observations=[observation.__dict__ for observation in report.observations],
     )

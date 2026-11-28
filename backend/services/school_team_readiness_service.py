@@ -137,6 +137,8 @@ class TeamPhaseBand:
     bowling: BowlingTotals | None
     batting_recorded_rows: int
     bowling_recorded_rows: int
+    batting_source_games: frozenset[str] = frozenset()
+    bowling_source_games: frozenset[str] = frozenset()
 
 
 @dataclass(frozen=True)
@@ -670,10 +672,28 @@ def _ordered_phase_rows(deliveries: list[dict]) -> list[tuple[dict, int]] | None
 
 
 async def calculate_team_phase_analysis(
-    db: AsyncSession, request: TeamReadinessRequest
+    db: AsyncSession,
+    request: TeamReadinessRequest,
+    *,
+    recent_form: TeamRecentFormResult | None = None,
 ) -> TeamPhaseResult:
     """Aggregate explicitly positioned recorded rows for the selected five games."""
-    recent = await calculate_team_recent_form(db, request)
+    recent = (
+        recent_form if recent_form is not None else await calculate_team_recent_form(db, request)
+    )
+    if (
+        recent.readiness.organization_id != request.organization_id
+        or recent.readiness.team_id != request.team_id
+        or recent.readiness.as_of_date != request.as_of_date
+    ):
+        raise ValueError("recent form scope differs from phase request")
+    if recent_form is not None:
+        await require_team_performance_access(
+            db,
+            organization_id=request.organization_id,
+            team_id=request.team_id,
+            actor_user_id=request.actor_user_id,
+        )
     if recent.readiness.state != "ready":
         return TeamPhaseResult(recent.readiness, 0, (), 0)
     sources = {source.game_id: source for source in recent.readiness.selected_sources}
@@ -698,6 +718,9 @@ async def calculate_team_phase_analysis(
             "bowling_games": 0,
         }
         for name, _, _ in PHASE_BANDS
+    }
+    observed_games: dict[tuple[str, str], set[str]] = {
+        (name, role): set() for name, _, _ in PHASE_BANDS for role in ("batting", "bowling")
     }
     unavailable_games = 0
     for game in games:
@@ -750,6 +773,7 @@ async def calculate_team_phase_analysis(
                 bucket["bowling_rows"] += 1
             seen.add((name, role))
         for name, role in seen:
+            observed_games[(name, role)].add(game.id)
             if role == "batting":
                 totals[name]["batting_games"] += 1
             else:
@@ -771,6 +795,8 @@ async def calculate_team_phase_analysis(
             ),
             batting_recorded_rows=totals[name]["batting_rows"],
             bowling_recorded_rows=totals[name]["bowling_rows"],
+            batting_source_games=frozenset(observed_games[(name, "batting")]),
+            bowling_source_games=frozenset(observed_games[(name, "bowling")]),
         )
         for name, start, end in PHASE_BANDS
     )

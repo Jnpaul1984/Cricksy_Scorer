@@ -56,6 +56,7 @@ import type {
   OrganizationSelectionNotificationResult,
   OrganizationTeamPerformance,
   OrganizationTeamRecentForm,
+  OrganizationTeamCoachReport,
   OrganizationTeamPhaseAnalysis,
   OrganizationCommunitySettings,
   OrganizationCommunityCompetitionSettings,
@@ -541,6 +542,17 @@ export const getOrganizationTeamPhaseAnalysis = (
     orgPath(
       organizationId,
       `/team-performance/teams/${encodeURIComponent(teamId)}/phases?as_of_date=${encodeURIComponent(asOfDate)}`,
+    ),
+  );
+export const getOrganizationTeamCoachReport = (
+  organizationId: string,
+  teamId: string,
+  asOfDate: string,
+) =>
+  apiRequest<OrganizationTeamCoachReport>(
+    orgPath(
+      organizationId,
+      `/team-performance/teams/${encodeURIComponent(teamId)}/coach-report?as_of_date=${encodeURIComponent(asOfDate)}`,
     ),
   );
 export const getSchoolTeam = (organizationId: string, teamId: string) =>

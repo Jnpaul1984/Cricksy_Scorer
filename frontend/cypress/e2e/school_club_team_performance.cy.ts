@@ -173,6 +173,51 @@ describe('School/Club Team Performance staff pilot', () => {
         .should('include', '/team-performance/teams/team-archived?overs_limit=20');
     });
 
+    it(`shows the private ${kind} report only after a requested as-of date`, () => {
+      stubOrganization(kind, id);
+      cy.intercept(
+        'GET',
+        `**/api/organizations/${id}/team-performance/teams/team-active/coach-report?as_of_date=*`,
+        {
+          readiness: {
+            organization_id: id,
+            team_id: 'team-active',
+            as_of_date: '2026-05-01',
+            required_history: 5,
+            usable_prior_match_count: 5,
+            remaining_match_count: 0,
+            state: 'ready',
+            usable_batting_match_count: 5,
+            usable_bowling_match_count: 5,
+            exclusion_counts: {},
+          },
+          sample_size: 5,
+          completeness: 'unknown',
+          recorded_delivery_rows: 85,
+          batting: performance(id, 'team-active').batting,
+          bowling: performance(id, 'team-active').bowling,
+          matches: Array.from({ length: 5 }, (_, index) => ({
+            ordinal: index + 1,
+            played_date: `2026-04-0${index + 1}`,
+            recorded_delivery_rows: 17,
+            batting: performance(id, 'team-active').batting,
+            bowling: performance(id, 'team-active').bowling,
+          })),
+          phase_unavailable_matches: 5,
+          phases: [],
+          observations: [],
+        },
+      ).as('coachReport');
+      cy.get('input[aria-label="Recent form as-of date"]').type('2026-05-01');
+      cy.get('table[aria-labelledby="report-trend-heading"]').should('not.exist');
+      cy.contains('button', 'View report').click();
+      cy.wait('@coachReport');
+      cy.get('table[aria-labelledby="report-trend-heading"] tbody tr').should('have.length', 5);
+      cy.contains('Phase positions are unavailable for some matches').should('be.visible');
+      cy.get('select[aria-label="Team"]').select('team-archived');
+      cy.get('table[aria-labelledby="report-trend-heading"]').should('not.exist');
+    });
+
     it(`shows a bounded ${kind} five-match recorded form trend`, () => {
       stubOrganization(kind, id);
       cy.intercept(
