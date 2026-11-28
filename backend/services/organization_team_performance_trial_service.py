@@ -1129,6 +1129,9 @@ async def handle_completed_game_after_free_commit(db: AsyncSession, game_id: str
     """
     import logging
 
+    if not isinstance(db, AsyncSession):
+        return
+
     try:
         events = await record_completion_events(db, game_id=game_id)
         if not events:
