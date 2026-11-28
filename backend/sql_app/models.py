@@ -625,6 +625,159 @@ class OrganizationTeamPerformanceGrant(Base):
     revocation_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
+class TeamPerformanceTrialAvailability(Base):
+    """Independent, default-off Cricksy-controlled trial availability."""
+
+    __tablename__ = "team_performance_trial_availability"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('enabled', 'revoked')", name="ck_team_trial_availability_status"
+        ),
+    )
+
+    organization_id: Mapped[str] = mapped_column(
+        ForeignKey("organizations.id", ondelete="RESTRICT"), primary_key=True
+    )
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    changed_by_user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
+    )
+    changed_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class TeamPerformanceTrialAvailabilityEvent(Base):
+    """Append-only record of platform availability decisions."""
+
+    __tablename__ = "team_performance_trial_availability_events"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    organization_id: Mapped[str] = mapped_column(
+        ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    actor_user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
+    )
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    recorded_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class TeamPerformanceTrial(Base):
+    """One lifetime trial identity per organization-owned Team."""
+
+    __tablename__ = "team_performance_trials"
+    __table_args__ = (
+        UniqueConstraint("organization_id", "team_id", name="uq_team_trial_organization_team"),
+        CheckConstraint(
+            "state IN ('active', 'exhausted', 'expired', 'revoked', 'review_required')",
+            name="ck_team_trial_state",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    organization_id: Mapped[str] = mapped_column(
+        ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    team_id: Mapped[str] = mapped_column(
+        ForeignKey("teams.id", ondelete="RESTRICT"), nullable=False
+    )
+    policy_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    state: Mapped[str] = mapped_column(String(20), nullable=False, default="active")
+    activated_by_user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
+    )
+    activated_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    venue_timezone: Mapped[str] = mapped_column(String(64), nullable=False)
+    activation_local_date: Mapped[dt.date] = mapped_column(Date, nullable=False)
+    expires_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    completed_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    report_access_until: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    prerequisite_sources: Mapped[list[dict[str, Any]]] = mapped_column(JSON, nullable=False)
+
+
+class TeamPerformanceTrialEvent(Base):
+    """Append-only policy and consumption history; no credit is deleted."""
+
+    __tablename__ = "team_performance_trial_events"
+    __table_args__ = (
+        UniqueConstraint("trial_id", "event_key", name="uq_team_trial_event_key"),
+        Index("ix_team_trial_events_trial_time", "trial_id", "recorded_at"),
+    )
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    trial_id: Mapped[str] = mapped_column(
+        ForeignKey("team_performance_trials.id", ondelete="RESTRICT"), nullable=False
+    )
+    kind: Mapped[str] = mapped_column(String(24), nullable=False)
+    event_key: Mapped[str] = mapped_column(String(160), nullable=False)
+    game_id: Mapped[str | None] = mapped_column(ForeignKey("games.id", ondelete="RESTRICT"))
+    actor_user_id: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"))
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    evidence: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    recorded_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class TeamPerformanceTrialConsumption(Base):
+    """Immutable Game claim; compensating reversal is a separate trial event."""
+
+    __tablename__ = "team_performance_trial_consumptions"
+    __table_args__ = (
+        UniqueConstraint("trial_id", "game_id", name="uq_team_trial_consumed_game"),
+        UniqueConstraint("trial_id", "completion_event_id", name="uq_team_trial_completion_event"),
+    )
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    trial_id: Mapped[str] = mapped_column(
+        ForeignKey("team_performance_trials.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    game_id: Mapped[str] = mapped_column(
+        ForeignKey("games.id", ondelete="RESTRICT"), nullable=False
+    )
+    completion_event_id: Mapped[str] = mapped_column(
+        ForeignKey("team_performance_trial_completions.id", ondelete="RESTRICT"), nullable=False
+    )
+    played_date: Mapped[dt.date] = mapped_column(Date, nullable=False)
+    metadata_revision: Mapped[int] = mapped_column(Integer, nullable=False)
+    ledger_digest: Mapped[str] = mapped_column(String(64), nullable=False)
+    recorded_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class TeamPerformanceTrialCompletion(Base):
+    """Server-recorded transition evidence captured after Free completion commits."""
+
+    __tablename__ = "team_performance_trial_completions"
+    __table_args__ = (
+        UniqueConstraint("trial_id", "game_id", name="uq_team_trial_completion_game"),
+        Index("ix_team_trial_completion_order", "trial_id", "completed_at"),
+    )
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    trial_id: Mapped[str] = mapped_column(
+        ForeignKey("team_performance_trials.id", ondelete="RESTRICT"), nullable=False
+    )
+    game_id: Mapped[str] = mapped_column(
+        ForeignKey("games.id", ondelete="RESTRICT"), nullable=False
+    )
+    completed_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    evidence: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+
+
+class TeamPerformanceTrialSnapshot(Base):
+    """Immutable, scoped rendered report for one valid consumed Game."""
+
+    __tablename__ = "team_performance_trial_snapshots"
+    __table_args__ = (Index("ix_team_trial_snapshot_trial_ordinal", "trial_id", "ordinal"),)
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    trial_id: Mapped[str] = mapped_column(
+        ForeignKey("team_performance_trials.id", ondelete="RESTRICT"), nullable=False
+    )
+    ordinal: Mapped[int] = mapped_column(Integer, nullable=False)
+    report: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    sources: Mapped[list[dict[str, Any]]] = mapped_column(JSON, nullable=False)
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
 # -----------------------------
 # Helpers for safe JSON defaults
 # (avoid default={} or default=[])

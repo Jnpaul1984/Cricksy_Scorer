@@ -55,7 +55,17 @@ const performance = (organizationId: string, teamId: string) => ({
   },
 });
 
-function stubOrganization(kind: 'school' | 'club', id: string) {
+function stubOrganization(
+  kind: 'school' | 'club',
+  id: string,
+  trialStatus?: {
+    state: string;
+    games_used: number;
+    games_remaining: number;
+    expires_at: string | null;
+    report_access_until: string | null;
+  },
+) {
   const base = kind === 'school' ? 'schools' : 'clubs';
   const organization = {
     id,
@@ -103,6 +113,9 @@ function stubOrganization(kind: 'school' | 'club', id: string) {
       status: 'archived',
     },
   ]);
+  cy.intercept('GET', `**/api/organizations/${id}/team-performance/teams/*/trial`,
+    trialStatus || { statusCode: 403, body: { detail: 'Trial unavailable' } },
+  ).as(`trialStatus-${id}`);
   cy.intercept(
     {
       method: 'GET',
@@ -154,6 +167,18 @@ describe('School/Club Team Performance staff pilot', () => {
     ['school', 'school-pilot', 'Central School'],
     ['club', 'club-pilot', 'Central Cricket Club'],
   ] as const) {
+    it(`shows the authorized ${kind} trial allowance and report deadline without consuming on load`, () => {
+      stubOrganization(kind, id, {
+        state: 'exhausted', games_used: 3, games_remaining: 0,
+        expires_at: '2027-02-26T12:00:00Z',
+        report_access_until: '2026-12-14T12:00:00Z',
+      });
+      cy.wait(`@trialStatus-${id}`);
+      cy.contains('Games used: 3. Games remaining: 0.').should('be.visible');
+      cy.contains('Retained report available until: 2026-12-14T12:00:00Z').should('be.visible');
+      cy.contains('Activate eligible Team trial').should('not.exist');
+    });
+
     it(`renders the private ${kind} aggregate workspace and exact selected scope`, () => {
       stubOrganization(kind, id);
       cy.contains('h1', title).should('be.visible');

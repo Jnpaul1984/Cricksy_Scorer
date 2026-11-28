@@ -3,10 +3,6 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Annotated, Any, cast
 
-from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from backend.api.schemas.game_performance_metadata import (
     GamePerformanceMetadataResponse,
     GamePerformanceMetadataUpdate,
@@ -23,6 +19,9 @@ from backend.services.live_bus import emit_state_update
 from backend.services.snapshot_service import build_snapshot as _snapshot_from_game
 from backend.sql_app import crud, models, schemas
 from backend.sql_app.database import get_db
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
 # Safe dynamic caller for private helpers in game_helpers (avoids static private
@@ -46,7 +45,7 @@ BASE_DIR = Path(__file__).resolve().parent
 async def read_team_performance_metadata(
     game_id: str,
     current_user: Annotated[models.User, Depends(get_current_active_user)],
-    db: AsyncSession = Depends(get_db),
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> GamePerformanceMetadataResponse:
     try:
         game = await get_game_performance_metadata(
@@ -73,7 +72,7 @@ async def update_team_performance_metadata(
     game_id: str,
     body: GamePerformanceMetadataUpdate,
     current_user: Annotated[models.User, Depends(get_current_active_user)],
-    db: AsyncSession = Depends(get_db),
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> GamePerformanceMetadataResponse:
     fields = body.model_fields_set
     if not ({"actual_played_date", "original_overs_limit"} & fields):
@@ -110,7 +109,7 @@ async def set_overs_limit(
     game_id: str,
     body: OversLimitBody,
     current_user: Annotated[models.User, Depends(get_current_active_user)],
-    db: AsyncSession = Depends(get_db),
+    db: Annotated[AsyncSession, Depends(get_db)],
 ):
     db_game = await crud.get_game(db, game_id=game_id)
     if not db_game:
@@ -118,6 +117,7 @@ async def set_overs_limit(
     await require_game_mutation_access(db, game=db_game, user=current_user)
 
     g: Any = db_game
+    was_completed = g.status == models.GameStatus.completed
 
     bowled_balls = int(getattr(g, "overs_completed", 0)) * 6 + int(getattr(g, "balls_this_over", 0))
     new_limit_balls = int(body.overs_limit) * 6
@@ -149,6 +149,12 @@ async def set_overs_limit(
     _gh("_recompute_totals_and_runtime", u)
     _gh("_complete_game_by_result", u)
     await crud.update_game(db, game_model=u)
+    if not was_completed and u.status == models.GameStatus.completed:
+        from backend.services.organization_team_performance_trial_service import (
+            handle_completed_game_after_free_commit,
+        )
+
+        await handle_completed_game_after_free_commit(db, game_id)
     await emit_state_update(game_id, snap)
 
     return {"id": game_id, "overs_limit": cast(Any, updated).overs_limit}
@@ -159,7 +165,7 @@ async def set_team_roles(
     game_id: str,
     payload: schemas.TeamRoleUpdate,
     current_user: Annotated[models.User, Depends(get_current_active_user)],
-    db: AsyncSession = Depends(get_db),
+    db: Annotated[AsyncSession, Depends(get_db)],
 ):
     db_game = await crud.get_game(db, game_id=game_id)
     if not db_game:

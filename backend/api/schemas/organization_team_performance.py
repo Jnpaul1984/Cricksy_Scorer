@@ -5,7 +5,7 @@ from __future__ import annotations
 import datetime as dt
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class TeamPerformanceBatting(BaseModel):
@@ -159,3 +159,31 @@ class OrganizationTeamCoachReport(BaseModel):
     phase_unavailable_matches: int
     phases: list[TeamPhaseBandResponse]
     observations: list[TeamCoachReportObservation]
+
+
+class TeamTrialStatus(BaseModel):
+    state: Literal["not_started", "active", "exhausted", "expired", "revoked", "review_required"]
+    games_used: int
+    games_remaining: int
+    expires_at: dt.datetime | None
+    report_access_until: dt.datetime | None
+
+
+class TeamTrialAvailabilityCommand(BaseModel):
+    enabled: bool
+    reason: str = Field(min_length=1, max_length=2000)
+
+
+class TeamTrialActivationCommand(BaseModel):
+    venue_timezone: str = Field(min_length=1, max_length=64)
+    reason: str = Field(min_length=1, max_length=2000)
+
+
+class TeamTrialReviewCommand(BaseModel):
+    reason: str = Field(min_length=1, max_length=2000)
+    reverse_game_id: str | None = None
+
+
+class TeamTrialExtensionCommand(BaseModel):
+    new_expires_at: dt.datetime
+    reason: str = Field(min_length=1, max_length=2000)

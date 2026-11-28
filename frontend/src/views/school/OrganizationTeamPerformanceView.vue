@@ -9,6 +9,10 @@ import {
   getOrganizationTeamPhaseAnalysis,
   getOrganizationTeamCoachReport,
   listOrganizationTeamPerformanceTeams,
+  listSchoolTeams,
+  getOrganizationTeamTrialStatus,
+  activateOrganizationTeamTrial,
+  getOrganizationTeamTrialReport,
 } from '@/services/schoolAdminApi';
 import type {
   OrganizationTeamPerformance,
@@ -16,6 +20,7 @@ import type {
   OrganizationTeamPhaseAnalysis,
   OrganizationTeamCoachReport,
   OrganizationTeamPerformanceTeamOption,
+  OrganizationTeamTrialStatus,
 } from '@/types/schoolAdmin';
 
 type ViewState =
@@ -29,7 +34,7 @@ type ViewState =
   | 'request_failure'
   | 'scope_too_large';
 
-const { organizationId, organizationBasePath, terminology, canManageTeams } = useSchoolContext();
+const { organizationId, organizationBasePath, terminology, canManageTeams, membership } = useSchoolContext();
 const teams = ref<OrganizationTeamPerformanceTeamOption[]>([]);
 const selectedTeamId = ref('');
 const oversLimit = ref(20);
@@ -51,6 +56,13 @@ const reportState = ref<
   | 'request_failure'
 >('idle');
 const reportError = ref('');
+const trialStatus = ref<OrganizationTeamTrialStatus | null>(null);
+const trialState = ref<'idle' | 'loading' | 'unavailable' | 'error'>('idle');
+const trialError = ref('');
+const trialVenueTimezone = ref('');
+const trialReason = ref('');
+const trialBusy = ref(false);
+let trialGeneration = 0;
 const phaseState = ref<
   | 'idle'
   | 'loading'
@@ -135,6 +147,20 @@ watch(
         !canManageTeams.value
       ) {
         return;
+      }
+      if ((reason as { status?: number } | null)?.status === 403) {
+        try {
+          const freeTeams = await listSchoolTeams(requestedOrganizationId);
+          if (teamsRequestGeneration !== teamGeneration || requestedOrganizationId !== organizationId.value)
+            return;
+          teams.value = freeTeams.map((team) => ({ id: team.id, name: team.name, status: team.status }));
+          teamsOrganizationId.value = requestedOrganizationId;
+          selectedTeamId.value = teams.value.find((team) => team.status === 'active')?.id ?? '';
+          state.value = 'unavailable_access';
+          return;
+        } catch {
+          // Keep the original non-disclosing pilot access state.
+        }
       }
       state.value = failureStatus(reason);
       if (state.value === 'request_failure') error.value = getErrorMessage(reason);
@@ -378,12 +404,82 @@ watch(
   { immediate: true },
 );
 
+watch(
+  [organizationId, canManageTeams, selectedTeamId],
+  async ([requestedOrganizationId, allowed, requestedTeamId]) => {
+    const generation = ++trialGeneration;
+    trialStatus.value = null;
+    trialError.value = '';
+    trialVenueTimezone.value = '';
+    trialReason.value = '';
+    if (!allowed || !requestedOrganizationId || !requestedTeamId) {
+      trialState.value = 'idle';
+      return;
+    }
+    trialState.value = 'loading';
+    try {
+      const result = await getOrganizationTeamTrialStatus(requestedOrganizationId, requestedTeamId);
+      if (generation !== trialGeneration || requestedOrganizationId !== organizationId.value || requestedTeamId !== selectedTeamId.value)
+        return;
+      trialStatus.value = result;
+      trialState.value = 'idle';
+    } catch (reason) {
+      if (generation !== trialGeneration || requestedOrganizationId !== organizationId.value || requestedTeamId !== selectedTeamId.value)
+        return;
+      trialState.value = failureStatus(reason) === 'unavailable_access' ? 'unavailable' : 'error';
+      if (trialState.value === 'error') trialError.value = getErrorMessage(reason);
+    }
+  },
+  { immediate: true },
+);
+
+async function activateSelectedTeamTrial() {
+  if (!organizationId.value || !selectedTeamId.value || trialBusy.value) return;
+  const organization = organizationId.value;
+  const team = selectedTeamId.value;
+  trialBusy.value = true;
+  trialError.value = '';
+  try {
+    const result = await activateOrganizationTeamTrial(
+      organization, team, trialVenueTimezone.value, trialReason.value,
+    );
+    if (organization === organizationId.value && team === selectedTeamId.value) {
+      trialStatus.value = result;
+      trialState.value = 'idle';
+    }
+  } catch (reason) {
+    if (organization === organizationId.value && team === selectedTeamId.value)
+      trialError.value = getErrorMessage(reason);
+  } finally {
+    trialBusy.value = false;
+  }
+}
+
+async function viewRetainedTrialReport() {
+  if (!organizationId.value || !selectedTeamId.value) return;
+  const organization = organizationId.value;
+  const team = selectedTeamId.value;
+  trialError.value = '';
+  try {
+    const result = await getOrganizationTeamTrialReport(organization, team);
+    if (organization === organizationId.value && team === selectedTeamId.value) {
+      coachReport.value = result;
+      reportState.value = result.readiness.state;
+    }
+  } catch (reason) {
+    if (organization === organizationId.value && team === selectedTeamId.value)
+      trialError.value = getErrorMessage(reason);
+  }
+}
+
 onBeforeUnmount(() => {
   teamGeneration += 1;
   requestGeneration += 1;
   formGeneration += 1;
   phaseGeneration += 1;
   reportGeneration += 1;
+  trialGeneration += 1;
+  trialStatus.value = null;
   clearData();
   recentForm.value = null;
   phaseAnalysis.value = null;
@@ -395,7 +491,7 @@ onBeforeUnmount(() => {
 <template>
   <section class="panel" aria-labelledby="team-performance-heading">
     <header>
-      <p class="eyebrow">{{ terminology.kindLabel }} staff pilot</p>
+      <p class="eyebrow">{{ terminology.kindLabel }} staff workspace</p>
       <h2 id="team-performance-heading">Team Performance</h2>
       <p>Read-only batting and bowling aggregates from recorded limited-overs deliveries.</p>
     </header>
@@ -440,6 +536,36 @@ onBeforeUnmount(() => {
         </label>
       </div>
     </template>
+
+    <section v-if="canManageTeams && selectedTeamId" class="coverage" aria-labelledby="trial-heading">
+      <h3 id="trial-heading">Three-game Team trial</h3>
+      <p v-if="trialState === 'loading'" role="status">Loading trial status…</p>
+      <p v-else-if="trialState === 'unavailable'" role="status">Trial status is unavailable for this Team or organization.</p>
+      <p v-else-if="trialState === 'error'" role="alert">{{ trialError }}</p>
+      <template v-if="trialStatus">
+        <p role="status">State: {{ trialStatus.state }}. Games used: {{ trialStatus.games_used }}. Games remaining: {{ trialStatus.games_remaining }}.</p>
+        <p v-if="trialStatus.expires_at">Trial expires: {{ trialStatus.expires_at }}.</p>
+        <p v-if="trialStatus.report_access_until">Retained report available until: {{ trialStatus.report_access_until }}.</p>
+        <form
+          v-if="trialStatus.state === 'not_started' && ['owner', 'admin'].includes(membership?.role || '')"
+          @submit.prevent="activateSelectedTeamTrial"
+        >
+          <label>Confirmed venue IANA timezone
+            <input v-model.trim="trialVenueTimezone" aria-label="Venue timezone" required placeholder="America/Barbados" />
+          </label>
+          <label>Activation reason
+            <input v-model.trim="trialReason" aria-label="Trial activation reason" required />
+          </label>
+          <button type="submit" :disabled="trialBusy">Activate eligible Team trial</button>
+        </form>
+        <button
+          v-if="trialStatus.games_used > 0 && ['active', 'exhausted'].includes(trialStatus.state)"
+          type="button"
+          @click="viewRetainedTrialReport"
+        >View retained trial report</button>
+      </template>
+      <p v-if="trialError" role="alert">{{ trialError }}</p>
+    </section>
 
     <p v-if="state === 'no_eligible_games'" class="notice" role="status">
       No eligible official completed limited-overs games match this Team and overs limit.

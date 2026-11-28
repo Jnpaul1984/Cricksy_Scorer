@@ -15,6 +15,11 @@ from backend.api.schemas.organization_team_performance import (
     TeamPerformanceCoverage,
     TeamPhaseBandResponse,
     TeamRecentFormMatch,
+    TeamTrialActivationCommand,
+    TeamTrialAvailabilityCommand,
+    TeamTrialExtensionCommand,
+    TeamTrialReviewCommand,
+    TeamTrialStatus,
 )
 from backend.api.schemas.school_statistics import (
     SchoolFixtureSummary,
@@ -29,6 +34,18 @@ from backend.services.organization_team_performance_access import (
     TeamPerformanceAccessError,
     require_team_performance_access,
     require_team_performance_organization_access,
+)
+from backend.services.organization_team_performance_trial_service import (
+    TrialTransitionError,
+    activate_trial,
+    extend_trial_for_system_fault,
+    request_trial_review,
+    request_trial_verification,
+    resolve_trial_review,
+    retained_trial_report,
+    revoke_trial,
+    set_trial_availability,
+    trial_status,
 )
 from backend.services.school_team_analytics_service import (
     TeamAnalyticsRequest,
@@ -51,6 +68,13 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(tags=["school-statistics"])
+
+
+def _trial_http_error(exc: TrialTransitionError | TeamPerformanceAccessError) -> Never:
+    if isinstance(exc, TeamPerformanceAccessError):
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    raise HTTPException(status_code=409, detail=str(exc)) from exc
+
 
 NO_LEDGER_CODES = frozenset({"no_usable_ledger"})
 
@@ -583,3 +607,217 @@ async def get_organization_team_coach_report(
         else [],
         observations=[observation.__dict__ for observation in report.observations],
     )
+
+
+@router.put("/api/organizations/{organization_id}/team-performance/trial-availability")
+async def set_organization_team_trial_availability(
+    organization_id: str,
+    command: TeamTrialAvailabilityCommand,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict[str, bool]:
+    try:
+        await set_trial_availability(
+            db,
+            organization_id=organization_id,
+            operator_user_id=current_user.id,
+            enabled=command.enabled,
+            reason=command.reason,
+        )
+        await db.commit()
+    except (TrialTransitionError, TeamPerformanceAccessError) as exc:
+        _trial_http_error(exc)
+    return {"enabled": command.enabled}
+
+
+@router.post(
+    "/api/organizations/{organization_id}/team-performance/teams/{team_id}/trial/activate",
+    response_model=TeamTrialStatus,
+)
+async def activate_organization_team_trial(
+    organization_id: str,
+    team_id: str,
+    command: TeamTrialActivationCommand,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> TeamTrialStatus:
+    try:
+        await activate_trial(
+            db,
+            organization_id=organization_id,
+            team_id=team_id,
+            actor_user_id=current_user.id,
+            venue_timezone=command.venue_timezone,
+            reason=command.reason,
+        )
+        await db.commit()
+        return TeamTrialStatus.model_validate(
+            await trial_status(
+                db,
+                organization_id=organization_id,
+                team_id=team_id,
+                actor_user_id=current_user.id,
+            )
+        )
+    except (TrialTransitionError, TeamPerformanceAccessError) as exc:
+        _trial_http_error(exc)
+
+
+@router.get(
+    "/api/organizations/{organization_id}/team-performance/teams/{team_id}/trial",
+    response_model=TeamTrialStatus,
+)
+async def get_organization_team_trial_status(
+    organization_id: str,
+    team_id: str,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> TeamTrialStatus:
+    try:
+        return TeamTrialStatus.model_validate(
+            await trial_status(
+                db,
+                organization_id=organization_id,
+                team_id=team_id,
+                actor_user_id=current_user.id,
+            )
+        )
+    except (TrialTransitionError, TeamPerformanceAccessError) as exc:
+        _trial_http_error(exc)
+
+
+@router.get(
+    "/api/organizations/{organization_id}/team-performance/teams/{team_id}/trial/report",
+    response_model=OrganizationTeamCoachReport,
+)
+async def get_organization_team_trial_report(
+    organization_id: str,
+    team_id: str,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> OrganizationTeamCoachReport:
+    try:
+        return OrganizationTeamCoachReport.model_validate(
+            await retained_trial_report(
+                db,
+                organization_id=organization_id,
+                team_id=team_id,
+                actor_user_id=current_user.id,
+            )
+        )
+    except (TrialTransitionError, TeamPerformanceAccessError) as exc:
+        _trial_http_error(exc)
+
+
+@router.post("/api/organizations/{organization_id}/team-performance/teams/{team_id}/trial/verify")
+async def verify_organization_team_trial_game(
+    organization_id: str,
+    team_id: str,
+    game_id: str,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict[str, bool]:
+    try:
+        verified = await request_trial_verification(
+            db,
+            organization_id=organization_id,
+            team_id=team_id,
+            actor_user_id=current_user.id,
+            game_id=game_id,
+        )
+        await db.commit()
+    except (TrialTransitionError, TeamPerformanceAccessError) as exc:
+        _trial_http_error(exc)
+    return {"verified": verified}
+
+
+@router.post("/api/organizations/{organization_id}/team-performance/teams/{team_id}/trial/review")
+async def review_organization_team_trial_game(
+    organization_id: str,
+    team_id: str,
+    game_id: str,
+    command: TeamTrialReviewCommand,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict[str, bool]:
+    try:
+        await request_trial_review(
+            db,
+            organization_id=organization_id,
+            team_id=team_id,
+            actor_user_id=current_user.id,
+            game_id=game_id,
+            reason=command.reason,
+        )
+        await db.commit()
+    except (TrialTransitionError, TeamPerformanceAccessError) as exc:
+        _trial_http_error(exc)
+    return {"review_requested": True}
+
+
+@router.post("/api/organizations/{organization_id}/team-performance/teams/{team_id}/trial/resolve")
+async def resolve_organization_team_trial(
+    organization_id: str,
+    team_id: str,
+    command: TeamTrialReviewCommand,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict[str, bool]:
+    try:
+        await resolve_trial_review(
+            db,
+            organization_id=organization_id,
+            team_id=team_id,
+            operator_user_id=current_user.id,
+            reason=command.reason,
+            reverse_game_id=command.reverse_game_id,
+        )
+        await db.commit()
+        return {"resolved": True}
+    except (TrialTransitionError, TeamPerformanceAccessError) as exc:
+        _trial_http_error(exc)
+
+
+@router.post("/api/organizations/{organization_id}/team-performance/teams/{team_id}/trial/extend")
+async def extend_organization_team_trial(
+    organization_id: str,
+    team_id: str,
+    command: TeamTrialExtensionCommand,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict[str, bool]:
+    try:
+        await extend_trial_for_system_fault(
+            db,
+            organization_id=organization_id,
+            team_id=team_id,
+            operator_user_id=current_user.id,
+            new_expires_at=command.new_expires_at,
+            reason=command.reason,
+        )
+        await db.commit()
+        return {"extended": True}
+    except (TrialTransitionError, TeamPerformanceAccessError) as exc:
+        _trial_http_error(exc)
+
+
+@router.post("/api/organizations/{organization_id}/team-performance/teams/{team_id}/trial/revoke")
+async def revoke_organization_team_trial(
+    organization_id: str,
+    team_id: str,
+    command: TeamTrialReviewCommand,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict[str, bool]:
+    try:
+        await revoke_trial(
+            db,
+            organization_id=organization_id,
+            team_id=team_id,
+            operator_user_id=current_user.id,
+            reason=command.reason,
+        )
+        await db.commit()
+    except (TrialTransitionError, TeamPerformanceAccessError) as exc:
+        _trial_http_error(exc)
+    return {"revoked": True}

@@ -16,6 +16,8 @@ import type {
   OrganizationTeamCoachReport,
   OrganizationTeamPerformanceTeamOption,
   SchoolMembershipRole,
+  SchoolMembership,
+  OrganizationTeamTrialStatus,
 } from '@/types/schoolAdmin';
 import OrganizationTeamPerformanceView from '@/views/school/OrganizationTeamPerformanceView.vue';
 
@@ -212,7 +214,7 @@ function schoolContext(
     organizationBasePath: computed(() => organizationBasePath(organizationType.value)),
     terminology: computed(() => organizationTerminology(organizationType.value)),
     organization: ref(null),
-    membership: ref(null),
+    membership: computed(() => ({ role: role.value } as SchoolMembership)),
     entitlement: ref(null),
     canManageTeams: staff,
     canManageRosterMetadata: staff,
@@ -764,5 +766,50 @@ describe('organization Team Performance pilot view', () => {
     await flushPromises();
     expect(oversizedWrapper.text()).toContain('complete recorded-history scope is too large');
     expect(oversizedWrapper.text()).not.toContain('Team batting');
+  });
+  it('shows approved trial status and requires an explicit owner activation with a timezone', async () => {
+    const initial: OrganizationTeamTrialStatus = {
+      state: 'not_started', games_used: 0, games_remaining: 3,
+      expires_at: null, report_access_until: null,
+    };
+    vi.mocked(schoolApi.getOrganizationTeamTrialStatus).mockResolvedValue(initial);
+    vi.mocked(schoolApi.activateOrganizationTeamTrial).mockResolvedValue({
+      state: 'active', games_used: 0, games_remaining: 3,
+      expires_at: '2027-02-26T12:00:00Z', report_access_until: null,
+    });
+    const wrapper = mountView(ref('school-a'), ref('owner'));
+    await flushPromises();
+    expect(wrapper.text()).toContain('Games remaining: 3');
+    expect(schoolApi.activateOrganizationTeamTrial).not.toHaveBeenCalled();
+    await wrapper.get('input[aria-label="Venue timezone"]').setValue('America/Barbados');
+    await wrapper.get('input[aria-label="Trial activation reason"]').setValue('Five verified matches');
+    await wrapper.get('form').trigger('submit');
+    await flushPromises();
+    expect(schoolApi.activateOrganizationTeamTrial).toHaveBeenCalledWith(
+      'school-a', 'team-a', 'America/Barbados', 'Five verified matches',
+    );
+    expect(wrapper.text()).toContain('Trial expires: 2027-02-26T12:00:00Z');
+  });
+
+  it('displays the retained report only after an explicit request and clears it on access loss', async () => {
+    vi.mocked(schoolApi.getOrganizationTeamTrialStatus).mockResolvedValue({
+      state: 'exhausted', games_used: 3, games_remaining: 0,
+      expires_at: '2027-02-26T12:00:00Z', report_access_until: '2026-12-14T12:00:00Z',
+    });
+    vi.mocked(schoolApi.getOrganizationTeamTrialReport).mockResolvedValue(report());
+    const role = ref<SchoolMembershipRole>('coach');
+    const wrapper = mountView(ref('school-a'), role);
+    await flushPromises();
+    expect(wrapper.text()).toContain('Games used: 3');
+    expect(schoolApi.getOrganizationTeamTrialReport).not.toHaveBeenCalled();
+    const button = wrapper.findAll('button').find((item) => item.text().includes('View retained trial report'));
+    expect(button).toBeDefined();
+    await button!.trigger('click');
+    await flushPromises();
+    expect(schoolApi.getOrganizationTeamTrialReport).toHaveBeenCalledWith('school-a', 'team-a');
+    expect(wrapper.find('table[aria-labelledby="report-trend-heading"]').exists()).toBe(true);
+    role.value = 'viewer';
+    await flushPromises();
+    expect(wrapper.find('table[aria-labelledby="report-trend-heading"]').exists()).toBe(false);
   });
 });
