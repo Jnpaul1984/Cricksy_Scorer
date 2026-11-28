@@ -403,6 +403,29 @@ def test_trial_activation_authority_timezone_and_revocation(school_client, monke
     )
     assert school_client.get(base, headers=owner.headers).status_code == 403
 
+    async def completion_while_revoked():
+        _, game = await _make_game(school_client, org_id, owner.id, dt.date(2026, 3, 8), team)
+        async with school_client.session_maker() as db:
+            assert await trial_service.record_completion_event(db, game_id=game.id) is None
+            await db.commit()
+        return game
+
+    revoked_game = asyncio.run(completion_while_revoked())
+    assert (
+        school_client.put(
+            f"/api/organizations/{org_id}/team-performance/trial-availability",
+            headers=operator.headers,
+            json={"enabled": True, "reason": "Availability restored"},
+        ).status_code
+        == 200
+    )
+    assert school_client.get(base, headers=owner.headers).json()["games_used"] == 0
+    verification = school_client.post(
+        f"{base}/verify?game_id={revoked_game.id}", headers=owner.headers
+    )
+    assert verification.status_code == 200 and verification.json() == {"verified": False}
+    assert school_client.get(base, headers=owner.headers).json()["state"] == "review_required"
+
 
 def test_invalidated_final_game_requires_operator_reversal_before_replacement(
     school_client,

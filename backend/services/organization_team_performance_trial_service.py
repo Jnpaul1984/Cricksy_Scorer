@@ -507,6 +507,13 @@ async def record_completion_events(
     for trial in trials:
         if (trial.organization_id, trial.team_id) not in scopes:
             continue
+        available = await db.scalar(
+            select(models.TeamPerformanceTrialAvailability.status).where(
+                models.TeamPerformanceTrialAvailability.organization_id == trial.organization_id
+            )
+        )
+        if available != "enabled":
+            continue
         existing = await db.scalar(
             select(models.TeamPerformanceTrialCompletion).where(
                 models.TeamPerformanceTrialCompletion.trial_id == trial.id,
