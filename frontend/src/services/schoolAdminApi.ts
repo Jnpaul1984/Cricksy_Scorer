@@ -58,6 +58,7 @@ import type {
   OrganizationTeamRecentForm,
   OrganizationTeamCoachReport,
   OrganizationTeamPhaseAnalysis,
+  OrganizationTeamTrialStatus,
   OrganizationCommunitySettings,
   OrganizationCommunityCompetitionSettings,
   OrganizationFixtureYoutubeVideo,
@@ -554,6 +555,27 @@ export const getOrganizationTeamCoachReport = (
       organizationId,
       `/team-performance/teams/${encodeURIComponent(teamId)}/coach-report?as_of_date=${encodeURIComponent(asOfDate)}`,
     ),
+  );
+
+export const getOrganizationTeamTrialStatus = (organizationId: string, teamId: string) =>
+  apiRequest<OrganizationTeamTrialStatus>(
+    orgPath(organizationId, `/team-performance/teams/${encodeURIComponent(teamId)}/trial`),
+  );
+
+export const activateOrganizationTeamTrial = (
+  organizationId: string,
+  teamId: string,
+  venueTimezone: string,
+  reason: string,
+) =>
+  apiRequest<OrganizationTeamTrialStatus>(
+    orgPath(organizationId, `/team-performance/teams/${encodeURIComponent(teamId)}/trial/activate`),
+    { method: 'POST', body: JSON.stringify({ venue_timezone: venueTimezone, reason }) },
+  );
+
+export const getOrganizationTeamTrialReport = (organizationId: string, teamId: string) =>
+  apiRequest<OrganizationTeamCoachReport>(
+    orgPath(organizationId, `/team-performance/teams/${encodeURIComponent(teamId)}/trial/report`),
   );
 export const getSchoolTeam = (organizationId: string, teamId: string) =>
   apiRequest<SchoolTeam>(orgPath(organizationId, `/teams/${encodeURIComponent(teamId)}`));

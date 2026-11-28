@@ -133,6 +133,14 @@ export interface OrganizationTeamCoachReport extends OrganizationTeamRecentForm 
   }[];
 }
 
+export interface OrganizationTeamTrialStatus {
+  state: 'not_started' | 'active' | 'exhausted' | 'expired' | 'revoked' | 'review_required';
+  games_used: number;
+  games_remaining: number;
+  expires_at: string | null;
+  report_access_until: string | null;
+}
+
 export interface SchoolOrganization {
   id: string;
   name: string;

@@ -824,6 +824,7 @@ async def finalize_game(
     await _require_school_scorer(db, game=db_game, user=current_user)
 
     g: Any = db_game
+    was_completed = g.status == models.GameStatus.completed
 
     _gh("_rebuild_scorecards_from_deliveries", g)
     _gh("_recompute_totals_and_runtime", g)
@@ -835,6 +836,12 @@ async def finalize_game(
 
     updated = await crud.update_game(db, game_model=db_game)
     u = cast(Any, updated)
+    if not was_completed and u.status == models.GameStatus.completed:
+        from backend.services.organization_team_performance_trial_service import (
+            handle_completed_game_after_free_commit,
+        )
+
+        await handle_completed_game_after_free_commit(db, game_id)
     snap = _snapshot_from_game(u, None, BASE_DIR)
 
     from backend.services.live_bus import emit_state_update
@@ -1321,6 +1328,12 @@ async def add_delivery(
     _gh("_ensure_target_if_chasing", u)
     _gh("_maybe_finalize_match", u)
     await crud.update_game(db, game_model=u)
+    if u.status == models.GameStatus.completed:
+        from backend.services.organization_team_performance_trial_service import (
+            handle_completed_game_after_free_commit,
+        )
+
+        await handle_completed_game_after_free_commit(db, game_id)
 
     # Build snapshot + final flags
     last = u.deliveries[-1] if u.deliveries else None
@@ -1701,6 +1714,12 @@ async def correct_delivery(
     _gh("_ensure_target_if_chasing", g)
     _gh("_maybe_finalize_match", g)
     await crud.update_game(db, game_model=g)
+    if g.status == models.GameStatus.completed:
+        from backend.services.organization_team_performance_trial_service import (
+            handle_completed_game_after_free_commit,
+        )
+
+        await handle_completed_game_after_free_commit(db, game_id)
 
     # Build snapshot
     last = g.deliveries[-1] if g.deliveries else None

@@ -313,6 +313,7 @@ async def post_game_results(
             detail="Game not found",
         )
     await require_game_mutation_access(db, game=game, user=current_user)
+    was_completed = game.status == models.GameStatus.completed
 
     try:
         ta: int = int(payload.team_a_score)
@@ -404,6 +405,12 @@ async def post_game_results(
             game.completed_at = dt.datetime.now(UTC)
 
         await crud.update_game(db, game_model=game)
+        if not was_completed and game.status == models.GameStatus.completed:
+            from backend.services.organization_team_performance_trial_service import (
+                handle_completed_game_after_free_commit,
+            )
+
+            await handle_completed_game_after_free_commit(db, str(game_id))
 
         # Debugging: report whether an in-memory repo exists and contains the game
         try:

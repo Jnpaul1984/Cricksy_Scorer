@@ -66,6 +66,29 @@ class TeamReadinessRequest:
     team_id: str
     as_of_date: dt.date
     reference_game_id: str | None = None
+    access_mode: Literal["pilot", "trial_activation", "trial_report", "trial_system"] = "pilot"
+
+
+async def _authorize_readiness(db: AsyncSession, request: TeamReadinessRequest) -> None:
+    if request.access_mode == "pilot":
+        await require_team_performance_access(
+            db,
+            organization_id=request.organization_id,
+            team_id=request.team_id,
+            actor_user_id=request.actor_user_id,
+        )
+        return
+    from backend.services.organization_team_performance_trial_service import (
+        require_trial_scope,
+    )
+
+    await require_trial_scope(
+        db,
+        organization_id=request.organization_id,
+        team_id=request.team_id,
+        actor_user_id=request.actor_user_id,
+        mode=request.access_mode,
+    )
 
 
 @dataclass(frozen=True)
@@ -396,12 +419,7 @@ async def evaluate_team_match_readiness(
     """Return a safe summary while retaining the deterministic latest-five lineage internally."""
     if type(request.as_of_date) is not dt.date:
         raise ValueError("as_of_date must be a calendar date")
-    await require_team_performance_access(
-        db,
-        organization_id=request.organization_id,
-        team_id=request.team_id,
-        actor_user_id=request.actor_user_id,
-    )
+    await _authorize_readiness(db, request)
 
     candidates = (
         await db.execute(_readiness_candidates_stmt(request, db.get_bind().dialect.name))
@@ -507,17 +525,69 @@ async def evaluate_team_match_readiness(
     for game, _ in eligible:
         assert game.actual_played_date is not None
         date_counts[game.actual_played_date] = date_counts.get(game.actual_played_date, 0) + 1
-    ambiguous_dates = {played_date for played_date, count in date_counts.items() if count > 1}
+    verified_completion_order: dict[str, dt.datetime] = {}
+    if request.access_mode in {"trial_report", "trial_system"} and eligible:
+        trial_id = await db.scalar(
+            select(models.TeamPerformanceTrial.id).where(
+                models.TeamPerformanceTrial.organization_id == request.organization_id,
+                models.TeamPerformanceTrial.team_id == request.team_id,
+            )
+        )
+        if trial_id is not None:
+            events = (
+                await db.scalars(
+                    select(models.TeamPerformanceTrialCompletion).where(
+                        models.TeamPerformanceTrialCompletion.trial_id == trial_id,
+                        models.TeamPerformanceTrialCompletion.game_id.in_(
+                            {game.id for game, _ in eligible}
+                        ),
+                    )
+                )
+            ).all()
+            eligible_by_id = {game.id: (game, digest) for game, digest in eligible}
+            for event in events:
+                game, digest = eligible_by_id[event.game_id]
+                if (
+                    event.evidence.get("played_date") == game.actual_played_date.isoformat()
+                    and event.evidence.get("metadata_revision")
+                    == game.team_performance_metadata_revision
+                    and event.evidence.get("ledger_digest") == digest
+                ):
+                    verified_completion_order[event.game_id] = (
+                        event.completed_at.replace(tzinfo=dt.UTC)
+                        if event.completed_at.tzinfo is None
+                        else event.completed_at.astimezone(dt.UTC)
+                    )
+    resolved_dates: set[dt.date] = set()
+    for date, count in date_counts.items():
+        if count <= 1:
+            continue
+        group = [game.id for game, _ in eligible if game.actual_played_date == date]
+        times = [verified_completion_order.get(game_id) for game_id in group]
+        if (
+            len(times) == count
+            and all(value is not None for value in times)
+            and len(set(times)) == count
+        ):
+            resolved_dates.add(date)
+    ambiguous_dates = {
+        played_date
+        for played_date, count in date_counts.items()
+        if count > 1 and played_date not in resolved_dates
+    }
     chronologically_usable: list[tuple[models.Game, str]] = []
     for game, digest in eligible:
         assert game.actual_played_date is not None
-        if date_counts[game.actual_played_date] > 1:
+        if game.actual_played_date in ambiguous_dates:
             counts["same_date_ambiguous"] += 1
         else:
             chronologically_usable.append((game, digest))
 
     chronologically_usable.sort(
-        key=lambda item: item[0].actual_played_date or dt.date.min,
+        key=lambda item: (
+            item[0].actual_played_date or dt.date.min,
+            verified_completion_order.get(item[0].id, dt.datetime.min.replace(tzinfo=dt.UTC)),
+        ),
         reverse=True,
     )
     usable_count = len(chronologically_usable)
@@ -688,12 +758,7 @@ async def calculate_team_phase_analysis(
     ):
         raise ValueError("recent form scope differs from phase request")
     if recent_form is not None:
-        await require_team_performance_access(
-            db,
-            organization_id=request.organization_id,
-            team_id=request.team_id,
-            actor_user_id=request.actor_user_id,
-        )
+        await _authorize_readiness(db, request)
     if recent.readiness.state != "ready":
         return TeamPhaseResult(recent.readiness, 0, (), 0)
     sources = {source.game_id: source for source in recent.readiness.selected_sources}
