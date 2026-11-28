@@ -13,6 +13,7 @@ import type {
   OrganizationTeamPerformance,
   OrganizationTeamRecentForm,
   OrganizationTeamPhaseAnalysis,
+  OrganizationTeamCoachReport,
   OrganizationTeamPerformanceTeamOption,
   SchoolMembershipRole,
 } from '@/types/schoolAdmin';
@@ -187,6 +188,17 @@ function phase(
   };
 }
 
+function report(
+  state: 'ready' | 'not_ready' | 'data_unavailable' = 'ready',
+): OrganizationTeamCoachReport {
+  return {
+    ...form(state),
+    phase_unavailable_matches: state === 'ready' ? 1 : 0,
+    phases: phase(state).phases,
+    observations: [],
+  };
+}
+
 function schoolContext(
   organizationId: Ref<string>,
   role: Ref<SchoolMembershipRole>,
@@ -244,6 +256,66 @@ describe('organization Team Performance pilot view', () => {
       async (organizationId, teamId) => performance(organizationId, teamId),
     );
     vi.mocked(schoolApi.getOrganizationTeamPhaseAnalysis).mockResolvedValue(phase());
+    vi.mocked(schoolApi.getOrganizationTeamCoachReport).mockResolvedValue(report());
+  });
+
+  it('loads the report only on request and clears stale Team, date and access results', async () => {
+    let resolveOld: (value: OrganizationTeamCoachReport) => void = () => undefined;
+    vi.mocked(schoolApi.getOrganizationTeamCoachReport)
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveOld = resolve;
+          }),
+      )
+      .mockResolvedValue(report());
+    vi.mocked(schoolApi.getOrganizationTeamRecentForm).mockResolvedValue(form());
+    const role = ref<SchoolMembershipRole>('coach');
+    const wrapper = mountView(ref('school-a'), role);
+    await flushPromises();
+    const date = wrapper.get('input[aria-label="Recent form as-of date"]');
+    await date.setValue('2026-05-01');
+    await flushPromises();
+    expect(schoolApi.getOrganizationTeamCoachReport).not.toHaveBeenCalled();
+    await wrapper.get('button').trigger('click');
+    await flushPromises();
+    expect(wrapper.text()).toContain('Loading Team coach report');
+    await date.setValue('2026-05-02');
+    await flushPromises();
+    resolveOld(report());
+    await flushPromises();
+    expect(wrapper.find('table[aria-labelledby="report-trend-heading"]').exists()).toBe(false);
+    await wrapper.get('button').trigger('click');
+    await flushPromises();
+    expect(wrapper.find('table[aria-labelledby="report-trend-heading"]').exists()).toBe(true);
+    expect(wrapper.text()).toContain('independently valid form');
+    role.value = 'viewer';
+    await flushPromises();
+    expect(wrapper.find('table[aria-labelledby="report-trend-heading"]').exists()).toBe(false);
+  });
+
+  it('shows insufficient, unavailable, denied and error report states', async () => {
+    vi.mocked(schoolApi.getOrganizationTeamCoachReport)
+      .mockResolvedValueOnce(report('not_ready'))
+      .mockResolvedValueOnce(report('data_unavailable'))
+      .mockRejectedValueOnce(Object.assign(new Error('denied'), { status: 403 }))
+      .mockRejectedValueOnce(new Error('report failed'));
+    const wrapper = mountView(ref('school-a'));
+    await flushPromises();
+    const date = wrapper.get('input[aria-label="Recent form as-of date"]');
+    for (const [index, expected] of [
+      'Insufficient history',
+      'evidence is unavailable',
+      'unavailable for your current access',
+      'report failed',
+    ].entries()) {
+      await date.setValue(`2026-05-0${index + 1}`);
+      await flushPromises();
+      await wrapper.get('button').trigger('click');
+      await flushPromises();
+      expect(wrapper.text()).toContain(expected);
+      expect(wrapper.find('table[aria-labelledby="report-trend-heading"]').exists()).toBe(false);
+    }
   });
 
   it('shows approved bands, recorded zero and unavailable phase evidence', async () => {

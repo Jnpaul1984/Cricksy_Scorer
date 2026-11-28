@@ -114,6 +114,25 @@ export interface OrganizationTeamPhaseAnalysis {
   }[];
 }
 
+export interface OrganizationTeamCoachReport extends OrganizationTeamRecentForm {
+  phase_unavailable_matches: number;
+  phases: OrganizationTeamPhaseAnalysis['phases'];
+  observations: {
+    subject: 'batting' | 'bowling';
+    earlier_band: 'opening' | 'middle' | 'closing';
+    later_band: 'opening' | 'middle' | 'closing';
+    earlier_rate: number;
+    later_rate: number;
+    earlier_runs: number;
+    later_runs: number;
+    earlier_legal_balls: number;
+    later_legal_balls: number;
+    observed_matches: number;
+    unit: 'runs_per_six_legal_balls';
+    evidence_section: 'phases';
+  }[];
+}
+
 export interface SchoolOrganization {
   id: string;
   name: string;

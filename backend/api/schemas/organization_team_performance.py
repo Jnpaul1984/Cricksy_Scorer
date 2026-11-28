@@ -131,3 +131,31 @@ class OrganizationTeamPhaseAnalysis(BaseModel):
     completeness: Literal["unknown"] = "unknown"
     phase_unavailable_matches: int
     phases: list[TeamPhaseBandResponse]
+
+
+class TeamCoachReportObservation(BaseModel):
+    subject: Literal["batting", "bowling"]
+    earlier_band: Literal["opening", "middle", "closing"]
+    later_band: Literal["opening", "middle", "closing"]
+    earlier_rate: float
+    later_rate: float
+    earlier_runs: int
+    later_runs: int
+    earlier_legal_balls: int
+    later_legal_balls: int
+    observed_matches: int
+    unit: Literal["runs_per_six_legal_balls"]
+    evidence_section: Literal["phases"]
+
+
+class OrganizationTeamCoachReport(BaseModel):
+    readiness: OrganizationTeamPerformanceReadiness
+    sample_size: int
+    completeness: Literal["unknown"] = "unknown"
+    recorded_delivery_rows: int
+    batting: TeamPerformanceBatting | None
+    bowling: TeamPerformanceBowling | None
+    matches: list[TeamRecentFormMatch]
+    phase_unavailable_matches: int
+    phases: list[TeamPhaseBandResponse]
+    observations: list[TeamCoachReportObservation]

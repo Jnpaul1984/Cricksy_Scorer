@@ -7,12 +7,14 @@ import {
   getOrganizationTeamPerformance,
   getOrganizationTeamRecentForm,
   getOrganizationTeamPhaseAnalysis,
+  getOrganizationTeamCoachReport,
   listOrganizationTeamPerformanceTeams,
 } from '@/services/schoolAdminApi';
 import type {
   OrganizationTeamPerformance,
   OrganizationTeamRecentForm,
   OrganizationTeamPhaseAnalysis,
+  OrganizationTeamCoachReport,
   OrganizationTeamPerformanceTeamOption,
 } from '@/types/schoolAdmin';
 
@@ -35,6 +37,19 @@ const data = ref<OrganizationTeamPerformance | null>(null);
 const asOfDate = ref('');
 const recentForm = ref<OrganizationTeamRecentForm | null>(null);
 const phaseAnalysis = ref<OrganizationTeamPhaseAnalysis | null>(null);
+const coachReport = ref<OrganizationTeamCoachReport | null>(null);
+const reportRequested = ref(false);
+const reportState = ref<
+  | 'idle'
+  | 'loading'
+  | 'ready'
+  | 'not_ready'
+  | 'data_unavailable'
+  | 'unavailable_access'
+  | 'scope_too_large'
+  | 'request_failure'
+>('idle');
+const reportError = ref('');
 const phaseState = ref<
   | 'idle'
   | 'loading'
@@ -64,6 +79,7 @@ let teamGeneration = 0;
 let requestGeneration = 0;
 let formGeneration = 0;
 let phaseGeneration = 0;
+let reportGeneration = 0;
 
 function clearData() {
   data.value = null;
@@ -294,14 +310,82 @@ watch(
   { immediate: true },
 );
 
+watch(
+  [organizationId, canManageTeams, selectedTeamId, asOfDate],
+  () => {
+    reportRequested.value = false;
+  },
+  { flush: 'sync' },
+);
+
+watch(
+  [organizationId, canManageTeams, selectedTeamId, asOfDate, reportRequested],
+  async ([requestedOrganizationId, allowed, requestedTeamId, requestedDate, requested]) => {
+    const generation = ++reportGeneration;
+    coachReport.value = null;
+    reportError.value = '';
+    if (!allowed || !requestedOrganizationId) {
+      reportState.value = 'unavailable_access';
+      return;
+    }
+    if (
+      !requested ||
+      !requestedTeamId ||
+      !requestedDate ||
+      teamsOrganizationId.value !== requestedOrganizationId
+    ) {
+      reportState.value = 'idle';
+      return;
+    }
+    reportState.value = 'loading';
+    try {
+      const result = await getOrganizationTeamCoachReport(
+        requestedOrganizationId,
+        requestedTeamId,
+        requestedDate,
+      );
+      if (
+        generation !== reportGeneration ||
+        requestedOrganizationId !== organizationId.value ||
+        requestedTeamId !== selectedTeamId.value ||
+        requestedDate !== asOfDate.value ||
+        !canManageTeams.value ||
+        !reportRequested.value
+      )
+        return;
+      coachReport.value = result;
+      reportState.value =
+        result.readiness.state === 'data_unavailable' &&
+        result.readiness.exclusion_counts.scope_too_large
+          ? 'scope_too_large'
+          : result.readiness.state;
+    } catch (reason) {
+      if (
+        generation !== reportGeneration ||
+        requestedOrganizationId !== organizationId.value ||
+        requestedTeamId !== selectedTeamId.value ||
+        requestedDate !== asOfDate.value ||
+        !canManageTeams.value ||
+        !reportRequested.value
+      )
+        return;
+      reportState.value = failureStatus(reason);
+      if (reportState.value === 'request_failure') reportError.value = getErrorMessage(reason);
+    }
+  },
+  { immediate: true },
+);
+
 onBeforeUnmount(() => {
   teamGeneration += 1;
   requestGeneration += 1;
   formGeneration += 1;
   phaseGeneration += 1;
+  reportGeneration += 1;
   clearData();
   recentForm.value = null;
   phaseAnalysis.value = null;
+  coachReport.value = null;
   teams.value = [];
 });
 </script>
@@ -713,6 +797,169 @@ onBeforeUnmount(() => {
             </table>
           </div>
         </template>
+      </template>
+    </section>
+
+    <section
+      v-if="canManageTeams && teamsOrganizationId === organizationId"
+      class="coverage"
+      aria-labelledby="coach-report-heading"
+    >
+      <h3 id="coach-report-heading">Team coach report</h3>
+      <p>
+        Private five-match review for the selected Team and as-of date. Based on recorded delivery
+        data. Historical completeness has not been verified.
+      </p>
+      <button
+        type="button"
+        :disabled="!selectedTeamId || !asOfDate || reportState === 'loading'"
+        @click="reportRequested = true"
+      >
+        View report
+      </button>
+      <p v-if="reportState === 'idle'" role="status">
+        Choose an as-of date above to view the report.
+      </p>
+      <p v-else-if="reportState === 'loading'" role="status">Loading Team coach report…</p>
+      <p v-else-if="reportState === 'unavailable_access'" role="alert">
+        Team coach report is unavailable for your current access.
+      </p>
+      <p v-else-if="reportState === 'scope_too_large'" role="alert">
+        Report scope exceeds the safe workload limit.
+      </p>
+      <p v-else-if="reportState === 'request_failure'" role="alert">{{ reportError }}</p>
+      <p v-else-if="reportState === 'not_ready'" role="status">
+        Insufficient history: {{ coachReport?.readiness.remaining_match_count }} more usable prior
+        matches needed.
+      </p>
+      <p v-else-if="reportState === 'data_unavailable'" role="status">
+        Report evidence is unavailable or changed during calculation.
+      </p>
+      <template
+        v-if="reportState === 'ready' && coachReport && coachReport.batting && coachReport.bowling"
+      >
+        <p>
+          Five verified original 25-over matches before {{ coachReport.readiness.as_of_date }}.
+          Sample size: {{ coachReport.sample_size }}. Recorded rows:
+          {{ coachReport.recorded_delivery_rows }}.
+        </p>
+        <div class="cards">
+          <section class="metric-card" aria-labelledby="report-batting-heading">
+            <h4 id="report-batting-heading">Batting aggregate</h4>
+            <p>
+              Team runs: {{ coachReport.batting.team_runs }}; wickets lost:
+              {{ coachReport.batting.wickets_lost }}; legal balls:
+              {{ coachReport.batting.legal_balls }}; runs per six legal balls:
+              {{ coachReport.batting.run_rate ?? '—' }}.
+            </p>
+          </section>
+          <section class="metric-card" aria-labelledby="report-bowling-heading">
+            <h4 id="report-bowling-heading">Bowling aggregate</h4>
+            <p>
+              Opposition runs: {{ coachReport.bowling.opposition_team_runs }}; team wickets:
+              {{ coachReport.bowling.team_wickets }}; legal balls:
+              {{ coachReport.bowling.legal_balls }}; runs conceded per six legal balls:
+              {{ coachReport.bowling.team_concession_rate ?? '—' }}.
+            </p>
+          </section>
+        </div>
+        <h4 id="report-trend-heading">Recent-match trend</h4>
+        <div class="trend-scroll">
+          <table aria-labelledby="report-trend-heading">
+            <thead>
+              <tr>
+                <th>Match (oldest first)</th>
+                <th>Played date</th>
+                <th>Batting runs</th>
+                <th>Batting legal balls</th>
+                <th>Run rate</th>
+                <th>Opposition runs</th>
+                <th>Bowling legal balls</th>
+                <th>Concession rate</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="match in coachReport.matches" :key="match.ordinal">
+                <th>{{ match.ordinal }}</th>
+                <td>{{ match.played_date }}</td>
+                <td>{{ match.batting.team_runs }}</td>
+                <td>{{ match.batting.legal_balls }}</td>
+                <td>{{ match.batting.run_rate ?? '—' }}</td>
+                <td>{{ match.bowling.opposition_team_runs }}</td>
+                <td>{{ match.bowling.legal_balls }}</td>
+                <td>{{ match.bowling.team_concession_rate ?? '—' }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <h4 id="report-phases-heading">Phase observations and coverage</h4>
+        <p>
+          Analytical bands: opening 1–5, middle 6–20, closing 21–25. These are not official
+          powerplay rules. Unplayed overs are not inferred. Matches without usable phase positions:
+          {{ coachReport.phase_unavailable_matches }}.
+        </p>
+        <div class="trend-scroll">
+          <table aria-labelledby="report-phases-heading">
+            <thead>
+              <tr>
+                <th>Band</th>
+                <th>Batting observed / unavailable matches</th>
+                <th>Batting rows</th>
+                <th>Batting runs / legal balls</th>
+                <th>Bowling observed / unavailable matches</th>
+                <th>Bowling rows</th>
+                <th>Opposition runs / legal balls</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="phase in coachReport.phases" :key="phase.name">
+                <th>{{ phase.name }} ({{ phase.start_over }}–{{ phase.end_over }})</th>
+                <td>
+                  {{ phase.batting_observed_matches }} / {{ phase.batting_unavailable_matches }}
+                </td>
+                <td>{{ phase.batting_recorded_rows }}</td>
+                <td>
+                  {{
+                    phase.batting
+                      ? `${phase.batting.team_runs} / ${phase.batting.legal_balls}`
+                      : 'Unavailable'
+                  }}
+                </td>
+                <td>
+                  {{ phase.bowling_observed_matches }} / {{ phase.bowling_unavailable_matches }}
+                </td>
+                <td>{{ phase.bowling_recorded_rows }}</td>
+                <td>
+                  {{
+                    phase.bowling
+                      ? `${phase.bowling.opposition_team_runs} / ${phase.bowling.legal_balls}`
+                      : 'Unavailable'
+                  }}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p v-if="coachReport.phase_unavailable_matches" role="status">
+          Phase positions are unavailable for some matches; the independently valid form above
+          remains available.
+        </p>
+        <ul v-if="coachReport.observations.length" aria-label="Factual phase comparisons">
+          <li
+            v-for="observation in coachReport.observations"
+            :key="`${observation.subject}-${observation.earlier_band}-${observation.later_band}`"
+          >
+            {{ observation.subject }}: {{ observation.earlier_band }}
+            {{ observation.earlier_runs }} runs / {{ observation.earlier_legal_balls }} legal balls
+            ({{ observation.earlier_rate }} per six) and {{ observation.later_band }}
+            {{ observation.later_runs }} runs / {{ observation.later_legal_balls }} legal balls ({{
+              observation.later_rate
+            }}
+            per six), across {{ observation.observed_matches }} observed matches. Evidence: phase
+            table above.
+          </li>
+        </ul>
+        <p v-else>No directly comparable phase rates are available for review.</p>
       </template>
     </section>
 

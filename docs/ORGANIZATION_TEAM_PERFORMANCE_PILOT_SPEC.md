@@ -18,6 +18,12 @@ The existing readiness selector and recent-form calculation enforce access, the 
 
 The private response contains only the safe readiness summary, three named band ranges, sample size, per-role coverage and bounded aggregate counters. It excludes Game/source IDs, player identities, raw deliveries and audit provenance. No migration, entitlement/grant, Free statistics, scoring, DLS, result, trial, billing or public behavior changes. Rollback is a code revert; no data migration is needed.
 
+## Issue #639 — private Team coach report slice
+
+An explicit in-app report action composes the existing readiness-selected five prior original 25-over matches with recent form and approved analytical phases. It uses the same actor, organization, Team and exclusive as-of date. The service checks metadata revisions and ledger digests during the selected-five reads, then rechecks readiness to catch a changed selection; changed or inconsistent evidence returns data unavailable with no mixed report. It retains form when phase positions are unavailable, labels observed zero and unavailable separately, and shows per-band coverage. Factual adjacent-band rate comparisons require the identical internally tracked observed match set, nonzero legal-ball denominators and unequal unrounded rates; the response gives runs, legal balls, sample size, units and a phase evidence reference. Internal match sets never appear in the response. The report contains no player judgments, prescriptions, causal claims or AI text.
+
+The route remains under the existing default-off grant and contextual staff access. One report request makes two bounded readiness scans (each capped at 250 candidate games and 5 MiB) and two selected-five reads, plus access revalidation; the explicit report action avoids this cost on ordinary workspace load. The report is read-only and private, with no stored artifact, export, share link or trial consumption. This advances PERF-RPT-005 and PERF-RPT-007 only for the bounded in-app Team slice; broader coach reports and exports remain open. Rollback is a code revert without migration.
+
 ## Product contract
 
 - Add one private Team Performance view inside the existing organization workspace. It applies equally to School and Club organizations.
